@@ -1,22 +1,14 @@
-/**
- * @file CustomChatFooter.tsx
- * @description ChatScreen 底部工具栏，支持文件列表、提示词选择、模型切换和网络搜索
- * @module chat/component
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import {
   ChatMode,
   ChatStatus,
   FileInfo,
-  SystemPrompt,
 } from '../../types/Chat.ts';
 import {
   CustomFileListComponent,
   DisplayMode,
 } from './CustomFileListComponent.tsx';
-import { PromptListComponent } from './PromptListComponent.tsx';
 import { ModelIconButton } from './ModelIconButton.tsx';
 import { ModelSelectionModal } from './ModelSelectionModal.tsx';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,23 +17,19 @@ import { isAndroid, isMacCatalyst } from '../../utils/PlatformUtils.ts';
 interface CustomComposerProps {
   files: FileInfo[];
   onFileUpdated: (files: FileInfo[], isUpdate?: boolean) => void;
-  onSystemPromptUpdated: (prompt: SystemPrompt | null) => void;
   onSwitchedToTextModel: () => void;
   chatMode: ChatMode;
   hasInputText?: boolean;
   chatStatus?: ChatStatus;
-  systemPrompt?: SystemPrompt | null;
 }
 
 export const CustomChatFooter: React.FC<CustomComposerProps> = ({
   files,
   onFileUpdated,
-  onSystemPromptUpdated,
   onSwitchedToTextModel,
   chatMode,
   hasInputText = false,
   chatStatus,
-  systemPrompt,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [iconPosition, setIconPosition] = useState({ x: 0, y: 0 });
@@ -49,11 +37,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
   const iconPositionRef = useRef({ x: 0, y: 0 });
   const insets = useSafeAreaInsets();
   const statusBarHeight = useRef(insets.top);
-  const isVirtualTryOn = systemPrompt?.id === -7;
-  const modeOnImage =
-    files.length === 1 && isVirtualTryOn
-      ? DisplayMode.Edit
-      : DisplayMode.GenImage;
 
   const handleOpenModal = () => {
     if (iconPositionRef.current.y === 0) {
@@ -108,7 +91,7 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
           <CustomFileListComponent
             files={files}
             onFileUpdated={onFileUpdated}
-            mode={chatMode === ChatMode.Image ? modeOnImage : DisplayMode.Edit}
+            mode={DisplayMode.Edit}
             isHideFileList={isHideFileList}
           />
         )}
@@ -120,15 +103,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
                 marginTop: -72,
               }),
             }}>
-            <PromptListComponent
-              onSelectPrompt={prompt => {
-                onSystemPromptUpdated(prompt);
-              }}
-              onSwitchedToTextModel={() => {
-                onSwitchedToTextModel();
-              }}
-              chatMode={chatMode}
-            />
             {chatMode === ChatMode.Text && (
               <>
                 <View ref={modelIconRef} collapsable={false}>
@@ -155,6 +129,7 @@ const styles = StyleSheet.create({
   promptContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     flex: 1,
     marginBottom: isAndroid ? 12 : 0,
   },

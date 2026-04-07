@@ -24,7 +24,7 @@ import {
   getTotalOutputTokens,
   getUsagePrice,
 } from './ModelPrice.ts';
-import { HeaderLeftView } from '../prompt/HeaderLeftView.tsx';
+import { HeaderLeftView } from '../component/HeaderLeftView.tsx';
 import { useTheme, ColorScheme } from '../theme';
 
 type NavigationProp = DrawerNavigationProp<RouteParamList>;

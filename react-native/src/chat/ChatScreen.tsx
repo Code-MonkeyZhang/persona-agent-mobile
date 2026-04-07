@@ -30,18 +30,11 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
-  getCurrentSystemPrompt,
-  getCurrentVoiceSystemPrompt,
   getImageModel,
-  getLastVirtualTryOnImgFile,
   getMessagesBySessionId,
   getSessionId,
   getTextModel,
   isTokenValid,
-  saveCurrentImageSystemPrompt,
-  saveCurrentSystemPrompt,
-  saveCurrentVoiceSystemPrompt,
-  saveLastVirtualTryOnImgFile,
   saveMessageList,
   saveMessages,
   updateTotalUsage,
@@ -52,7 +45,6 @@ import {
   FileInfo,
   Metrics,
   SwiftChatMessage,
-  SystemPrompt,
   Usage,
 } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
@@ -115,9 +107,6 @@ function ChatScreen(): React.JSX.Element {
   // ==================== 状态声明 ====================
   const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
-  const [systemPrompt, setSystemPrompt] = useState<SystemPrompt | null>(
-    isNovaSonic ? getCurrentVoiceSystemPrompt : getCurrentSystemPrompt
-  );
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
@@ -138,7 +127,6 @@ function ChatScreen(): React.JSX.Element {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
   const usageRef = useRef(usage);
-  const systemPromptRef = useRef(systemPrompt);
   const drawerTypeRef = useRef(drawerType);
   const isVoiceLoading = useRef(false);
   const contentHeightRef = useRef(0);
@@ -243,16 +231,13 @@ function ChatScreen(): React.JSX.Element {
   // header text and right button click
   React.useLayoutEffect(() => {
     currentMode = mode;
-    systemPromptRef.current = systemPrompt;
     const headerOptions: HeaderOptions = {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
         <HeaderTitle
           title={
             mode === ChatMode.Text
-              ? systemPrompt
-                ? systemPrompt.name
-                : 'Chat'
+              ? 'Chat'
               : 'Image'
           }
           usage={usage}
@@ -283,7 +268,7 @@ function ChatScreen(): React.JSX.Element {
       ),
     };
     navigation.setOptions(headerOptions);
-  }, [usage, navigation, mode, systemPrompt, isDark]);
+  }, [usage, navigation, mode, isDark]);
 
   // ==================== 会话切换 & 消息加载 ====================
   // sessionId changes (start new chat or click another session)
@@ -304,11 +289,7 @@ function ChatScreen(): React.JSX.Element {
         saveCurrentMessages();
       }
       if (modeRef.current !== mode) {
-        // when change chat mode, clear system prompt and files
         modeRef.current = mode;
-        setTimeout(() => {
-          sendEventRef.current?.('unSelectSystemPrompt');
-        }, 50);
         setSelectedFiles([]);
       }
       setChatStatus(ChatStatus.Init);
@@ -327,11 +308,6 @@ function ChatScreen(): React.JSX.Element {
       sessionIdRef.current = initialSessionId;
       setUsage((msg[0] as SwiftChatMessage).usage);
 
-      setSystemPrompt(null);
-      saveCurrentSystemPrompt(null);
-      saveCurrentVoiceSystemPrompt(null);
-      saveCurrentImageSystemPrompt(null);
-      sendEventRef.current?.('unSelectSystemPrompt');
       getBedrockMessagesFromChatMessages(msg).then(currentMessage => {
         bedrockMessages.current = currentMessage;
       });
@@ -618,12 +594,10 @@ function ChatScreen(): React.JSX.Element {
         let latencyMs = 0;
         let metrics: Metrics | undefined;
 
-        const effectiveSystemPrompt = systemPromptRef.current;
-
         invokeBedrockWithCallBack(
           bedrockMessages.current,
           modeRef.current,
-          effectiveSystemPrompt,
+          null,
           () => isCanceled.current,
           controllerRef.current,
           (
@@ -758,32 +732,18 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
 
-    if (message[0]?.text || files.length > 0) {
-      if (!message[0]?.text) {
-        // 支持输入非文本
-        if (modeRef.current === ChatMode.Text) {
-          // use system prompt name as user prompt TODO:MVP这个要改
-          if (systemPromptRef.current) {
-            message[0].text = systemPromptRef.current.name;
-          } else {
+      if (message[0]?.text || files.length > 0) {
+        if (!message[0]?.text) {
+          if (modeRef.current === ChatMode.Text) {
             message[0].text = getFileTypeSummary(files);
+          } else {
+            message[0].text = 'Empty Message';
           }
         } else {
-          // use selected system prompt as user prompt
-          message[0].text = systemPromptRef.current?.prompt ?? 'Empty Message';
-          if (systemPromptRef.current?.id === -7) {
-            saveLastVirtualTryOnImgFile(files[0]);
-            saveCurrentImageSystemPrompt(null);
-            sendEventRef.current('unSelectSystemPrompt');
+          if (modeRef.current === ChatMode.Image) {
+            // append user prompt after default image prompt in image mode
           }
         }
-      } else {
-        // append user prompt after system prompt in image mode
-        if (modeRef.current === ChatMode.Image && systemPromptRef.current) {
-          message[0].text =
-            systemPromptRef.current?.prompt + '\n' + message[0].text;
-        }
-      }
 
       if (selectedFilesRef.current.length > 0) {
         message[0].image = JSON.stringify(selectedFilesRef.current);
@@ -807,14 +767,11 @@ function ChatScreen(): React.JSX.Element {
   // NOTE: 这个需要留着, 虽然MVP可能暂时用不上
   const handleNewFileSelected = (files: FileInfo[]) => {
     setSelectedFiles(prevFiles => {
-      const isVirtualTryOn =
-        modeRef.current === ChatMode.Image &&
-        systemPromptRef.current?.id === -7;
       return checkFileNumberLimit(
         prevFiles,
         files,
         modeRef.current,
-        isVirtualTryOn
+        false
       );
     });
   };
@@ -946,7 +903,6 @@ function ChatScreen(): React.JSX.Element {
                 trigger(HapticFeedbackTypes.impactMedium);
               });
             }}
-            systemPrompt={systemPrompt}
           />
         )}
         /** 自定义底部工具栏：附件文件列表、System Prompt 选择器、聊天模式切换 */
@@ -960,38 +916,12 @@ function ChatScreen(): React.JSX.Element {
                 handleNewFileSelected(files);
               }
             }}
-            onSystemPromptUpdated={prompt => {
-              const lastPromptIsVirtualTryOn = systemPrompt?.id === -7;
-              setSystemPrompt(prompt);
-
-              if (modeRef.current === ChatMode.Image) {
-                saveCurrentImageSystemPrompt(prompt);
-                if (prompt?.id === -7) {
-                  const lastVirtualTryOnImgFile = getLastVirtualTryOnImgFile();
-                  if (lastVirtualTryOnImgFile) {
-                    setSelectedFiles([lastVirtualTryOnImgFile]);
-                  }
-                } else {
-                  if (selectedFiles.length > 0 && lastPromptIsVirtualTryOn) {
-                    setSelectedFiles([]);
-                  }
-                }
-              } else if (isNovaSonic) {
-                saveCurrentVoiceSystemPrompt(prompt);
-                if (chatStatus === ChatStatus.Running) {
-                  endVoiceConversationRef.current?.();
-                }
-              } else {
-                saveCurrentSystemPrompt(prompt);
-              }
-            }}
             onSwitchedToTextModel={() => {
               endVoiceConversationRef.current?.();
             }}
             chatMode={modeRef.current}
             hasInputText={hasInputText}
             chatStatus={chatStatus}
-            systemPrompt={systemPrompt}
           />
         )}
         /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */

@@ -14,8 +14,6 @@ import SettingsScreen from './settings/SettingsScreen.tsx';
 import Toast from 'react-native-toast-message';
 import TokenUsageScreen from './settings/TokenUsageScreen.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import PromptScreen from './prompt/PromptScreen.tsx';
-
 import ImageGalleryScreen from './image/ImageGalleryScreen.tsx';
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
@@ -95,10 +93,9 @@ const DrawerNavigator = () => {
 };
 /**
  * Stack导航器 - 全屏页面栈管理
- * 包含4个页面：
+ * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
  * - TokenUsage: Token使用统计
- * - Prompt: 系统提示词配置
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -114,20 +111,6 @@ const AppNavigator = () => {
         component={TokenUsageScreen}
         options={{
           title: 'Usage',
-          contentStyle: {
-            height: isMac ? 66 : undefined,
-            backgroundColor: colors.background,
-          },
-          headerTitleAlign: 'center',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-        }}
-      />
-      <Stack.Screen
-        name="Prompt"
-        component={PromptScreen}
-        options={{
-          title: 'System Prompt',
           contentStyle: {
             height: isMac ? 66 : undefined,
             backgroundColor: colors.background,
