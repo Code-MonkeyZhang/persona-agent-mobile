@@ -29,7 +29,16 @@ import { isMac } from '../App.tsx';
 import { DrawerActions } from '@react-navigation/native';
 import { useTheme, ColorScheme } from '../theme';
 
+/**
+ * 自定义侧边栏内容组件
+ *
+ * React Navigation 框架通过 props 传入3个属性（类型定义见 DrawerContentComponentProps）：
+ * - state: 当前的导航状态（有哪些页面、当前在第几个页面）
+ * - navigation: 导航方法（navigate跳转、goBack返回、dispatch发送导航指令等）
+ * - descriptors: 每个页面的配置信息（页面标题、样式选项等）
+ */
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
+  // 从 props 中解构出 navigation，用于页面跳转（如 navigation.navigate('Settings')）
   navigation,
 }) => {
   const { colors, isDark } = useTheme();
@@ -229,7 +238,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 style={[
                   styles.touch,
                   isSelected &&
-                    (isMac ? styles.macTouchSelected : styles.touchSelected),
+                  (isMac ? styles.macTouchSelected : styles.touchSelected),
                 ]}>
                 <Text numberOfLines={1} style={styles.title}>
                   {item.title}
