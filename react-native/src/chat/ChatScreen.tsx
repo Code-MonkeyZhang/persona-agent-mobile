@@ -75,8 +75,6 @@ import {
 import HeaderTitle from './component/HeaderTitle.tsx';
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
-import { webSearchOrchestrator } from '../websearch/services/WebSearchOrchestrator.ts';
-import { Citation } from '../types/Chat.ts';
 import {
   setLatestHtmlCode,
   clearLatestHtmlCode,
@@ -157,8 +155,7 @@ function ChatScreen(): React.JSX.Element {
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
-  const [usage, setUsage] = useState<Usage>();
+  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);  const [usage, setUsage] = useState<Usage>();
   const [userScrolled, setUserScrolled] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
@@ -182,7 +179,6 @@ function ChatScreen(): React.JSX.Element {
   const containerHeightRef = useRef(0);
   const [isShowVoiceLoading, setIsShowVoiceLoading] = useState(false);
   const audioWaveformRef = useRef<AudioWaveformRef>(null);
-  const [searchPhase, setSearchPhase] = useState<string>('');
 
   // App mode state
   const isAppModeRef = useRef(false);
@@ -725,53 +721,22 @@ function ChatScreen(): React.JSX.Element {
 
       // Wrap in async function to support await
       (async () => {
-        // Create AbortController before web search so it can be used throughout
         controllerRef.current = new AbortController();
         isCanceled.current = false;
 
-        // Get the last user message (the one after bot message)
         const userMessage = messages.length > 1 ? messages[1]?.text : null;
 
-        let webSearchSystemPrompt;
-        let webSearchCitations: Citation[] | undefined;
-        // Execute web search only in text mode with user message
-        if (userMessage && modeRef.current === ChatMode.Text) {
-          try {
-            const webSearchResult = await webSearchOrchestrator.execute(
-              userMessage,
-              bedrockMessages.current,
-              (phase: string) => {
-                setSearchPhase(phase);
-              },
-              undefined,
-              controllerRef.current
-            );
-            if (webSearchResult) {
-              webSearchSystemPrompt = webSearchResult.systemPrompt;
-              webSearchCitations = webSearchResult.citations;
-            }
-          } catch (error) {
-            // For errors, log and continue without web search
-            console.log('❌ Web search error in ChatScreen:', error);
-          }
-        }
-
-        // Check if aborted after web search completes
+        // Check if aborted
         if (isCanceled.current) {
           setChatStatus(ChatStatus.Init);
-          setSearchPhase('');
           return;
         }
 
-        // Clear searchPhase before starting AI response
-        setSearchPhase('');
         const startRequestTime = new Date().getTime();
         let latencyMs = 0;
         let metrics: Metrics | undefined;
 
-        // Prioritize web search system prompt, otherwise use user-selected system prompt
-        const effectiveSystemPrompt =
-          webSearchSystemPrompt || systemPromptRef.current;
+        const effectiveSystemPrompt = systemPromptRef.current;
 
         // In App mode, temporarily prepend htmlCode to last user message
         const currentHtmlCode = getLatestHtmlCode();
@@ -842,7 +807,7 @@ function ChatScreen(): React.JSX.Element {
                         : msg,
                     reasoning: reasoning,
                     metrics: metrics,
-                    citations: webSearchCitations,
+                    citations: undefined,
                   };
                   return newMessages;
                 });
@@ -1200,7 +1165,6 @@ function ChatScreen(): React.JSX.Element {
               {...props}
               chatStatus={chatStatus}
               isLastAIMessage={isLastAIMessage}
-              searchPhase={isLastAIMessage ? searchPhase : ''}
               onReasoningToggle={handleReasoningToggle}
               messageIndex={messageIndex}
               regenerateFromUserMessage={regenerateFromUserMessage}

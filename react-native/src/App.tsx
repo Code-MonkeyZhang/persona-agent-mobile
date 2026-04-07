@@ -23,7 +23,6 @@ import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
 import { configureErrorHandling } from './utils/ErrorUtils';
 import { migrateOpenAICompatConfig } from './storage/StorageUtils.ts';
-import { SearchWebView } from './websearch/components/SearchWebView';
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -187,7 +186,6 @@ const AppNavigator = () => {
  *     3. 抽屉打开/关闭
  *     4. Tab切换
  *   - 此处用于每次切换页面时自动收起键盘，防止键盘遮挡其他页面内容
- * - SearchWebView: 隐藏的WebView组件，用于Web搜索功能
  */
 const AppWithTheme = () => {
   const { colors, isDark } = useTheme();
@@ -205,9 +203,6 @@ const AppWithTheme = () => {
         }}>
         <AppNavigator />
       </NavigationContainer>
-
-      {/* 隐藏的WebView，用于Web搜索 TODO: 这个功能迟早要删掉 */}
-      <SearchWebView />
     </>
   );
 };

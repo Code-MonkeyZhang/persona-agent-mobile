@@ -20,7 +20,6 @@ import { invokeBedrockWithCallBack } from '../api/bedrock-api';
 import { ChatMode } from '../types/Chat';
 import { BedrockMessage } from '../chat/util/BedrockMessageConvertor';
 import { updateTotalUsage } from '../storage/StorageUtils';
-import { tavilyProvider } from '../websearch/providers/TavilyProvider';
 import { jsonrepair } from 'jsonrepair';
 
 interface ChatMessage {
@@ -124,34 +123,12 @@ const AIWebView = forwardRef<AIWebViewRef, AIWebViewProps>(
 
     // Handle web search request
     const handleWebSearch = useCallback(
-      async (requestId: string, query: string, maxResults: number) => {
-        const controller = new AbortController();
-        controllersRef.current.set(requestId, controller);
-
-        try {
-          const results = await tavilyProvider.search(
-            query,
-            maxResults,
-            controller
-          );
-          // Return only url, title, content fields
-          const simplifiedResults = results.map(r => ({
-            url: r.url,
-            title: r.title,
-            content: r.content,
-          }));
-          sendToWebView({
-            type: 'searchResults',
-            id: requestId,
-            results: simplifiedResults,
-          });
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Web search failed';
-          sendToWebView({ type: 'error', id: requestId, error: errorMessage });
-        } finally {
-          controllersRef.current.delete(requestId);
-        }
+      async (requestId: string, _query: string, _maxResults: number) => {
+        sendToWebView({
+          type: 'error',
+          id: requestId,
+          error: 'Web search is not available',
+        });
       },
       [sendToWebView]
     );

@@ -20,7 +20,7 @@ import RNFS from 'react-native-fs';
 import MDSvg from 'react-native-marked/src/components/MDSvg.tsx';
 import MDImage from 'react-native-marked/src/components/MDImage.tsx';
 import ImageProgressBar from '../ImageProgressBar.tsx';
-import { Citation, PressMode } from '../../../types/Chat.ts';
+import { PressMode } from '../../../types/Chat.ts';
 import MarkedList from '@jsamr/react-native-li';
 import Decimal from '@jsamr/counter-style/lib/es/presets/decimal';
 import Disc from '@jsamr/counter-style/lib/es/presets/disc';
@@ -31,7 +31,6 @@ import { isAndroid } from '../../../utils/PlatformUtils.ts';
 import { ColorScheme } from '../../../theme';
 import MermaidCodeRenderer from './MermaidCodeRenderer';
 import HtmlCodeRenderer from './HtmlCodeRenderer';
-import CitationBadge from '../CitationBadge';
 import CopyButton from './CopyButton';
 
 const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter'));
@@ -178,7 +177,6 @@ export class CustomMarkdownRenderer
   private colors: ColorScheme;
   private styles: ReturnType<typeof createCustomStyles>;
   private isDark: boolean;
-  private citations: Citation[];
   private onPreviewToggle?: (
     expanded: boolean,
     height: number,
@@ -193,7 +191,7 @@ export class CustomMarkdownRenderer
     private onImagePress: (pressMode: PressMode, url: string) => void,
     colors: ColorScheme,
     isDark: boolean,
-    citations: Citation[] = [],
+    _citations: never[] = [],
     onPreviewToggle?: (
       expanded: boolean,
       height: number,
@@ -208,7 +206,6 @@ export class CustomMarkdownRenderer
     this.colors = colors;
     this.isDark = isDark;
     this.styles = createCustomStyles(colors);
-    this.citations = citations;
     this.onPreviewToggle = onPreviewToggle;
     this.messageHtmlCode = messageHtmlCode;
     this.messageDiffCode = messageDiffCode;
@@ -234,53 +231,11 @@ export class CustomMarkdownRenderer
     return this.getTextView(text, styles);
   }
 
-  // Parse citation marks [1], [2], [3] etc. and replace with CitationBadge components
-  private parseCitationMarks(text: string): ReactNode[] {
-    if (!this.citations || this.citations.length === 0) {
-      return [text];
+  text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
+    if (Array.isArray(text)) {
+      return this.getNodeForTextArray(text, styles);
     }
-
-    // Regular expression to match [number] pattern
-    const citationRegex = /\[(\d+)\]/g;
-    const parts: ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = citationRegex.exec(text)) !== null) {
-      const citationNumber = parseInt(match[1], 10);
-      const citation = this.citations.find(c => c.number === citationNumber);
-
-      // Add text before the citation mark
-      if (match.index > lastIndex) {
-        parts.push(text.substring(lastIndex, match.index));
-      }
-
-      // Add citation badge if we have a matching citation
-      if (citation) {
-        // Add space before citation badge
-        parts.push(' ');
-        parts.push(
-          <CitationBadge
-            key={`citation-${citationNumber}-${match.index}`}
-            number={citationNumber}
-            url={citation.url}
-          />
-        );
-        // Add space after citation badge
-      } else {
-        // If no matching citation found, keep the original text
-        parts.push(match[0]);
-      }
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add remaining text after the last match
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
-
-    return parts.length > 0 ? parts : [text];
+    return this.getTextView(text, styles);
   }
 
   codespan(text: string, styles?: TextStyle): ReactNode {
@@ -288,18 +243,6 @@ export class CustomMarkdownRenderer
       ...styles,
       ...this.styles.codeSpanText,
     });
-  }
-
-  text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
-    if (Array.isArray(text)) {
-      return this.getNodeForTextArray(text, styles);
-    }
-    // Parse citation marks in the text
-    const parsedContent = this.parseCitationMarks(text);
-    if (parsedContent.length === 1 && typeof parsedContent[0] === 'string') {
-      return this.getTextView(parsedContent[0], styles);
-    }
-    return this.getTextView(parsedContent, styles);
   }
 
   strong(children: string | ReactNode[], styles?: TextStyle): ReactNode {

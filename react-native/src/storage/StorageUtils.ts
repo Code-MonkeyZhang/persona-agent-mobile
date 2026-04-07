@@ -76,7 +76,6 @@ const tokenInfoKey = keyPrefix + 'tokenInfo';
 const bedrockConfigModeKey = keyPrefix + 'bedrockConfigModeKey';
 const bedrockApiKeyTag = keyPrefix + 'bedrockApiKeyTag';
 const lastVirtualTryOnImgFileTag = keyPrefix + 'lastVirtualTryOnImgFileTag';
-const searchProviderKey = keyPrefix + 'searchProviderKey';
 const tavilyApiKeyTag = keyPrefix + 'tavilyApiKeyTag';
 const savedAppsKey = keyPrefix + 'savedAppsKey';
 
@@ -95,7 +94,6 @@ let currentSystemPrompts: SystemPrompt[] | undefined;
 let currentOpenAIProxyEnabled: boolean | undefined;
 let currentThinkingEnabled: boolean | undefined;
 let currentReasoningExpanded: boolean | undefined;
-let currentSearchProvider: string | undefined;
 let currentModelOrder: Model[] | undefined;
 let currentBedrockConfigMode: string | undefined;
 let currentBedrockApiKey: string | undefined;
@@ -741,19 +739,6 @@ export function getLastVirtualTryOnImgFile(): FileInfo | null {
     }
     return null;
   }
-}
-
-export function saveSearchProvider(provider: string) {
-  currentSearchProvider = provider;
-  storage.set(searchProviderKey, provider);
-}
-
-export function getSearchProvider(): string {
-  if (currentSearchProvider) {
-    return currentSearchProvider;
-  }
-  currentSearchProvider = storage.getString(searchProviderKey) ?? 'disabled';
-  return currentSearchProvider;
 }
 
 export function saveTavilyApiKey(apiKey: string) {

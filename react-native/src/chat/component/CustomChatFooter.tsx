@@ -19,8 +19,6 @@ import {
 import { PromptListComponent } from './PromptListComponent.tsx';
 import { ModelIconButton } from './ModelIconButton.tsx';
 import { ModelSelectionModal } from './ModelSelectionModal.tsx';
-import { WebSearchIconButton } from './WebSearchIconButton.tsx';
-import { WebSearchSelectionModal } from './WebSearchSelectionModal.tsx';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isAndroid, isMacCatalyst } from '../../utils/PlatformUtils.ts';
 
@@ -46,13 +44,9 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
   systemPrompt,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [iconPosition, setIconPosition] = useState({ x: 0, y: 0 });
-  const [searchIconPosition, setSearchIconPosition] = useState({ x: 0, y: 0 });
   const modelIconRef = useRef<View>(null);
-  const searchIconRef = useRef<View>(null);
   const iconPositionRef = useRef({ x: 0, y: 0 });
-  const searchIconPositionRef = useRef({ x: 0, y: 0 });
   const insets = useSafeAreaInsets();
   const statusBarHeight = useRef(insets.top);
   const isVirtualTryOn = systemPrompt?.id === -7;
@@ -76,21 +70,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
     }
   };
 
-  const handleOpenSearchModal = () => {
-    if (searchIconPositionRef.current.y === 0) {
-      searchIconRef.current?.measure((x, y, width, height, pageX, pageY) => {
-        searchIconPositionRef.current = {
-          x: pageX,
-          y: pageY + 10 + (isAndroid ? statusBarHeight.current : 0),
-        };
-        setSearchIconPosition(searchIconPositionRef.current);
-        setSearchModalVisible(true);
-      });
-    } else {
-      setSearchModalVisible(true);
-    }
-  };
-
   useEffect(() => {
     Keyboard.addListener('keyboardWillShow', () => {
       modelIconRef.current?.measure((x, y, width, height, pageX, pageY) => {
@@ -102,24 +81,11 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
           setIconPosition(iconPositionRef.current);
         }
       });
-      searchIconRef.current?.measure((x, y, width, height, pageX, pageY) => {
-        if (searchIconPositionRef.current.y === 0) {
-          searchIconPositionRef.current = {
-            x: pageX,
-            y: pageY + 10 + (isAndroid ? statusBarHeight.current : 0),
-          };
-          setSearchIconPosition(searchIconPositionRef.current);
-        }
-      });
     });
   }, []);
 
   const handleCloseModal = () => {
     setModalVisible(false);
-  };
-
-  const handleCloseSearchModal = () => {
-    setSearchModalVisible(false);
   };
   const isHideFileList = hasInputText || chatStatus === ChatStatus.Running;
 
@@ -165,9 +131,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
             />
             {chatMode === ChatMode.Text && (
               <>
-                <View ref={searchIconRef} collapsable={false}>
-                  <WebSearchIconButton onPress={handleOpenSearchModal} />
-                </View>
                 <View ref={modelIconRef} collapsable={false}>
                   <ModelIconButton onPress={handleOpenModal} />
                 </View>
@@ -180,11 +143,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
         visible={modalVisible}
         onClose={handleCloseModal}
         iconPosition={iconPosition}
-      />
-      <WebSearchSelectionModal
-        visible={searchModalVisible}
-        onClose={handleCloseSearchModal}
-        iconPosition={searchIconPosition}
       />
     </>
   );

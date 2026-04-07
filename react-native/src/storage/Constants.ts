@@ -2,7 +2,6 @@ import { Model, ModelTag, SystemPrompt } from '../types/Chat.ts';
 import {
   getDeepSeekApiKey,
   getOpenAIApiKey,
-  getTavilyApiKey,
 } from './StorageUtils.ts';
 import { isMac } from '../App.tsx';
 
@@ -314,24 +313,6 @@ if (fixed) {
 \`\`\`
 `;
 
-  const webSearchHint = getTavilyApiKey()
-    ? `
-### Web Search API
-
-\`AI.webSearch(query, maxResults?)\` - Search the web for information
-
-**Parameters:**
-- \`query\`: string (REQUIRED)
-- \`maxResults\`: number (optional, default: 5)
-- Returns: Promise<Array<{url, title, content}>>
-
-\`\`\`javascript
-const results = await AI.webSearch('your query', 5);
-results.forEach(r => console.log(r.title, r.url, r.content));
-\`\`\`
-`
-    : '';
-
   return `You are an expert HTML/CSS/JavaScript developer. Your task is to create or modify fully functional, interactive single-page web applications based on user requirements.
 
 ## Output Format
@@ -390,7 +371,6 @@ ${deviceHint}
 
 ## Available APIs
 ${aiApiHint}
-${webSearchHint}
 
 ## Design Guidelines
 - Modern, clean UI with good visual hierarchy
