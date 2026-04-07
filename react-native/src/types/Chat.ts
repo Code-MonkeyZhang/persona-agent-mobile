@@ -24,15 +24,11 @@ export enum ChatStatus {
 export interface EventData {
   id?: number;
   prompt?: SystemPrompt;
-  // WebView search events
   url?: string;
   script?: string;
   data?: string;
   error?: string;
   code?: number;
-  // App mode events
-  htmlCode?: string;
-  diffCode?: string;
 }
 
 export type Model = {
@@ -140,9 +136,6 @@ export interface SwiftChatMessage extends IMessage {
   user: SwiftChatUser;
   metrics?: Metrics;
   citations?: Citation[];
-  htmlCode?: string;
-  diffCode?: string;
-  isLastHtml?: boolean;
 }
 
 interface SwiftChatUser extends User {
@@ -197,12 +190,4 @@ export type TokenResponse = {
 export interface Metrics {
   latencyMs: string;
   speed: string;
-}
-
-export interface SavedApp {
-  id: string;
-  name: string;
-  htmlCode: string;
-  screenshotPath?: string;
-  createdAt: number;
 }

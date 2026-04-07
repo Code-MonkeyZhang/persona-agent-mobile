@@ -75,40 +75,10 @@ import {
 import HeaderTitle from './component/HeaderTitle.tsx';
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
-import {
-  setLatestHtmlCode,
-  clearLatestHtmlCode,
-  getLatestHtmlCode,
-  replaceHtmlWithPlaceholder,
-  replaceDiffWithPlaceholder,
-} from './util/DiffUtils.ts';
 
 const BOT_ID = 2;
-const APP_PROMPT_NAME = 'App';
 
-/**
- * Find the latest htmlCode from AI messages
- * Traverse all AI messages to find the first one with htmlCode
- */
-const findLatestHtmlCode = (messages: SwiftChatMessage[]): string => {
-  const aiMessages = messages.filter(m => m.user._id === BOT_ID);
-  for (const msg of aiMessages) {
-    if (msg.htmlCode) {
-      return msg.htmlCode;
-    }
-  }
-  return '';
-};
-
-/**
- * Check if any AI message has diffCode (for detecting failed diff apply case)
- */
-const hasAnyDiffCode = (messages: SwiftChatMessage[]): boolean => {
-  const aiMessages = messages.filter(m => m.user._id === BOT_ID);
-  return aiMessages.some(msg => msg.diffCode);
-};
-
-const createBotMessage = (mode: string, isAppMode: boolean = false) => {
+const createBotMessage = (mode: string) => {
   return {
     _id: uuid.v4(),
     text: mode === ChatMode.Text ? textPlaceholder : imagePlaceholder,
@@ -121,7 +91,6 @@ const createBotMessage = (mode: string, isAppMode: boolean = false) => {
           : getImageModel().modelName,
       modelTag: mode === ChatMode.Text ? getTextModel().modelTag : undefined,
     },
-    isLastHtml: isAppMode ? true : undefined,
   };
 };
 const imagePlaceholder = '![](bedrock://imgProgress)';
@@ -138,9 +107,6 @@ function ChatScreen(): React.JSX.Element {
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
   const mode = route.params?.mode ?? currentMode;
-  const editAppCode = route.params?.editAppCode;
-  const editAppName = route.params?.editAppName;
-  const editTimestamp = route.params?.editTimestamp;
   const modeRef = useRef(mode);
   const isNovaSonic =
     getTextModel().modelId.includes('sonic') &&
@@ -180,8 +146,6 @@ function ChatScreen(): React.JSX.Element {
   const [isShowVoiceLoading, setIsShowVoiceLoading] = useState(false);
   const audioWaveformRef = useRef<AudioWaveformRef>(null);
 
-  // App mode state
-  const isAppModeRef = useRef(false);
   const endVoiceConversationRef = useRef<(() => Promise<boolean>) | null>(null);
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
@@ -271,7 +235,6 @@ function ChatScreen(): React.JSX.Element {
 
       setMessages([]);
       bedrockMessages.current = [];
-      clearLatestHtmlCode();
       setUsage(undefined);
       showKeyboard();
     }, [])
@@ -363,21 +326,12 @@ function ChatScreen(): React.JSX.Element {
       const msg = getMessagesBySessionId(initialSessionId);
       sessionIdRef.current = initialSessionId;
       setUsage((msg[0] as SwiftChatMessage).usage);
-      // restore htmlCode from history
-      const restoredHtmlCode = findLatestHtmlCode(msg as SwiftChatMessage[]);
-      setLatestHtmlCode(restoredHtmlCode);
 
-      if (restoredHtmlCode || hasAnyDiffCode(msg as SwiftChatMessage[])) {
-        isAppModeRef.current = true;
-        sendEventRef.current?.('selectAppPrompt');
-      } else {
-        setSystemPrompt(null);
-        saveCurrentSystemPrompt(null);
-        saveCurrentVoiceSystemPrompt(null);
-        saveCurrentImageSystemPrompt(null);
-        //notify to unselect prompt
-        sendEventRef.current?.('unSelectSystemPrompt');
-      }
+      setSystemPrompt(null);
+      saveCurrentSystemPrompt(null);
+      saveCurrentVoiceSystemPrompt(null);
+      saveCurrentImageSystemPrompt(null);
+      sendEventRef.current?.('unSelectSystemPrompt');
       getBedrockMessagesFromChatMessages(msg).then(currentMessage => {
         bedrockMessages.current = currentMessage;
       });
@@ -397,26 +351,6 @@ function ChatScreen(): React.JSX.Element {
   }, [initialSessionId, mode, tapIndex]);
 
   // ==================== 事件监听 ====================
-  // editAppCode handler - for editing saved apps from AppGallery
-  useEffect(() => {
-    if (editAppCode && editTimestamp) {
-      startNewChat.current();
-      setUsage(undefined);
-      setLatestHtmlCode(editAppCode);
-      isAppModeRef.current = true;
-      setTimeout(() => {
-        sendEventRef.current?.('selectAppPrompt');
-        // Pre-fill the input with app name hint
-        if (editAppName && textInputViewRef.current) {
-          const hintText = `Edit [${editAppName}]: `;
-          textInputViewRef.current.setNativeProps({ text: hintText });
-          inputTextRef.current = hintText;
-          setHasInputText(true);
-        }
-      }, 100);
-    }
-  }, [editAppCode, editAppName, editTimestamp]);
-
   // deleteChat listener
   useEffect(() => {
     if (event?.event === 'deleteChat' && event.params) {
@@ -430,50 +364,6 @@ function ChatScreen(): React.JSX.Element {
         bedrockMessages.current = [];
         setMessages([]);
       }
-    }
-  }, [event]);
-
-  // htmlCodeGenerated listener for App mode - update message.htmlCode for persistence
-  useEffect(() => {
-    if (event?.event === 'htmlCodeGenerated' && event.params?.htmlCode) {
-      const { htmlCode } = event.params;
-      setMessages(prevMessages => {
-        // update isLastHtml for all messages
-        const newMessages = prevMessages.map((msg, index) => {
-          if (index === 0) {
-            return { ...msg, htmlCode: htmlCode, isLastHtml: true };
-          } else if (msg.isLastHtml) {
-            return { ...msg, isLastHtml: false };
-          }
-          return msg;
-        });
-        return newMessages;
-      });
-    }
-  }, [event]);
-
-  // diffApplied listener for App mode - update message.htmlCode and save diffCode
-  // Note: placeholder replacement is done in ChatStatus.Complete handler
-  useEffect(() => {
-    if (event?.event === 'diffApplied' && event.params?.diffCode) {
-      const { htmlCode, diffCode } = event.params;
-      setMessages(prevMessages => {
-        // update isLastHtml for all messages
-        const newMessages = prevMessages.map((msg, index) => {
-          if (index === 0) {
-            return {
-              ...msg,
-              htmlCode: htmlCode,
-              diffCode: diffCode,
-              isLastHtml: true,
-            };
-          } else if (msg.isLastHtml) {
-            return { ...msg, isLastHtml: false };
-          }
-          return msg;
-        });
-        return newMessages;
-      });
     }
   }, [event]);
 
@@ -530,14 +420,6 @@ function ChatScreen(): React.JSX.Element {
     if (chatStatus === ChatStatus.Complete) {
       if (messagesRef.current.length <= 1) {
         return;
-      }
-      // In App mode, replace HTML/diff with placeholder to save context tokens
-      const msg = messagesRef.current[0];
-      if (isAppModeRef.current && msg.htmlCode) {
-        msg.text = replaceHtmlWithPlaceholder(msg.text, msg.htmlCode);
-      }
-      if (isAppModeRef.current && msg.diffCode && msg.htmlCode) {
-        msg.text = replaceDiffWithPlaceholder(msg.text, msg.diffCode);
       }
       saveCurrentMessages();
       getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
@@ -738,16 +620,6 @@ function ChatScreen(): React.JSX.Element {
 
         const effectiveSystemPrompt = systemPromptRef.current;
 
-        // In App mode, temporarily prepend htmlCode to last user message
-        const currentHtmlCode = getLatestHtmlCode();
-        const lastMsgContent = bedrockMessages.current[
-          bedrockMessages.current.length - 1
-        ]?.content[0] as { text?: string };
-        const originalText = lastMsgContent?.text;
-        if (isAppModeRef.current && currentHtmlCode && originalText) {
-          lastMsgContent.text = `Current app code:\n\`\`\`html\n${currentHtmlCode}\n\`\`\`\n\nUser request: ${originalText}`;
-        }
-
         invokeBedrockWithCallBack(
           bedrockMessages.current,
           modeRef.current,
@@ -839,11 +711,6 @@ function ChatScreen(): React.JSX.Element {
             }
           }
         ).then();
-
-        // Restore original text after sending
-        if (originalText && lastMsgContent) {
-          lastMsgContent.text = originalText;
-        }
       })(); // Close async IIFE
     }
   }, [messages]);
@@ -858,15 +725,6 @@ function ChatScreen(): React.JSX.Element {
       // Get all history messages after the user message
       const historyMessages = messagesRef.current.slice(userMessageIndex + 1);
 
-      // Update latestHtmlCode for app mode (only if found in history)
-      if (isAppModeRef.current) {
-        const foundHtmlCode = findLatestHtmlCode(historyMessages);
-        if (foundHtmlCode) {
-          setLatestHtmlCode(foundHtmlCode);
-        }
-      }
-
-      // Create the user message (updated if newText provided)
       const userMessage: SwiftChatMessage = newText
         ? { ...messagesRef.current[userMessageIndex], text: newText }
         : messagesRef.current[userMessageIndex];
@@ -1106,19 +964,6 @@ function ChatScreen(): React.JSX.Element {
               const lastPromptIsVirtualTryOn = systemPrompt?.id === -7;
               setSystemPrompt(prompt);
 
-              // Update App mode state
-              const isAppMode = prompt?.name === APP_PROMPT_NAME;
-              isAppModeRef.current = isAppMode;
-              if (isAppMode) {
-                // Restore htmlCode from latest AI message when switching to App mode
-                // Only update if not already set (e.g., from history load)
-                if (!getLatestHtmlCode()) {
-                  setLatestHtmlCode(findLatestHtmlCode(messages));
-                }
-              } else {
-                clearLatestHtmlCode();
-              }
-
               if (modeRef.current === ChatMode.Image) {
                 saveCurrentImageSystemPrompt(prompt);
                 if (prompt?.id === -7) {
@@ -1169,7 +1014,6 @@ function ChatScreen(): React.JSX.Element {
               messageIndex={messageIndex}
               regenerateFromUserMessage={regenerateFromUserMessage}
               flatListRef={flatListRef}
-              isAppMode={isAppModeRef.current}
             />
           );
         }}

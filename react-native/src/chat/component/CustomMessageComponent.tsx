@@ -65,7 +65,6 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
     newText?: string
   ) => void;
   flatListRef?: RefObject<FlatList<SwiftChatMessage>>;
-  isAppMode?: boolean;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -79,7 +78,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   messageIndex,
   regenerateFromUserMessage,
   flatListRef,
-  isAppMode,
 }) => {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -282,22 +280,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         colors,
         isDark,
         [],
-        onReasoningToggle,
-        currentMessage?.htmlCode,
-        currentMessage?.diffCode,
-        isAppMode,
-        currentMessage?.isLastHtml
+        onReasoningToggle
       ),
-    [
-      handleImagePress,
-      colors,
-      isDark,
-      onReasoningToggle,
-      currentMessage?.htmlCode,
-      currentMessage?.diffCode,
-      isAppMode,
-      currentMessage?.isLastHtml,
-    ]
+    [handleImagePress, colors, isDark, onReasoningToggle]
   );
 
   const customTokenizer = useMemo(() => new CustomTokenizer(), []);
@@ -879,9 +864,6 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     prevProps.currentMessage?.image === nextProps.currentMessage?.image &&
     prevProps.currentMessage?.reasoning ===
       nextProps.currentMessage?.reasoning &&
-    prevProps.currentMessage?.htmlCode === nextProps.currentMessage?.htmlCode &&
-    prevProps.currentMessage?.isLastHtml ===
-      nextProps.currentMessage?.isLastHtml &&
     prevProps.chatStatus === nextProps.chatStatus &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
     prevProps.messageIndex === nextProps.messageIndex

@@ -15,9 +15,7 @@ import Toast from 'react-native-toast-message';
 import TokenUsageScreen from './settings/TokenUsageScreen.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import PromptScreen from './prompt/PromptScreen.tsx';
-import AppGalleryScreen from './app/AppGalleryScreen.tsx';
-import AppViewerScreen from './app/AppViewerScreen.tsx';
-import CreateAppScreen from './app/CreateAppScreen.tsx';
+
 import ImageGalleryScreen from './image/ImageGalleryScreen.tsx';
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
@@ -38,7 +36,7 @@ const Drawer = createDrawerNavigator<RouteParamList>();
 const Stack = createNativeStackNavigator();
 
 // 渲染自定义抽屉内容的包装器
-// CustomDrawerContent 定义了侧边栏的布局：快捷入口(Chat/Image/App) + 聊天历史列表 + Settings
+// CustomDrawerContent 定义了侧边栏的布局：快捷入口(Chat/Image) + 聊天历史列表 + Settings
 // 将props透传给CustomDrawerContent组件
 const renderCustomDrawerContent = (
   props: React.JSX.IntrinsicAttributes & DrawerContentComponentProps
@@ -54,7 +52,7 @@ const renderCustomDrawerContent = (
  * │  Content)    │                      │
  * │              │                      │
  * │ Chat/Image/  │  ← 当前显示的页面      │
- * │ App入口      │  (Bedrock/Settings/   │
+ * │ 入口         │  (Bedrock/Settings/   │
  * │ Session列表   │   ImageGallery等)     │
  * │ ...          │                      │
  * │ Settings入口  │                      │
@@ -91,18 +89,16 @@ const DrawerNavigator = () => {
       <Drawer.Screen name="Bedrock" component={ChatScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
       <Drawer.Screen name="ImageGallery" component={ImageGalleryScreen} />
-      <Drawer.Screen name="AppGallery" component={AppGalleryScreen} />
+
     </Drawer.Navigator>
   );
 };
 /**
  * Stack导航器 - 全屏页面栈管理
- * 包含6个页面：
+ * 包含4个页面：
  * - Drawer: 抽屉导航器(默认首页)
  * - TokenUsage: Token使用统计
  * - Prompt: 系统提示词配置
- * - AppViewer: 应用查看器
- * - CreateApp: 创建应用
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -132,37 +128,6 @@ const AppNavigator = () => {
         component={PromptScreen}
         options={{
           title: 'System Prompt',
-          contentStyle: {
-            height: isMac ? 66 : undefined,
-            backgroundColor: colors.background,
-          },
-          headerTitleAlign: 'center',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-        }}
-      />
-      <Stack.Screen
-        name="AppViewer"
-        component={AppViewerScreen}
-        options={({ route }) => {
-          const params = route.params as RouteParamList['AppViewer'];
-          return {
-            title: params?.app?.name ?? 'App',
-            contentStyle: {
-              height: isMac ? 66 : undefined,
-              backgroundColor: '#000000',
-            },
-            headerTitleAlign: 'center',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-          };
-        }}
-      />
-      <Stack.Screen
-        name="CreateApp"
-        component={CreateAppScreen}
-        options={{
-          title: 'Create App',
           contentStyle: {
             height: isMac ? 66 : undefined,
             backgroundColor: colors.background,

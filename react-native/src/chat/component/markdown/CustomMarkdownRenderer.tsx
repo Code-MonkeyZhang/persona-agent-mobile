@@ -30,7 +30,6 @@ import MathView from 'react-native-math-view';
 import { isAndroid } from '../../../utils/PlatformUtils.ts';
 import { ColorScheme } from '../../../theme';
 import MermaidCodeRenderer from './MermaidCodeRenderer';
-import HtmlCodeRenderer from './HtmlCodeRenderer';
 import CopyButton from './CopyButton';
 
 const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter'));
@@ -49,10 +48,6 @@ const MemoizedCodeHighlighter = React.memo(
     isDark,
     onPreviewToggle,
     isCompleted,
-    messageHtmlCode,
-    messageDiffCode,
-    isAppMode,
-    isLastHtml,
   }: {
     text: string;
     language?: string;
@@ -64,13 +59,8 @@ const MemoizedCodeHighlighter = React.memo(
       animated: boolean
     ) => void;
     isCompleted?: boolean;
-    messageHtmlCode?: string;
-    messageDiffCode?: string;
-    isAppMode?: boolean;
-    isLastHtml?: boolean;
   }) => {
     const styles = createCustomStyles(colors);
-    // Use useRef to always capture the latest text value
     const textRef = React.useRef(text);
     textRef.current = text;
 
@@ -78,23 +68,6 @@ const MemoizedCodeHighlighter = React.memo(
     if (language === 'mermaid') {
       return (
         <MermaidCodeRenderer text={text} colors={colors} isDark={isDark} />
-      );
-    }
-
-    // Show HtmlCodeRenderer for html and code diff
-    if (language === 'html' || (isAppMode && language === 'diff')) {
-      return (
-        <HtmlCodeRenderer
-          text={text}
-          language={language}
-          colors={colors}
-          isDark={isDark}
-          onPreviewToggle={onPreviewToggle}
-          isCompleted={isCompleted}
-          messageHtmlCode={messageHtmlCode}
-          messageDiffCode={messageDiffCode}
-          isLastHtml={isLastHtml}
-        />
       );
     }
 
@@ -131,11 +104,9 @@ const MemoizedCodeHighlighter = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    // Mermaid diagrams need special handling - always re-render
     if (prevProps.language === 'mermaid' || nextProps.language === 'mermaid') {
       return false;
     }
-    // Update when text/language/theme changes
     if (
       prevProps.text !== nextProps.text ||
       prevProps.language !== nextProps.language ||
@@ -144,24 +115,7 @@ const MemoizedCodeHighlighter = React.memo(
     ) {
       return false;
     }
-    // Update once when isCompleted becomes true
     if (!prevProps.isCompleted && nextProps.isCompleted) {
-      return false;
-    }
-    // Update when messageHtmlCode changes (for preview switch)
-    if (prevProps.messageHtmlCode !== nextProps.messageHtmlCode) {
-      return false;
-    }
-    // Update when messageDiffCode changes (for diff history display)
-    if (prevProps.messageDiffCode !== nextProps.messageDiffCode) {
-      return false;
-    }
-    // Update when isAppMode changes
-    if (prevProps.isAppMode !== nextProps.isAppMode) {
-      return false;
-    }
-    // Update when isLastHtml changes
-    if (prevProps.isLastHtml !== nextProps.isLastHtml) {
       return false;
     }
     return true;
@@ -182,10 +136,6 @@ export class CustomMarkdownRenderer
     height: number,
     animated: boolean
   ) => void;
-  private messageHtmlCode?: string;
-  private messageDiffCode?: string;
-  private isAppMode?: boolean;
-  private isLastHtml?: boolean;
 
   constructor(
     private onImagePress: (pressMode: PressMode, url: string) => void,
@@ -196,21 +146,13 @@ export class CustomMarkdownRenderer
       expanded: boolean,
       height: number,
       animated: boolean
-    ) => void,
-    messageHtmlCode?: string,
-    messageDiffCode?: string,
-    isAppMode?: boolean,
-    isLastHtml?: boolean
+    ) => void
   ) {
     super();
     this.colors = colors;
     this.isDark = isDark;
     this.styles = createCustomStyles(colors);
     this.onPreviewToggle = onPreviewToggle;
-    this.messageHtmlCode = messageHtmlCode;
-    this.messageDiffCode = messageDiffCode;
-    this.isAppMode = isAppMode;
-    this.isLastHtml = isLastHtml;
   }
 
   getTextView(children: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -326,11 +268,6 @@ export class CustomMarkdownRenderer
       let componentKey = this.getKey();
       if (language === 'mermaid') {
         componentKey = 'mermaid-code-block';
-      } else if (
-        this.isAppMode &&
-        (language === 'html' || language === 'diff')
-      ) {
-        componentKey = 'html-code-block';
       }
       return (
         <MemoizedCodeHighlighter
@@ -341,10 +278,6 @@ export class CustomMarkdownRenderer
           isDark={this.isDark}
           onPreviewToggle={this.onPreviewToggle}
           isCompleted={isCompleted}
-          messageHtmlCode={this.messageHtmlCode}
-          messageDiffCode={this.messageDiffCode}
-          isAppMode={this.isAppMode}
-          isLastHtml={this.isLastHtml}
         />
       );
     } else {

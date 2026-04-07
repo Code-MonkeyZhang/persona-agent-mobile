@@ -1,4 +1,4 @@
-import { ChatMode, SavedApp, SystemPrompt } from './Chat.ts';
+import { ChatMode, SystemPrompt } from './Chat.ts';
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 /**
@@ -29,9 +29,6 @@ export type RouteParamList = {
     sessionId?: number;
     tapIndex?: number;
     mode?: ChatMode;
-    editAppCode?: string;
-    editAppName?: string;
-    editTimestamp?: number;
   };
   Settings: NonNullable<unknown>;
   TokenUsage: NonNullable<unknown>;
@@ -39,10 +36,5 @@ export type RouteParamList = {
     prompt?: SystemPrompt;
     promptType?: string | undefined;
   };
-  AppGallery: NonNullable<unknown>;
-  AppViewer: {
-    app: SavedApp;
-  };
-  CreateApp: NonNullable<unknown>;
   ImageGallery: NonNullable<unknown>;
 };
