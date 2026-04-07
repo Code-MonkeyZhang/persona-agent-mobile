@@ -1,3 +1,7 @@
+/**
+ * @file CustomMessageComponent.tsx
+ * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、引用、操作按钮、附件）
+ */
 import React, {
   useCallback,
   useEffect,
@@ -47,6 +51,7 @@ import {
 } from '../../storage/StorageUtils.ts';
 import CitationList from './CitationList';
 
+/** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态、编辑回调等属性 */
 interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
   chatStatus: ChatStatus;
   isLastAIMessage?: boolean;
@@ -67,6 +72,7 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
 
 const { width: screenWidth } = Dimensions.get('window');
 
+/** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、引用、操作按钮、附件）TODO:对于MVP这个需要仿照Desktop进行更改 */ 
 const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   currentMessage,
   chatStatus,
@@ -724,6 +730,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   );
 };
 
+/** 样式工厂函数, 根据主题颜色, 动态创建组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     container: {
@@ -891,6 +898,7 @@ const createStyles = (colors: ColorScheme) =>
     },
   });
 
+/** Markdown 富文本渲染的自定义样式配置（标题、列表、表格等间距） */
 const customMarkedStyles: MarkedStyles = {
   table: { marginVertical: 4 },
   li: { paddingVertical: 4 },
@@ -902,6 +910,7 @@ const customMarkedStyles: MarkedStyles = {
   paragraph: { paddingVertical: 6 },
 };
 
+/** 导出组件并自定义 memo 比较函数，仅在消息内容、状态、索引等关键属性变化时才重新渲染 */
 export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
   return (
     prevProps.currentMessage?.text === nextProps.currentMessage?.text &&

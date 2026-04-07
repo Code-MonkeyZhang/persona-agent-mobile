@@ -1,3 +1,8 @@
+/**
+ * @file ModelSelectionModal.tsx
+ * @description 模型选择弹窗，支持切换对话使用的 AI 模型
+ */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAppContext } from '../../history/AppProvider';
 import {

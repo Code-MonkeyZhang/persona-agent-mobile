@@ -131,7 +131,9 @@ const textPlaceholder = '...';
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 let currentMode = ChatMode.Text;
 
+// 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
+  // ==================== 路由参数 ====================
   const { colors, isDark } = useTheme();
   const navigation = useNavigation();
   const route = useRoute<ChatScreenRouteProp>();
@@ -146,6 +148,7 @@ function ChatScreen(): React.JSX.Element {
     getTextModel().modelId.includes('sonic') &&
     modeRef.current === ChatMode.Text;
 
+  // ==================== 状态声明 ====================
   const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
   const [systemPrompt, setSystemPrompt] = useState<SystemPrompt | null>(
@@ -187,6 +190,7 @@ function ChatScreen(): React.JSX.Element {
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
 
+  // ==================== 语音聊天 ====================
   const endVoiceConversation = useCallback(async () => {
     audioWaveformRef.current?.resetAudioLevels();
     if (isVoiceLoading.current) {
@@ -205,6 +209,7 @@ function ChatScreen(): React.JSX.Element {
     endVoiceConversationRef.current = endVoiceConversation;
   }, [endVoiceConversation]);
 
+  // ==================== Ref 同步 & 副作用 ====================
   // update refs value with state
   useEffect(() => {
     messagesRef.current = messages;
@@ -257,6 +262,7 @@ function ChatScreen(): React.JSX.Element {
     };
   }, []);
 
+  // ==================== 新建聊天 & 导航栏 ====================
   // start new chat
   const startNewChat = useRef(
     useCallback(() => {
@@ -320,6 +326,7 @@ function ChatScreen(): React.JSX.Element {
     navigation.setOptions(headerOptions);
   }, [usage, navigation, mode, systemPrompt, isDark]);
 
+  // ==================== 会话切换 & 消息加载 ====================
   // sessionId changes (start new chat or click another session)
   useEffect(() => {
     if (tapIndex && initialSessionId) {
@@ -393,6 +400,7 @@ function ChatScreen(): React.JSX.Element {
     }
   }, [initialSessionId, mode, tapIndex]);
 
+  // ==================== 事件监听 ====================
   // editAppCode handler - for editing saved apps from AppGallery
   useEffect(() => {
     if (editAppCode && editTimestamp) {
@@ -473,6 +481,7 @@ function ChatScreen(): React.JSX.Element {
     }
   }, [event]);
 
+  // ==================== 键盘 & 屏幕 & 生命周期 ====================
   // keyboard show listener for scroll to bottom
   useEffect(() => {
     const handleKeyboardShow = () => {
@@ -519,6 +528,7 @@ function ChatScreen(): React.JSX.Element {
     };
   }, []);
 
+  // ==================== 消息完成 & 保存 ====================
   // handle message complete update bedrockMessage and saveMessage
   useEffect(() => {
     if (chatStatus === ChatStatus.Complete) {
@@ -604,6 +614,7 @@ function ChatScreen(): React.JSX.Element {
     }
   };
 
+  // ==================== 滚动控制 ====================
   const { width: screenWidth, height: screenHeight } = screenDimensions;
 
   const chatScreenWidth =
@@ -685,6 +696,15 @@ function ChatScreen(): React.JSX.Element {
     },
     []
   );
+
+  // ==================== AI 流式输出 ====================
+
+  /**
+   * 监听 messages 变化，当检测到新的 AI 占位消息（"..."）时：
+   * 1. 执行网页搜索（仅文字模式），获取搜索结果和引用
+   * 2. 调用 Bedrock API 进行流式输出，逐 token 更新 AI 回复
+   * 3. 计算延迟、速度等指标，完成后设置 ChatStatus.Complete
+   */
 
   // invoke bedrock api
   useEffect(() => {
@@ -863,7 +883,8 @@ function ChatScreen(): React.JSX.Element {
     }
   }, [messages]);
 
-  // Shared function for regenerate and edit-submit
+  // ==================== 发送消息 & 重新生成 ====================
+  /** 重新生成：从指定用户消息重新发起 AI 回复，支持编辑后重发 */
   const regenerateFromUserMessage = useCallback(
     (userMessageIndex: number, newText?: string) => {
       setUserScrolled(false);
@@ -902,11 +923,13 @@ function ChatScreen(): React.JSX.Element {
     []
   );
 
-  // handle onSend
+  /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
   const onSend = useCallback(async (message: SwiftChatMessage[] = []) => {
-    // Reset user scroll state when sending a new message
+    // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
     setUserScrolled(false);
+    // 取出当前选中的附件文件
     const files = selectedFilesRef.current;
+    // 如果有视频还在转码/压缩中，提示等待
     if (!isAllFileReady(files)) {
       showInfo('please wait for all videos to be ready');
       return;
@@ -914,8 +937,9 @@ function ChatScreen(): React.JSX.Element {
 
     if (message[0]?.text || files.length > 0) {
       if (!message[0]?.text) {
+        // 支持输入非文本
         if (modeRef.current === ChatMode.Text) {
-          // use system prompt name as user prompt
+          // use system prompt name as user prompt TODO:MVP这个要改
           if (systemPromptRef.current) {
             message[0].text = systemPromptRef.current.name;
           } else {
@@ -956,6 +980,8 @@ function ChatScreen(): React.JSX.Element {
     }
   }, []);
 
+  // ==================== 文件 & 语音转录 ====================
+  // NOTE: 这个需要留着, 虽然MVP可能暂时用不上
   const handleNewFileSelected = (files: FileInfo[]) => {
     setSelectedFiles(prevFiles => {
       const isVirtualTryOn =
@@ -1005,14 +1031,20 @@ function ChatScreen(): React.JSX.Element {
     }
   };
 
+  // ==================== UI 渲染 ====================
   const styles = createStyles(colors, isNovaSonic);
 
   return (
     <SafeAreaView style={styles.container}>
       <GiftedChat
+        // 消息列表的 ref，用于代码中控制滚动（如 scrollToBottom、编辑时滚动定位）
         messageContainerRef={flatListRef}
+        // 输入框的 ref，用于发送后清空输入框、重新聚焦键盘
         textInputRef={textInputViewRef}
+        // 点击非可交互区域时收起键盘
         keyboardShouldPersistTaps="never"
+        // 底部偏移：处理键盘/底部安全区域的遮挡问题
+        // Android 系统自动处理所以为 0；iPhone 竖屏有 Home Indicator 多留 24；其余 12
         bottomOffset={
           Platform.OS === 'android'
             ? 0
@@ -1027,6 +1059,7 @@ function ChatScreen(): React.JSX.Element {
         }}
         alignTop={false}
         inverted={true}
+        /** 空聊天页面：无消息时显示的欢迎界面 */
         renderChatEmpty={() => (
           <EmptyChatComponent
             chatMode={modeRef.current}
@@ -1036,6 +1069,7 @@ function ChatScreen(): React.JSX.Element {
         alwaysShowSend={
           chatStatus !== ChatStatus.Init || selectedFiles.length > 0
         }
+        /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
         renderComposer={props => {
           if (isNovaSonic && mode === ChatMode.Text) {
             return <AudioWaveformComponent ref={audioWaveformRef} />;
@@ -1046,6 +1080,7 @@ function ChatScreen(): React.JSX.Element {
             <Composer {...props} textInputStyle={styles.composerTextInput} />
           );
         }}
+        /** 自定义发送按钮：根据状态切换发送/停止/语音/附件按钮 */
         renderSend={props => (
           <CustomSendComponent
             {...props}
@@ -1091,6 +1126,7 @@ function ChatScreen(): React.JSX.Element {
             systemPrompt={systemPrompt}
           />
         )}
+        /** 自定义底部工具栏：附件文件列表、System Prompt 选择器、聊天模式切换 */
         renderChatFooter={() => (
           <CustomChatFooter
             files={selectedFiles}
@@ -1148,6 +1184,7 @@ function ChatScreen(): React.JSX.Element {
             systemPrompt={systemPrompt}
           />
         )}
+        /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
         renderMessage={props => {
           // Find the index of the current message in the messages array
           const messageIndex = messages.findIndex(
@@ -1172,6 +1209,7 @@ function ChatScreen(): React.JSX.Element {
             />
           );
         }}
+        /** 消息列表配置：滚动监听、自动滚动控制、流式输出时保持消息位置不跳动 */
         listViewProps={{
           contentContainerStyle: styles.contentContainer,
           contentInset: { top: 2 },
@@ -1198,6 +1236,7 @@ function ChatScreen(): React.JSX.Element {
         scrollToBottom={true}
         scrollToBottomComponent={CustomScrollToBottomComponent}
         scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
+        /** 自定义输入框外层容器：控制背景色、边距等样式 */
         renderInputToolbar={props => (
           <InputToolbar
             {...props}
@@ -1205,6 +1244,7 @@ function ChatScreen(): React.JSX.Element {
             primaryStyle={styles.inputToolbarPrimary}
           />
         )}
+        /** 输入框原生属性：键盘回车发送、字体样式、输入变化监听 */
         textInputProps={{
           ...styles.textInputStyle,
           ...{
@@ -1265,6 +1305,7 @@ function ChatScreen(): React.JSX.Element {
   );
 }
 
+// 聊天页面的样式定义（页面背景、输入框区域等）
 const createStyles = (colors: ColorScheme, isNovaSonic: boolean) =>
   StyleSheet.create({
     container: {

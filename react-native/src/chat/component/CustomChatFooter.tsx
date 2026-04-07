@@ -1,3 +1,9 @@
+/**
+ * @file CustomChatFooter.tsx
+ * @description ChatScreen 底部工具栏，支持文件列表、提示词选择、模型切换和网络搜索
+ * @module chat/component
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import {
