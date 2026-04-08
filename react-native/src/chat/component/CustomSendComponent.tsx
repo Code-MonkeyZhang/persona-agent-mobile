@@ -1,7 +1,6 @@
 import { Send, SendProps } from 'react-native-gifted-chat';
 import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import LoadingSpinner from './LoadingSpinner';
 import {
   ChatMode,
   ChatStatus,
@@ -9,33 +8,27 @@ import {
   SwiftChatMessage,
 } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
-import { getTextModel } from '../../storage/StorageUtils.ts';
 import { useTheme, ColorScheme } from '../../theme';
 
 interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
   chatStatus: ChatStatus;
   chatMode: ChatMode;
   selectedFiles: FileInfo[];
-  isShowLoading?: boolean;
   onStopPress: () => void;
   onFileSelected: (files: FileInfo[]) => void;
-  onVoiceChatToggle?: () => void;
 }
 
 const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   chatStatus,
   chatMode,
   selectedFiles,
-  isShowLoading: isShowLoading = false,
   onStopPress,
   onFileSelected,
-  onVoiceChatToggle,
   ...props
 }) => {
   const { text, onSend } = props;
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const isNovaSonic = getTextModel().modelId.includes('sonic');
 
   const handleSend = useCallback(() => {
     if (onSend) {
@@ -52,15 +45,13 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
     },
     [onFileSelected]
   );
-  let isShowSending = false;
-  if (chatMode === ChatMode.Text) {
-    isShowSending =
-      ((text && text!.length > 0) ||
-        selectedFiles.length > 0 ||
-        chatStatus === ChatStatus.Running) &&
-      !isNovaSonic &&
-      !isShowLoading;
-  }
+
+  const isShowSending =
+    chatMode === ChatMode.Text &&
+    ((text && text.length > 0) ||
+      selectedFiles.length > 0 ||
+      chatStatus === ChatStatus.Running);
+
   if (isShowSending) {
     return (
       <Send
@@ -92,54 +83,12 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       </Send>
     );
   } else {
-    if ((isNovaSonic || isShowLoading) && chatMode === ChatMode.Text) {
-      if (isShowLoading) {
-        return (
-          <View style={styles.loadingContainer}>
-            <LoadingSpinner
-              source={require('../../assets/loading.png')}
-              visible={true}
-              size={26}
-            />
-          </View>
-        );
-      }
-      return (
-        <>
-          {chatStatus === ChatStatus.Running && (
-            <View style={styles.micContainer}>
-              <TouchableOpacity
-                style={styles.stopContainer}
-                onPress={() => onStopPress()}>
-                <View style={styles.circle} />
-                <View style={styles.rectangle} />
-              </TouchableOpacity>
-            </View>
-          )}
-          {chatStatus !== ChatStatus.Running && (
-            <TouchableOpacity
-              style={styles.micContainer}
-              onPress={onVoiceChatToggle}>
-              <Image
-                source={
-                  isDark
-                    ? require('../../assets/mic_dark.png')
-                    : require('../../assets/mic.png')
-                }
-                style={styles.sendButton}
-              />
-            </TouchableOpacity>
-          )}
-        </>
-      );
-    } else {
-      return (
-        <CustomAddFileComponent
-          {...props}
-          onFileSelected={handleFileSelected}
-        />
-      );
-    }
+    return (
+      <CustomAddFileComponent
+        {...props}
+        onFileSelected={handleFileSelected}
+      />
+    );
   }
 };
 
@@ -171,19 +120,6 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       alignItems: 'center',
       alignSelf: 'flex-end',
-    },
-    micContainer: {
-      justifyContent: 'center',
-      alignItems: 'center',
-      alignSelf: 'flex-end',
-      height: 44,
-    },
-    loadingContainer: {
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 10,
-      marginLeft: 10,
-      height: 44,
     },
     sendButton: {
       width: 26,

@@ -17,10 +17,6 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { voiceChatService } from './service/VoiceChatService';
-import AudioWaveformComponent, {
-  AudioWaveformRef,
-} from './component/AudioWaveformComponent';
 import { ColorScheme, useTheme } from '../theme';
 import { invokeBedrockWithCallBack, requestToken } from '../api/bedrock-api';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
@@ -94,9 +90,6 @@ function ChatScreen(): React.JSX.Element {
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
   const modeRef = useRef(currentMode);
-  const isNovaSonic =
-    getTextModel().modelId.includes('sonic') &&
-    modeRef.current === ChatMode.Text;
 
   // ==================== 状态声明 ====================
   const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
@@ -122,34 +115,10 @@ function ChatScreen(): React.JSX.Element {
   const selectedFilesRef = useRef(selectedFiles);
   const usageRef = useRef(usage);
   const drawerTypeRef = useRef(drawerType);
-  const isVoiceLoading = useRef(false);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
-  const [isShowVoiceLoading, setIsShowVoiceLoading] = useState(false);
-  const audioWaveformRef = useRef<AudioWaveformRef>(null);
-
-  const endVoiceConversationRef = useRef<(() => Promise<boolean>) | null>(null);
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
-
-  // ==================== 语音聊天 ====================
-  const endVoiceConversation = useCallback(async () => {
-    audioWaveformRef.current?.resetAudioLevels();
-    if (isVoiceLoading.current) {
-      return Promise.resolve(false);
-    }
-    isVoiceLoading.current = true;
-    setIsShowVoiceLoading(true);
-    await voiceChatService.endConversation();
-    setChatStatus(ChatStatus.Init);
-    isVoiceLoading.current = false;
-    setIsShowVoiceLoading(false);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    endVoiceConversationRef.current = endVoiceConversation;
-  }, [endVoiceConversation]);
 
   // ==================== Ref 同步 & 副作用 ====================
   // update refs value with state
@@ -178,31 +147,6 @@ function ChatScreen(): React.JSX.Element {
   useEffect(() => {
     selectedFilesRef.current = selectedFiles;
   }, [selectedFiles]);
-
-  // Initialize voice chat service
-  useEffect(() => {
-    // Set up voice chat service callbacks
-    voiceChatService.setCallbacks(
-      // Handle transcript received
-      (role, text) => {
-        handleVoiceChatTranscript(role, text);
-      },
-      // Handle error
-      message => {
-        if (getTextModel().modelId.includes('sonic')) {
-          handleVoiceChatTranscript('ASSISTANT', message);
-          endVoiceConversationRef.current?.();
-          saveCurrentMessages();
-          console.log('Voice chat error:', message);
-        }
-      }
-    );
-
-    // Clean up on unmounting
-    return () => {
-      voiceChatService.cleanup();
-    };
-  }, []);
 
   // ==================== 新建聊天 & 导航栏 ====================
   // start new chat
@@ -284,7 +228,6 @@ function ChatScreen(): React.JSX.Element {
       // click from history
       setMessages([]);
       isNewChatRef.current = false;
-      endVoiceConversationRef.current?.();
       setIsLoadingMessages(true);
       const msg = getMessagesBySessionId(initialSessionId);
       sessionIdRef.current = initialSessionId;
@@ -734,43 +677,8 @@ function ChatScreen(): React.JSX.Element {
     });
   };
 
-  const handleVoiceChatTranscript = (role: string, text: string) => {
-    const userId = role === 'USER' ? 1 : BOT_ID;
-    if (
-      messagesRef.current.length > 0 &&
-      messagesRef.current[0].user._id === userId
-    ) {
-      if (userId === 1) {
-        text = ' ' + text;
-      }
-      setMessages(previousMessages => {
-        const newMessages = [...previousMessages];
-        if (!newMessages[0].text.includes(text)) {
-          newMessages[0] = {
-            ...newMessages[0],
-            text: newMessages[0].text + text,
-          };
-        }
-        return newMessages;
-      });
-    } else {
-      const newMessage: SwiftChatMessage = {
-        _id: uuid.v4(),
-        text: text,
-        createdAt: new Date(),
-        user: {
-          _id: userId,
-          name: role === 'USER' ? 'You' : getTextModel().modelName,
-          modelTag: role === 'USER' ? undefined : getTextModel().modelTag,
-        },
-      };
-
-      setMessages(previousMessages => [newMessage, ...previousMessages]);
-    }
-  };
-
   // ==================== UI 渲染 ====================
-  const styles = createStyles(colors, isNovaSonic);
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -808,16 +716,9 @@ function ChatScreen(): React.JSX.Element {
           chatStatus !== ChatStatus.Init || selectedFiles.length > 0
         }
         /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
-        renderComposer={props => {
-          if (isNovaSonic) {
-            return <AudioWaveformComponent ref={audioWaveformRef} />;
-          }
-
-          // Default input box
-          return (
+        renderComposer={props => (
             <Composer {...props} textInputStyle={styles.composerTextInput} />
-          );
-        }}
+        )}
         /** 自定义发送按钮：根据状态切换发送/停止/语音/附件按钮 */
         renderSend={props => (
           <CustomSendComponent
@@ -825,41 +726,13 @@ function ChatScreen(): React.JSX.Element {
             chatStatus={chatStatus}
             chatMode={ChatMode.Text}
             selectedFiles={selectedFiles}
-            isShowLoading={isShowVoiceLoading}
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
-              if (isNovaSonic) {
-                // End voice chat conversation
-                endVoiceConversation().then(success => {
-                  if (success) {
-                    trigger(HapticFeedbackTypes.impactMedium);
-                  }
-                });
-                saveCurrentMessages();
-              } else {
-                isCanceled.current = true;
-                controllerRef.current?.abort();
-              }
+              isCanceled.current = true;
+              controllerRef.current?.abort();
             }}
             onFileSelected={files => {
               handleNewFileSelected(files);
-            }}
-            onVoiceChatToggle={() => {
-              if (isVoiceLoading.current) {
-                return;
-              }
-              isVoiceLoading.current = true;
-              setIsShowVoiceLoading(true);
-              voiceChatService.startConversation().then(success => {
-                if (!success) {
-                  setChatStatus(ChatStatus.Init);
-                } else {
-                  setChatStatus(ChatStatus.Running);
-                }
-                isVoiceLoading.current = false;
-                setIsShowVoiceLoading(false);
-                trigger(HapticFeedbackTypes.impactMedium);
-              });
             }}
           />
         )}
@@ -873,9 +746,6 @@ function ChatScreen(): React.JSX.Element {
               } else {
                 handleNewFileSelected(files);
               }
-            }}
-            onSwitchedToTextModel={() => {
-              endVoiceConversationRef.current?.();
             }}
             hasInputText={hasInputText}
             chatStatus={chatStatus}
@@ -1001,7 +871,7 @@ function ChatScreen(): React.JSX.Element {
 }
 
 // 聊天页面的样式定义（页面背景、输入框区域等）
-const createStyles = (colors: ColorScheme, isNovaSonic: boolean) =>
+const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1029,7 +899,7 @@ const createStyles = (colors: ColorScheme, isNovaSonic: boolean) =>
       paddingBottom: isMac ? 10 : Platform.OS === 'android' ? 8 : 2,
     },
     inputToolbarPrimary: {
-      backgroundColor: isNovaSonic ? 'transparent' : colors.chatInputBackground,
+      backgroundColor: colors.chatInputBackground,
       borderRadius: 12,
       paddingHorizontal: 0,
     },

@@ -16,7 +16,6 @@ import { isAndroid, isMacCatalyst } from '../../utils/PlatformUtils.ts';
 interface CustomComposerProps {
   files: FileInfo[];
   onFileUpdated: (files: FileInfo[], isUpdate?: boolean) => void;
-  onSwitchedToTextModel: () => void;
   hasInputText?: boolean;
   chatStatus?: ChatStatus;
 }
@@ -24,7 +23,6 @@ interface CustomComposerProps {
 export const CustomChatFooter: React.FC<CustomComposerProps> = ({
   files,
   onFileUpdated,
-  onSwitchedToTextModel,
   hasInputText = false,
   chatStatus,
 }) => {
