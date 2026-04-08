@@ -10,14 +10,11 @@ import {
   TokenResponse,
   OpenAICompatConfig,
   ModelTag,
-  FileInfo,
 } from '../types/Chat.ts';
 import uuid from 'uuid';
 import {
-  DefaultImageSystemPrompts,
   DefaultRegion,
   DefaultVoiceSystemPrompts,
-  getDefaultImageModels,
   getDefaultSystemPrompts,
   getDefaultTextModels,
   VoiceIDList,
@@ -57,14 +54,14 @@ const openAICompatModelsKey = keyPrefix + 'openAICompatModelsKey';
 const openAICompatConfigsKey = keyPrefix + 'openAICompatConfigsKey';
 const regionKey = keyPrefix + 'regionKey';
 const textModelKey = keyPrefix + 'textModelKey';
-const imageModelKey = keyPrefix + 'imageModelKey';
+
 const allModelKey = keyPrefix + 'allModelKey';
-const imageSizeKey = keyPrefix + 'imageSizeKey';
+
 const modelUsageKey = keyPrefix + 'modelUsageKey';
 const systemPromptsKey = keyPrefix + 'systemPromptsKey';
 const currentSystemPromptKey = keyPrefix + 'currentSystemPromptKey';
 const currentVoiceSystemPromptKey = keyPrefix + 'currentVoiceSystemPromptKey';
-const currentImageSystemPromptKey = keyPrefix + 'currentImageSystemPromptKey';
+
 const currentPromptIdKey = keyPrefix + 'currentPromptIdKey';
 const openAIProxyEnabledKey = keyPrefix + 'openAIProxyEnabledKey';
 const thinkingEnabledKey = keyPrefix + 'thinkingEnabledKey';
@@ -74,7 +71,7 @@ const voiceIdKey = keyPrefix + 'voiceIdKey';
 const tokenInfoKey = keyPrefix + 'tokenInfo';
 const bedrockConfigModeKey = keyPrefix + 'bedrockConfigModeKey';
 const bedrockApiKeyTag = keyPrefix + 'bedrockApiKeyTag';
-const lastVirtualTryOnImgFileTag = keyPrefix + 'lastVirtualTryOnImgFileTag';
+
 const tavilyApiKeyTag = keyPrefix + 'tavilyApiKeyTag';
 
 let currentApiUrl: string | undefined;
@@ -86,7 +83,7 @@ let currentOpenAIApiKey: string | undefined;
 let currentOpenAICompatApiKey: string | undefined;
 let currentOpenAICompatApiURL: string | undefined;
 let currentRegion: string | undefined;
-let currentImageModel: Model | undefined;
+
 let currentTextModel: Model | undefined;
 let currentSystemPrompts: SystemPrompt[] | undefined;
 let currentOpenAIProxyEnabled: boolean | undefined;
@@ -96,7 +93,7 @@ let currentModelOrder: Model[] | undefined;
 let currentBedrockConfigMode: string | undefined;
 let currentBedrockApiKey: string | undefined;
 let currentOpenAICompatibleConfig: OpenAICompatConfig[] | undefined;
-let currentVirtualTryOnImgFile: FileInfo | undefined;
+
 let currentTavilyApiKey: string | undefined;
 
 export function saveMessages(
@@ -322,24 +319,6 @@ export function getTextModel(): Model {
   }
 }
 
-export function saveImageModel(model: Model) {
-  currentImageModel = model;
-  storage.set(imageModelKey, JSON.stringify(model));
-}
-
-export function getImageModel(): Model {
-  if (currentImageModel) {
-    return currentImageModel;
-  } else {
-    const modelString = storage.getString(imageModelKey) ?? '';
-    if (modelString.length > 0) {
-      currentImageModel = JSON.parse(modelString) as Model;
-    } else {
-      currentImageModel = getDefaultImageModels()[0];
-    }
-    return currentImageModel;
-  }
-}
 
 export function saveAllModels(allModels: AllModel) {
   storage.set(allModelKey, JSON.stringify(allModels));
@@ -351,40 +330,10 @@ export function getAllModels() {
     return JSON.parse(modelString) as AllModel;
   }
   return {
-    imageModel: getDefaultImageModels(),
     textModel: getDefaultTextModels(),
   };
 }
 
-export function getAllImageSize(imageModelId: string = '') {
-  if (isNewStabilityImageModel(imageModelId)) {
-    return ['1024 x 1024'];
-  }
-  if (isNovaCanvas(imageModelId)) {
-    return ['1024 x 1024', '2048 x 2048'];
-  }
-  return ['512 x 512', '1024 x 1024'];
-}
-
-export function isNewStabilityImageModel(modelId: string) {
-  return (
-    modelId === 'stability.sd3-large-v1:0' ||
-    modelId === 'stability.stable-image-ultra-v1:0' ||
-    modelId === 'stability.stable-image-core-v1:0'
-  );
-}
-
-export function isNovaCanvas(modelId: string) {
-  return modelId.includes('nova-canvas');
-}
-
-export function saveImageSize(size: string) {
-  storage.set(imageSizeKey, size);
-}
-
-export function getImageSize() {
-  return storage.getString(imageSizeKey) ?? getAllImageSize()[1];
-}
 
 export function saveVoiceId(voiceId: string) {
   storage.set(voiceIdKey, voiceId);
@@ -405,16 +354,8 @@ export function updateTotalUsage(usage: Usage) {
     m => m.modelName === usage.modelName
   );
   if (modelIndex >= 0) {
-    if (usage.imageCount) {
-      currentUsage[modelIndex].imageCount! += usage.imageCount;
-    } else if (usage.smallImageCount) {
-      currentUsage[modelIndex].smallImageCount! += usage.smallImageCount;
-    } else if (usage.largeImageCount) {
-      currentUsage[modelIndex].largeImageCount! += usage.largeImageCount;
-    } else {
-      currentUsage[modelIndex].inputTokens += usage.inputTokens;
-      currentUsage[modelIndex].outputTokens += usage.outputTokens;
-    }
+    currentUsage[modelIndex].inputTokens += usage.inputTokens;
+    currentUsage[modelIndex].outputTokens += usage.outputTokens;
   } else {
     currentUsage.push(usage);
   }
@@ -448,20 +389,6 @@ export function getCurrentVoiceSystemPrompt(): SystemPrompt | null {
   return null;
 }
 
-export function saveCurrentImageSystemPrompt(prompts: SystemPrompt | null) {
-  storage.set(
-    currentImageSystemPromptKey,
-    prompts ? JSON.stringify(prompts) : ''
-  );
-}
-
-export function getCurrentImageSystemPrompt(): SystemPrompt | null {
-  const promptString = storage.getString(currentImageSystemPromptKey) ?? '';
-  if (promptString.length > 0) {
-    return JSON.parse(promptString) as SystemPrompt;
-  }
-  return null;
-}
 
 export function saveSystemPrompts(prompts: SystemPrompt[], type?: string) {
   // get all prompt
@@ -499,14 +426,6 @@ export function getSystemPrompts(type?: string): SystemPrompt[] {
     ) {
       currentSystemPrompts = currentSystemPrompts.concat(
         DefaultVoiceSystemPrompts
-      );
-      saveAllSystemPrompts(currentSystemPrompts);
-    }
-    if (
-      currentSystemPrompts.filter(p => p.promptType === 'image').length === 0
-    ) {
-      currentSystemPrompts = currentSystemPrompts.concat(
-        DefaultImageSystemPrompts
       );
       saveAllSystemPrompts(currentSystemPrompts);
     }
@@ -691,24 +610,6 @@ export function getBedrockApiKey(): string {
   }
 }
 
-// Virtual try-on last base image file
-export function saveLastVirtualTryOnImgFile(file: FileInfo) {
-  currentVirtualTryOnImgFile = file;
-  storage.set(lastVirtualTryOnImgFileTag, JSON.stringify(file));
-}
-
-export function getLastVirtualTryOnImgFile(): FileInfo | null {
-  if (currentVirtualTryOnImgFile) {
-    return currentVirtualTryOnImgFile;
-  } else {
-    const fileString = storage.getString(lastVirtualTryOnImgFileTag) ?? '';
-    if (fileString) {
-      currentVirtualTryOnImgFile = JSON.parse(fileString) as FileInfo;
-      return currentVirtualTryOnImgFile;
-    }
-    return null;
-  }
-}
 
 export function saveTavilyApiKey(apiKey: string) {
   currentTavilyApiKey = apiKey;

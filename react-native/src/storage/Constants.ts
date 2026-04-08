@@ -89,12 +89,6 @@ export const DefaultTextModel = [
   },
 ];
 
-const DefaultImageModel = {
-  modelName: 'Stable Diffusion 3.5 Large',
-  modelId: 'stability.sd3-5-large-v1:0',
-  modelTag: ModelTag.Bedrock,
-};
-
 export const VoiceIDList = [
   {
     voiceName: 'Matthew (American English)',
@@ -139,30 +133,6 @@ export const VoiceIDList = [
   {
     voiceName: 'Carlos (Spanish)',
     voiceId: 'carlos',
-  },
-];
-
-export const DefaultImageSystemPrompts = [
-  {
-    id: -7,
-    name: 'Virtual try-on',
-    prompt: 'Virtual try-on',
-    includeHistory: false,
-    promptType: 'image',
-  },
-  {
-    id: -8,
-    name: 'Variations',
-    prompt: 'Generate similar style of the image',
-    includeHistory: false,
-    promptType: 'image',
-  },
-  {
-    id: -9,
-    name: 'RemoveBG',
-    prompt: 'Remove background of the image',
-    includeHistory: false,
-    promptType: 'image',
   },
 ];
 
@@ -227,7 +197,6 @@ No explanation or alternatives.`,
     includeHistory: true,
   },
   ...DefaultVoiceSystemPrompts,
-  ...DefaultImageSystemPrompts,
 ];
 
 export const DefaultVoicePrompt =
@@ -246,10 +215,6 @@ export function getDefaultApiKeyModels() {
     ...(getDeepSeekApiKey().length > 0 ? DeepSeekModels : []),
     ...(getOpenAIApiKey().length > 0 ? GPTModels : []),
   ] as Model[];
-}
-
-export function getDefaultImageModels() {
-  return [DefaultImageModel] as Model[];
 }
 
 const getAppPrompt = () => {

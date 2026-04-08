@@ -13,7 +13,7 @@ import {
   DrawerContentComponentProps,
   useDrawerStatus,
 } from '@react-navigation/drawer';
-import { Chat, ChatMode } from '../types/Chat.ts';
+import { Chat } from '../types/Chat.ts';
 import {
   deleteMessagesBySessionId,
   getMessageList,
@@ -157,7 +157,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 navigation.navigate('Bedrock', {
                   sessionId: -1,
                   tapIndex: -1,
-                  mode: ChatMode.Text,
                 });
               }}>
               <Image
@@ -170,22 +169,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               />
               <Text style={styles.settingsText}>Chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsTouch}
-              onPress={() => {
-                setDrawerToPermanent();
-                navigation.navigate('ImageGallery');
-              }}>
-              <Image
-                source={
-                  isDark
-                    ? require('../assets/image_dark.png')
-                    : require('../assets/image.png')
-                }
-                style={styles.settingsLeftImg}
-              />
-              <Text style={styles.settingsText}>Image</Text>
-            </TouchableOpacity>
+
 
           </View>
         }

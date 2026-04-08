@@ -19,7 +19,7 @@ import { Cell, Table, TableWrapper } from 'react-native-table-component';
 import RNFS from 'react-native-fs';
 import MDSvg from 'react-native-marked/src/components/MDSvg.tsx';
 import MDImage from 'react-native-marked/src/components/MDImage.tsx';
-import ImageProgressBar from '../ImageProgressBar.tsx';
+
 import { PressMode } from '../../../types/Chat.ts';
 import MarkedList from '@jsamr/react-native-li';
 import Decimal from '@jsamr/counter-style/lib/es/presets/decimal';
@@ -229,9 +229,6 @@ export class CustomMarkdownRenderer
 
   image(uri: string, alt?: string, style?: ImageStyle): ReactNode {
     const key = this.getKey();
-    if (uri.startsWith('bedrock://imgProgress')) {
-      return <ImageProgressBar key={key} />;
-    }
     if (uri.endsWith('.svg')) {
       return <MDSvg uri={uri} key={key} />;
     }

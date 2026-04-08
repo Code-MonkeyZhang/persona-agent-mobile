@@ -39,7 +39,7 @@ import FileViewer from 'react-native-file-viewer';
 import { isMac } from '../../App.tsx';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
-import ImageSpinner from './ImageSpinner.tsx';
+import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { getModelIcon, getModelTagByUserName } from '../../utils/ModelUtils.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
@@ -588,7 +588,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         {hasReasoning && reasoningSection}
         {showLoading && (
           <View style={styles.loadingContainer}>
-            <ImageSpinner
+            <LoadingSpinner
               visible={true}
               size={18}
               source={require('../../assets/loading.png')}

@@ -6,79 +6,29 @@ export const getUsagePrice = (usage: Usage): UsagePrice => {
     inputPrice: 0,
     outputPrice: 0,
     totalPrice: 0,
-    smallImagePrice: 0,
-    mediumImagePrice: 0,
-    largeImagePrice: 0,
   };
-  if (usage.imageCount || usage.smallImageCount || usage.largeImageCount) {
-    if (usage.smallImageCount) {
-      usagePrice.smallImagePrice = Number(
-        (
-          usage.smallImageCount *
-          getImagePrice(usage.modelName as keyof ImageModelPrices, 'small')
-        ).toFixed(2)
-      );
-    }
+  usagePrice.inputPrice = Number(
+    (
+      (usage.inputTokens *
+        (ModelPrice.textModelPrices[usage.modelName]?.inputTokenPrice ??
+          -1)) /
+      1000
+    ).toFixed(6)
+  );
 
-    if (usage.imageCount) {
-      usagePrice.mediumImagePrice = Number(
-        (
-          usage.imageCount *
-          getImagePrice(usage.modelName as keyof ImageModelPrices, 'medium')
-        ).toFixed(2)
-      );
-    }
-
-    if (usage.largeImageCount) {
-      usagePrice.largeImagePrice = Number(
-        (
-          usage.largeImageCount *
-          getImagePrice(usage.modelName as keyof ImageModelPrices, 'large')
-        ).toFixed(2)
-      );
-    }
-    usagePrice.totalPrice = Number(
-      (
-        usagePrice.smallImagePrice +
-        usagePrice.mediumImagePrice +
-        usagePrice.largeImagePrice
-      ).toFixed(2)
-    );
-  } else {
-    usagePrice.inputPrice = Number(
-      (
-        (usage.inputTokens *
-          (ModelPrice.textModelPrices[usage.modelName]?.inputTokenPrice ??
-            -1)) /
-        1000
-      ).toFixed(6)
-    );
-
-    usagePrice.outputPrice = Number(
-      (
-        (usage.outputTokens *
-          (ModelPrice.textModelPrices[usage.modelName]?.outputTokenPrice ??
-            -4)) /
-        1000
-      ).toFixed(6)
-    );
-    usagePrice.totalPrice = Number(
-      (usagePrice.inputPrice + usagePrice.outputPrice).toFixed(2)
-    );
-  }
+  usagePrice.outputPrice = Number(
+    (
+      (usage.outputTokens *
+        (ModelPrice.textModelPrices[usage.modelName]?.outputTokenPrice ??
+          -4)) /
+      1000
+    ).toFixed(6)
+  );
+  usagePrice.totalPrice = Number(
+    (usagePrice.inputPrice + usagePrice.outputPrice).toFixed(2)
+  );
   return usagePrice;
 };
-
-function getImagePrice(
-  modelName: keyof ImageModelPrices,
-  size: 'small' | 'medium' | 'large'
-): number {
-  const model = ModelPrice.imageModelPrices[modelName];
-  if (!model) {
-    return 0;
-  }
-  return size in model ? model[size as keyof typeof model] : 0;
-}
 
 export const ModelPrice: ModelPriceType = {
   textModelPrices: {
@@ -291,35 +241,6 @@ export const ModelPrice: ModelPriceType = {
       outputTokenPrice: 0.0004,
     },
   },
-  imageModelPrices: {
-    'Titan Image Generator G1': {
-      small: 0.008,
-      medium: 0.01,
-    },
-    'Titan Image Generator G1 v2': {
-      small: 0.008,
-      medium: 0.01,
-    },
-    'Nova Canvas': {
-      medium: 0.04,
-      large: 0.06,
-    },
-    'SDXL 1.0': {
-      medium: 0.04,
-    },
-    'SD3 Large 1.0': {
-      medium: 0.08,
-    },
-    'Stable Diffusion 3.5 Large': {
-      medium: 0.08,
-    },
-    'Stable Image Core 1.0': {
-      medium: 0.04,
-    },
-    'Stable Image Ultra 1.0': {
-      medium: 0.14,
-    },
-  },
 };
 
 interface ModelPriceType {
@@ -327,38 +248,7 @@ interface ModelPriceType {
     string,
     { inputTokenPrice: number; outputTokenPrice: number }
   >;
-  imageModelPrices: ImageModelPrices;
 }
-
-type ImageModelPrices = {
-  'Titan Image Generator G1': {
-    small: number;
-    medium: number;
-  };
-  'Titan Image Generator G1 v2': {
-    small: number;
-    medium: number;
-  };
-  'Nova Canvas': {
-    medium: number;
-    large: number;
-  };
-  'SDXL 1.0': {
-    medium: number;
-  };
-  'SD3 Large 1.0': {
-    medium: number;
-  };
-  'Stable Diffusion 3.5 Large': {
-    medium: number;
-  };
-  'Stable Image Core 1.0': {
-    medium: number;
-  };
-  'Stable Image Ultra 1.0': {
-    medium: number;
-  };
-};
 
 export function getTotalCost(usage: Usage[]) {
   return Number(
@@ -391,36 +281,6 @@ export function getTotalOutputPrice(usage: Usage[]) {
     usage
       .filter(modelUsage => getUsagePrice(modelUsage).outputPrice > 0)
       .reduce((sum, model) => sum + getUsagePrice(model).outputPrice, 0)
-      .toFixed(6)
-  );
-}
-
-export function getTotalImageCount(usage: Usage[]) {
-  return Number(
-    usage
-      .reduce(
-        (sum, model) =>
-          sum +
-          (model.smallImageCount || 0) +
-          (model.imageCount || 0) +
-          (model.largeImageCount || 0),
-        0
-      )
-      .toLocaleString()
-  );
-}
-
-export function getTotalImagePrice(usage: Usage[]) {
-  return Number(
-    usage
-      .reduce(
-        (sum, model) =>
-          sum +
-          (getUsagePrice(model).smallImagePrice || 0) +
-          (getUsagePrice(model).mediumImagePrice || 0) +
-          (getUsagePrice(model).largeImagePrice || 0),
-        0
-      )
       .toFixed(6)
   );
 }

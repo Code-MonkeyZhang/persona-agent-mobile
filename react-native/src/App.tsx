@@ -14,7 +14,7 @@ import SettingsScreen from './settings/SettingsScreen.tsx';
 import Toast from 'react-native-toast-message';
 import TokenUsageScreen from './settings/TokenUsageScreen.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import ImageGalleryScreen from './image/ImageGalleryScreen.tsx';
+
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
 import { configureErrorHandling } from './utils/ErrorUtils';
@@ -86,7 +86,7 @@ const DrawerNavigator = () => {
       drawerContent={renderCustomDrawerContent}>
       <Drawer.Screen name="Bedrock" component={ChatScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
-      <Drawer.Screen name="ImageGallery" component={ImageGalleryScreen} />
+
 
     </Drawer.Navigator>
   );

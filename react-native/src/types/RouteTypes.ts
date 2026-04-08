@@ -1,4 +1,3 @@
-import { ChatMode } from './Chat.ts';
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 /**
@@ -11,7 +10,6 @@ export type DrawerParamList = {
   Bedrock: {
     sessionId?: number;
     tapIndex?: number;
-    mode?: ChatMode;
   };
   Settings: NonNullable<unknown>;
 };
@@ -27,9 +25,7 @@ export type RouteParamList = {
   Bedrock: {
     sessionId?: number;
     tapIndex?: number;
-    mode?: ChatMode;
   };
   Settings: NonNullable<unknown>;
   TokenUsage: NonNullable<unknown>;
-  ImageGallery: NonNullable<unknown>;
 };

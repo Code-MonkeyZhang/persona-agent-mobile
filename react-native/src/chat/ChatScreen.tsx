@@ -30,7 +30,6 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
-  getImageModel,
   getMessagesBySessionId,
   getSessionId,
   getTextModel,
@@ -70,22 +69,18 @@ import { HeaderOptions } from '@react-navigation/elements';
 
 const BOT_ID = 2;
 
-const createBotMessage = (mode: string) => {
+const createBotMessage = () => {
   return {
     _id: uuid.v4(),
-    text: mode === ChatMode.Text ? textPlaceholder : imagePlaceholder,
+    text: textPlaceholder,
     createdAt: new Date(),
     user: {
       _id: BOT_ID,
-      name:
-        mode === ChatMode.Text
-          ? getTextModel().modelName
-          : getImageModel().modelName,
-      modelTag: mode === ChatMode.Text ? getTextModel().modelTag : undefined,
+      name: getTextModel().modelName,
+      modelTag: getTextModel().modelTag,
     },
   };
 };
-const imagePlaceholder = '![](bedrock://imgProgress)';
 const textPlaceholder = '...';
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 let currentMode = ChatMode.Text;
@@ -98,8 +93,7 @@ function ChatScreen(): React.JSX.Element {
   const route = useRoute<ChatScreenRouteProp>();
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
-  const mode = route.params?.mode ?? currentMode;
-  const modeRef = useRef(mode);
+  const modeRef = useRef(currentMode);
   const isNovaSonic =
     getTextModel().modelId.includes('sonic') &&
     modeRef.current === ChatMode.Text;
@@ -230,16 +224,12 @@ function ChatScreen(): React.JSX.Element {
 
   // header text and right button click
   React.useLayoutEffect(() => {
-    currentMode = mode;
+    currentMode = ChatMode.Text;
     const headerOptions: HeaderOptions = {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
         <HeaderTitle
-          title={
-            mode === ChatMode.Text
-              ? 'Chat'
-              : 'Image'
-          }
+          title={'Chat'}
           usage={usage}
           onDoubleTap={scrollToTop}
         />
@@ -268,7 +258,7 @@ function ChatScreen(): React.JSX.Element {
       ),
     };
     navigation.setOptions(headerOptions);
-  }, [usage, navigation, mode, isDark]);
+  }, [usage, navigation, isDark]);
 
   // ==================== 会话切换 & 消息加载 ====================
   // sessionId changes (start new chat or click another session)
@@ -278,20 +268,12 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       if (chatStatusRef.current === ChatStatus.Running) {
-        // there are still a request sending, abort the request and save current messages
         controllerRef.current?.abort();
         chatStatusRef.current = ChatStatus.Init;
-        if (modeRef.current === ChatMode.Image) {
-          if (messagesRef.current[0].text === imagePlaceholder) {
-            messagesRef.current[0].text = 'Request interrupted';
-          }
-        }
         saveCurrentMessages();
       }
-      if (modeRef.current !== mode) {
-        modeRef.current = mode;
-        setSelectedFiles([]);
-      }
+      modeRef.current = ChatMode.Text;
+      setSelectedFiles([]);
       setChatStatus(ChatStatus.Init);
       sendEventRef.current('');
       setUsage(undefined);
@@ -324,7 +306,7 @@ function ChatScreen(): React.JSX.Element {
         }, 200);
       }
     }
-  }, [initialSessionId, mode, tapIndex]);
+  }, [initialSessionId, tapIndex]);
 
   // ==================== 事件监听 ====================
   // deleteChat listener
@@ -567,15 +549,9 @@ function ChatScreen(): React.JSX.Element {
       lastMessage &&
       lastMessage.user &&
       lastMessage.user._id === BOT_ID &&
-      lastMessage.text ===
-        (modeRef.current === ChatMode.Text
-          ? textPlaceholder
-          : imagePlaceholder) &&
+      lastMessage.text === textPlaceholder &&
       chatStatusRef.current === ChatStatus.Running
     ) {
-      if (modeRef.current === ChatMode.Image) {
-        sendEventRef.current('onImageStart');
-      }
 
       // Wrap in async function to support await
       (async () => {
@@ -669,16 +645,6 @@ function ChatScreen(): React.JSX.Element {
               if (complete) {
                 setComplete();
               }
-            } else {
-              if (needStop) {
-                sendEventRef.current('onImageStop');
-              } else {
-                sendEventRef.current('onImageComplete');
-              }
-              setTimeout(() => {
-                updateMessage();
-                setComplete();
-              }, 1000);
             }
             if (needStop) {
               isCanceled.current = true;
@@ -710,7 +676,7 @@ function ChatScreen(): React.JSX.Element {
         bedrockMessages.current = historyBedrockMessages;
         setChatStatus(ChatStatus.Running);
         setMessages(_previousMessages => [
-          createBotMessage(modeRef.current),
+          createBotMessage(),
           userMessage,
           ...historyMessages,
         ]);
@@ -736,12 +702,6 @@ function ChatScreen(): React.JSX.Element {
         if (!message[0]?.text) {
           if (modeRef.current === ChatMode.Text) {
             message[0].text = getFileTypeSummary(files);
-          } else {
-            message[0].text = 'Empty Message';
-          }
-        } else {
-          if (modeRef.current === ChatMode.Image) {
-            // append user prompt after default image prompt in image mode
           }
         }
 
@@ -756,7 +716,7 @@ function ChatScreen(): React.JSX.Element {
         bedrockMessages.current.push(currentMsg);
         setChatStatus(ChatStatus.Running);
         setMessages(previousMessages => [
-          createBotMessage(modeRef.current),
+          createBotMessage(),
           ...GiftedChat.append(previousMessages, message),
         ]);
       });
@@ -769,9 +729,7 @@ function ChatScreen(): React.JSX.Element {
     setSelectedFiles(prevFiles => {
       return checkFileNumberLimit(
         prevFiles,
-        files,
-        modeRef.current,
-        false
+        files
       );
     });
   };
@@ -851,7 +809,7 @@ function ChatScreen(): React.JSX.Element {
         }
         /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
         renderComposer={props => {
-          if (isNovaSonic && mode === ChatMode.Text) {
+          if (isNovaSonic) {
             return <AudioWaveformComponent ref={audioWaveformRef} />;
           }
 
@@ -865,7 +823,7 @@ function ChatScreen(): React.JSX.Element {
           <CustomSendComponent
             {...props}
             chatStatus={chatStatus}
-            chatMode={mode}
+            chatMode={ChatMode.Text}
             selectedFiles={selectedFiles}
             isShowLoading={isShowVoiceLoading}
             onStopPress={() => {
@@ -919,7 +877,6 @@ function ChatScreen(): React.JSX.Element {
             onSwitchedToTextModel={() => {
               endVoiceConversationRef.current?.();
             }}
-            chatMode={modeRef.current}
             hasInputText={hasInputText}
             chatStatus={chatStatus}
           />

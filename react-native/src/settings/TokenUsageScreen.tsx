@@ -16,8 +16,6 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import {
   getTotalCost,
-  getTotalImageCount,
-  getTotalImagePrice,
   getTotalInputPrice,
   getTotalInputTokens,
   getTotalOutputPrice,
@@ -77,11 +75,6 @@ function TokenUsageScreen(): React.JSX.Element {
           })
           .map((usage, index) => {
             const usagePrice = getUsagePrice(usage);
-            const isImageModel =
-              usage.imageCount ||
-              usage.smallImageCount ||
-              usage.largeImageCount;
-
             return (
               <View key={index} style={styles.usageItem}>
                 <View style={styles.modelHeader}>
@@ -95,64 +88,28 @@ function TokenUsageScreen(): React.JSX.Element {
                   </Text>
                 </View>
 
-                {isImageModel ? (
-                  <>
-                    {usage.smallImageCount ? (
-                      <View style={styles.tokenInfo}>
-                        <Text style={styles.tokenText}>
-                          512-Standard: {usage.smallImageCount.toLocaleString()}
-                        </Text>
-                        <Text style={styles.tokenText}>
-                          USD {usagePrice.smallImagePrice}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {usage.imageCount ? (
-                      <View style={styles.tokenInfo}>
-                        <Text style={styles.tokenText}>
-                          1024-Standard: {usage.imageCount.toLocaleString()}
-                        </Text>
-                        <Text style={styles.tokenText}>
-                          USD {usagePrice.mediumImagePrice}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {usage.largeImageCount ? (
-                      <View style={styles.tokenInfo}>
-                        <Text style={styles.tokenText}>
-                          2048-Standard:{' '}
-                          {usage.largeImageCount.toLocaleString()}
-                        </Text>
-                        <Text style={styles.tokenText}>
-                          USD {usagePrice.largeImagePrice}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.tokenInfo}>
-                      <Text style={styles.tokenText}>
-                        Input: {usage.inputTokens.toLocaleString()}
-                      </Text>
-                      <Text style={styles.tokenText}>
-                        {usagePrice.inputPrice < 0
-                          ? '--'
-                          : `USD ${usagePrice.inputPrice}`}
-                      </Text>
-                    </View>
-                    <View style={styles.tokenInfo}>
-                      <Text style={styles.tokenText}>
-                        Output: {usage.outputTokens.toLocaleString()}
-                      </Text>
-                      <Text style={styles.tokenText}>
-                        {usagePrice.outputPrice < 0
-                          ? '--'
-                          : `USD ${usagePrice.outputPrice}`}
-                      </Text>
-                    </View>
-                  </>
-                )}
+                <>
+                  <View style={styles.tokenInfo}>
+                    <Text style={styles.tokenText}>
+                      Input: {usage.inputTokens.toLocaleString()}
+                    </Text>
+                    <Text style={styles.tokenText}>
+                      {usagePrice.inputPrice < 0
+                        ? '--'
+                        : `USD ${usagePrice.inputPrice}`}
+                    </Text>
+                  </View>
+                  <View style={styles.tokenInfo}>
+                    <Text style={styles.tokenText}>
+                      Output: {usage.outputTokens.toLocaleString()}
+                    </Text>
+                    <Text style={styles.tokenText}>
+                      {usagePrice.outputPrice < 0
+                        ? '--'
+                        : `USD ${usagePrice.outputPrice}`}
+                    </Text>
+                  </View>
+                </>
               </View>
             );
           })}
@@ -177,14 +134,6 @@ function TokenUsageScreen(): React.JSX.Element {
             </Text>
             <Text style={styles.totalText}>
               USD {getTotalOutputPrice(modelUsage).toString()}
-            </Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalText}>
-              Images: {getTotalImageCount(modelUsage).toLocaleString()}
-            </Text>
-            <Text style={styles.totalText}>
-              USD {getTotalImagePrice(modelUsage).toString()}
             </Text>
           </View>
         </View>

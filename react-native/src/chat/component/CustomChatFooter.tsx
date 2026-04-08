@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import {
-  ChatMode,
   ChatStatus,
   FileInfo,
 } from '../../types/Chat.ts';
@@ -18,7 +17,6 @@ interface CustomComposerProps {
   files: FileInfo[];
   onFileUpdated: (files: FileInfo[], isUpdate?: boolean) => void;
   onSwitchedToTextModel: () => void;
-  chatMode: ChatMode;
   hasInputText?: boolean;
   chatStatus?: ChatStatus;
 }
@@ -27,7 +25,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
   files,
   onFileUpdated,
   onSwitchedToTextModel,
-  chatMode,
   hasInputText = false,
   chatStatus,
 }) => {
@@ -95,23 +92,17 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
             isHideFileList={isHideFileList}
           />
         )}
-        {(chatMode === ChatMode.Text || chatMode === ChatMode.Image) && (
-          <View
+        <View
             style={{
               ...styles.promptContainer,
               ...(files.length > 0 && {
                 marginTop: -72,
               }),
             }}>
-            {chatMode === ChatMode.Text && (
-              <>
-                <View ref={modelIconRef} collapsable={false}>
-                  <ModelIconButton onPress={handleOpenModal} />
-                </View>
-              </>
-            )}
+            <View ref={modelIconRef} collapsable={false}>
+              <ModelIconButton onPress={handleOpenModal} />
+            </View>
           </View>
-        )}
       </View>
       <ModelSelectionModal
         visible={modalVisible}

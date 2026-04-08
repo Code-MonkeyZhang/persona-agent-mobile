@@ -1,7 +1,7 @@
 import { Send, SendProps } from 'react-native-gifted-chat';
 import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import ImageSpinner from './ImageSpinner';
+import LoadingSpinner from './LoadingSpinner';
 import {
   ChatMode,
   ChatStatus,
@@ -9,7 +9,7 @@ import {
   SwiftChatMessage,
 } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
-import { getImageModel, getTextModel } from '../../storage/StorageUtils.ts';
+import { getTextModel } from '../../storage/StorageUtils.ts';
 import { useTheme, ColorScheme } from '../../theme';
 
 interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
@@ -53,13 +53,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
     [onFileSelected]
   );
   let isShowSending = false;
-  if (chatMode === ChatMode.Image) {
-    isShowSending =
-      !isModelSupportUploadImages(chatMode) ||
-      selectedFiles.length > 0 ||
-      (text && text!.length > 0) ||
-      chatStatus === ChatStatus.Running;
-  } else if (chatMode === ChatMode.Text) {
+  if (chatMode === ChatMode.Text) {
     isShowSending =
       ((text && text!.length > 0) ||
         selectedFiles.length > 0 ||
@@ -102,7 +96,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       if (isShowLoading) {
         return (
           <View style={styles.loadingContainer}>
-            <ImageSpinner
+            <LoadingSpinner
               source={require('../../assets/loading.png')}
               visible={true}
               size={26}
@@ -143,19 +137,10 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
         <CustomAddFileComponent
           {...props}
           onFileSelected={handleFileSelected}
-          chatMode={chatMode}
         />
       );
     }
   }
-};
-
-const isModelSupportUploadImages = (chatMode: ChatMode): boolean => {
-  return (
-    chatMode === ChatMode.Image &&
-    (getImageModel().modelId.includes('nova-canvas') ||
-      getImageModel().modelId.includes('stability.sd3'))
-  );
 };
 
 const createStyles = (colors: ColorScheme) =>

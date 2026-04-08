@@ -62,18 +62,11 @@ export type OpenAICompatConfig = {
 
 export type AllModel = {
   textModel: Model[];
-  imageModel: Model[];
 };
 
 export enum ChatMode {
   Text = 'Text',
-  Image = 'Image',
 }
-
-export type ImageRes = {
-  image: string;
-  error: string;
-};
 
 export enum PressMode {
   Click = 'Click',
@@ -115,9 +108,7 @@ export type Usage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  imageCount?: number;
-  smallImageCount?: number;
-  largeImageCount?: number;
+
 };
 
 export type UsagePrice = {
@@ -125,9 +116,7 @@ export type UsagePrice = {
   inputPrice: number;
   outputPrice: number;
   totalPrice: number;
-  smallImagePrice: number;
-  mediumImagePrice: number;
-  largeImagePrice: number;
+
 };
 
 export interface SwiftChatMessage extends IMessage {

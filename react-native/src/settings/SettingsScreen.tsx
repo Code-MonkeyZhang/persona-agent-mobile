@@ -18,14 +18,11 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src';
 import {
-  getAllImageSize,
   getAllModels,
   getApiKey,
   getApiUrl,
   getDeepSeekApiKey,
   getHapticEnabled,
-  getImageModel,
-  getImageSize,
   getModelUsage,
   getOllamaApiUrl,
   getOllamaApiKey,
@@ -35,11 +32,8 @@ import {
   getTextModel,
   getThinkingEnabled,
   getVoiceId,
-  isNewStabilityImageModel,
   saveAllModels,
   saveDeepSeekApiKey,
-  saveImageModel,
-  saveImageSize,
   saveKeys,
   saveOllamaApiURL,
   saveOllamaApiKey,
@@ -119,16 +113,11 @@ function SettingsScreen(): React.JSX.Element {
     OpenAICompatConfig[]
   >(getOpenAICompatConfigs);
   const [region, setRegion] = useState(getRegion);
-  const [imageSize, setImageSize] = useState(getImageSize);
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
   const navigation = useNavigation<NavigationProp<RouteParamList>>();
   const [textModels, setTextModels] = useState<Model[]>(allModel.textModel);
   const [selectedTextModel, setSelectedTextModel] =
     useState<Model>(getTextModel);
-  const [imageModels, setImageModels] = useState<Model[]>(allModel.imageModel);
-  const [selectedImageModel, setSelectedImageModel] = useState<string>(
-    getImageModel().modelId
-  );
   const [upgradeInfo, setUpgradeInfo] = useState<UpgradeInfo>(initUpgradeInfo);
   const [cost, setCost] = useState('0.00');
   const controllerRef = useRef<AbortController | null>(null);
@@ -174,7 +163,6 @@ function SettingsScreen(): React.JSX.Element {
       // Get Bedrock models
       let bedrockResponse = {
         textModel: [] as Model[],
-        imageModel: [] as Model[],
       };
       if (shouldFetchBedrock) {
         bedrockResponse =
@@ -192,23 +180,6 @@ function SettingsScreen(): React.JSX.Element {
         bedrockResponse.textModel = textModels.filter(
           model => !model.modelTag || model.modelTag === ModelTag.Bedrock
         );
-        bedrockResponse.imageModel = imageModels;
-      }
-
-      // Handle image models
-      if (bedrockResponse.imageModel.length > 0) {
-        setImageModels(bedrockResponse.imageModel);
-        const imageModel = getImageModel();
-        const targetModels = bedrockResponse.imageModel.filter(
-          model => model.modelName === imageModel.modelName
-        );
-        if (targetModels && targetModels.length === 1) {
-          setSelectedImageModel(targetModels[0].modelId);
-          saveImageModel(targetModels[0]);
-        } else {
-          setSelectedImageModel(bedrockResponse.imageModel[0].modelId);
-          saveImageModel(bedrockResponse.imageModel[0]);
-        }
       }
 
       // Generate OpenAI Compatible models
@@ -255,14 +226,13 @@ function SettingsScreen(): React.JSX.Element {
       }
 
       sendEventRef.current('modelChanged');
-      if (bedrockResponse.imageModel.length > 0 || allTextModels.length > 0) {
+      if (allTextModels.length > 0) {
         saveAllModels({
           textModel: allTextModels,
-          imageModel: bedrockResponse.imageModel,
         });
       }
     },
-    [textModels, imageModels]
+    [textModels]
   );
 
   const fetchAndSetModelNamesRef = useRef(fetchAndSetModelNames);
@@ -398,16 +368,6 @@ function SettingsScreen(): React.JSX.Element {
   const textModelsData: DropdownItem[] = textModels.map(model => ({
     label: model.modelName ?? '',
     value: model.modelName ?? '',
-  }));
-  const imageModelsData: DropdownItem[] = imageModels.map(model => ({
-    label: model.modelName ?? '',
-    value: model.modelId ?? '',
-  }));
-  const imageSizesData: DropdownItem[] = getAllImageSize(
-    selectedImageModel
-  ).map(size => ({
-    label: size,
-    value: size,
   }));
   const voiceIDData: DropdownItem[] = VoiceIDList.map(voice => ({
     label: voice.voiceName,
@@ -715,40 +675,6 @@ function SettingsScreen(): React.JSX.Element {
               placeholder="Select Voice ID"
             />
           )}
-
-        <CustomDropdown
-          label="Image Model"
-          data={imageModelsData}
-          value={selectedImageModel}
-          onChange={(item: DropdownItem) => {
-            if (item.value !== '') {
-              setSelectedImageModel(item.value);
-              const selectedModel = imageModels.find(
-                model => model.modelId === item.value
-              );
-              if (selectedModel) {
-                saveImageModel(selectedModel);
-                if (isNewStabilityImageModel(item.value)) {
-                  setImageSize('1024 x 1024');
-                  saveImageSize('1024 x 1024');
-                }
-              }
-            }
-          }}
-          placeholder="Select a model"
-        />
-        <CustomDropdown
-          label="Image Size"
-          data={imageSizesData}
-          value={imageSize}
-          onChange={(item: DropdownItem) => {
-            if (item.value !== '') {
-              setImageSize(item.value);
-              saveImageSize(item.value);
-            }
-          }}
-          placeholder="Select image size"
-        />
 
         <Text style={[styles.label, styles.middleLabel]}>Web Search</Text>
 

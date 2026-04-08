@@ -227,7 +227,7 @@ function extractChunkContent(bedrockChunk: BedrockAPIChunk, rawChunk: string) {
 
 export const requestAllModelsByBedrockAPI = async (): Promise<AllModel> => {
   if (getBedrockApiKey() === '') {
-    return { imageModel: [], textModel: [] };
+    return { textModel: [] };
   }
   const controller = new AbortController();
   const url = `https://bedrock.${getRegion()}.amazonaws.com/foundation-models`;
@@ -245,15 +245,13 @@ export const requestAllModelsByBedrockAPI = async (): Promise<AllModel> => {
     clearTimeout(timeoutId);
     if (!response.ok) {
       console.log(`HTTP error! status: ${response.status}`);
-      return { imageModel: [], textModel: [] };
+      return { textModel: [] };
     }
     const allModel = await response.json();
 
-    // Process the model data similar to the Python code
     if (allModel.modelSummaries) {
       const modelNames = new Set<string>();
       const textModel: Model[] = [];
-      const imageModel: Model[] = [];
       const region = getRegion();
 
       for (const model of allModel.modelSummaries) {
@@ -285,26 +283,20 @@ export const requestAllModelsByBedrockAPI = async (): Promise<AllModel> => {
               modelName: model.modelName,
               modelTag: ModelTag.Bedrock,
             });
-          } else if (model.outputModalities?.includes('IMAGE')) {
-            imageModel.push({
-              modelId: model.modelId,
-              modelName: model.modelName,
-              modelTag: ModelTag.Bedrock,
-            });
           }
 
           modelNames.add(model.modelName);
         }
       }
 
-      return { textModel, imageModel };
+      return { textModel };
     }
 
-    return { imageModel: [], textModel: [] };
+    return { textModel: [] };
   } catch (error) {
     console.log('Bedrock API Error fetching models:', error);
     clearTimeout(timeoutId);
-    return { imageModel: [], textModel: [] };
+    return { textModel: [] };
   }
 };
 
