@@ -27,5 +27,4 @@ export type RouteParamList = {
     tapIndex?: number;
   };
   Settings: NonNullable<unknown>;
-  TokenUsage: NonNullable<unknown>;
 };

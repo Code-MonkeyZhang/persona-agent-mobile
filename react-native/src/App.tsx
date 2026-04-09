@@ -12,7 +12,6 @@ import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider, useAppContext } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import Toast from 'react-native-toast-message';
-import TokenUsageScreen from './settings/TokenUsageScreen.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
@@ -95,7 +94,6 @@ const DrawerNavigator = () => {
  * Stack导航器 - 全屏页面栈管理
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
- * - TokenUsage: Token使用统计
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -105,20 +103,6 @@ const AppNavigator = () => {
         name="Drawer"
         component={DrawerNavigator}
         options={{ headerShown: false, headerLargeTitleShadowVisible: false }}
-      />
-      <Stack.Screen
-        name="TokenUsage"
-        component={TokenUsageScreen}
-        options={{
-          title: 'Usage',
-          contentStyle: {
-            height: isMac ? 66 : undefined,
-            backgroundColor: colors.background,
-          },
-          headerTitleAlign: 'center',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-        }}
       />
     </Stack.Navigator>
   );

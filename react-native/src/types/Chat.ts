@@ -78,12 +78,6 @@ export interface DropdownItem {
   value: string;
 }
 
-export type UpgradeInfo = {
-  needUpgrade: boolean;
-  version: string;
-  url: string;
-};
-
 export enum FileType {
   document = 'document',
   image = 'image',

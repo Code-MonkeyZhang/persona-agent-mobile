@@ -72,8 +72,6 @@ const tokenInfoKey = keyPrefix + 'tokenInfo';
 const bedrockConfigModeKey = keyPrefix + 'bedrockConfigModeKey';
 const bedrockApiKeyTag = keyPrefix + 'bedrockApiKeyTag';
 
-const tavilyApiKeyTag = keyPrefix + 'tavilyApiKeyTag';
-
 let currentApiUrl: string | undefined;
 let currentApiKey: string | undefined;
 let currentOllamaApiUrl: string | undefined;
@@ -93,8 +91,6 @@ let currentModelOrder: Model[] | undefined;
 let currentBedrockConfigMode: string | undefined;
 let currentBedrockApiKey: string | undefined;
 let currentOpenAICompatibleConfig: OpenAICompatConfig[] | undefined;
-
-let currentTavilyApiKey: string | undefined;
 
 export function saveMessages(
   sessionId: number,
@@ -610,20 +606,6 @@ export function getBedrockApiKey(): string {
   }
 }
 
-
-export function saveTavilyApiKey(apiKey: string) {
-  currentTavilyApiKey = apiKey;
-  encryptStorage.set(tavilyApiKeyTag, apiKey);
-}
-
-export function getTavilyApiKey(): string {
-  if (currentTavilyApiKey) {
-    return currentTavilyApiKey;
-  } else {
-    currentTavilyApiKey = encryptStorage.getString(tavilyApiKeyTag) ?? '';
-    return currentTavilyApiKey;
-  }
-}
 
 // OpenAI Compatible configurations functions
 export function saveOpenAICompatConfigs(configs: OpenAICompatConfig[]) {

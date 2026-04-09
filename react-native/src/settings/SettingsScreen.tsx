@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Image,
-  Linking,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -23,7 +21,6 @@ import {
   getApiUrl,
   getDeepSeekApiKey,
   getHapticEnabled,
-  getModelUsage,
   getOllamaApiUrl,
   getOllamaApiKey,
   getOpenAIApiKey,
@@ -50,28 +47,22 @@ import {
   saveBedrockApiKey,
   generateOpenAICompatModels,
   getOpenAICompatConfigs,
-  getTavilyApiKey,
-  saveTavilyApiKey,
   clearAllChatHistory,
 } from '../storage/StorageUtils.ts';
 import { CustomHeaderRightButton } from '../chat/component/CustomHeaderRightButton.tsx';
 import { RouteParamList } from '../types/RouteTypes.ts';
-import { requestAllModels, requestUpgradeInfo } from '../api/bedrock-api.ts';
+import { requestAllModels } from '../api/bedrock-api.ts';
 import {
   DropdownItem,
   Model,
-  UpgradeInfo,
   OpenAICompatConfig,
   ModelTag,
 } from '../types/Chat.ts';
 
-import packageJson from '../../package.json';
 import { isMac } from '../App.tsx';
-import { getBuildNumber } from '../utils/PlatformUtils.ts';
 import CustomDropdown from './DropdownComponent.tsx';
 import {
   addBedrockPrefixToDeepseekModels,
-  getTotalCost,
 } from './ModelPrice.ts';
 import {
   BedrockThinkingModels,
@@ -88,12 +79,6 @@ import { useAppContext } from '../history/AppProvider.tsx';
 import { useTheme, ColorScheme } from '../theme';
 import { requestAllModelsByBedrockAPI } from '../api/bedrock-api-key.ts';
 import OpenAICompatConfigsSection from './OpenAICompatConfigsSection.tsx';
-
-const initUpgradeInfo: UpgradeInfo = {
-  needUpgrade: false,
-  version: '',
-  url: '',
-};
 
 export const GITHUB_LINK = 'https://github.com/aws-samples/swift-chat';
 
@@ -118,8 +103,6 @@ function SettingsScreen(): React.JSX.Element {
   const [textModels, setTextModels] = useState<Model[]>(allModel.textModel);
   const [selectedTextModel, setSelectedTextModel] =
     useState<Model>(getTextModel);
-  const [upgradeInfo, setUpgradeInfo] = useState<UpgradeInfo>(initUpgradeInfo);
-  const [cost, setCost] = useState('0.00');
   const controllerRef = useRef<AbortController | null>(null);
   const [selectedTab, setSelectedTab] = useState('bedrock');
   const [thinkingEnabled, setThinkingEnabled] = useState(getThinkingEnabled);
@@ -127,7 +110,6 @@ function SettingsScreen(): React.JSX.Element {
   const [bedrockConfigMode, setBedrockConfigMode] =
     useState(getBedrockConfigMode);
   const [bedrockApiKey, setBedrockApiKey] = useState(getBedrockApiKey);
-  const [tavilyApiKey, setTavilyApiKey] = useState(getTavilyApiKey);
   const { sendEvent } = useAppContext();
   const sendEventRef = useRef(sendEvent);
   const openAICompatConfigsRef = useRef(openAICompatConfigs);
@@ -239,7 +221,6 @@ function SettingsScreen(): React.JSX.Element {
 
   useEffect(() => {
     return navigation.addListener('focus', () => {
-      setCost(getTotalCost(getModelUsage()).toString());
       fetchAndSetModelNamesRef.current(true, true).then();
     });
   }, [navigation]);
@@ -252,21 +233,12 @@ function SettingsScreen(): React.JSX.Element {
     }
   };
 
-  const handleCheckUpgrade = async () => {
-    if ((isMac || Platform.OS === 'android') && upgradeInfo.needUpgrade) {
-      await Linking.openURL(upgradeInfo.url);
-    } else {
-      await Linking.openURL(GITHUB_LINK + '/releases');
-    }
-  };
-
   useEffect(() => {
     if (apiUrl === getApiUrl() && apiKey === getApiKey()) {
       return;
     }
     saveKeys(apiUrl.trim(), apiKey.trim());
     fetchAndSetModelNamesRef.current(false, true).then();
-    fetchUpgradeInfo().then();
   }, [apiUrl, apiKey]);
 
   useEffect(() => {
@@ -328,17 +300,6 @@ function SettingsScreen(): React.JSX.Element {
     saveBedrockApiKey(bedrockApiKey.trim());
     fetchAndSetModelNamesRef.current(false, true).then();
   }, [bedrockApiKey]);
-
-  const fetchUpgradeInfo = async () => {
-    if (isMac || Platform.OS === 'android') {
-      const os = isMac ? 'mac' : 'android';
-      const version = packageJson.version;
-      const response = await requestUpgradeInfo(os, version);
-      if (response.needUpgrade) {
-        setUpgradeInfo(response);
-      }
-    }
-  };
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -676,35 +637,6 @@ function SettingsScreen(): React.JSX.Element {
             />
           )}
 
-        <Text style={[styles.label, styles.middleLabel]}>Web Search</Text>
-
-        <CustomTextInput
-          label="Tavily API Key"
-          value={tavilyApiKey}
-          onChangeText={text => {
-            setTavilyApiKey(text);
-            saveTavilyApiKey(text);
-          }}
-          placeholder="Enter Tavily API Key"
-          secureTextEntry={true}
-        />
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.itemContainer}
-          onPress={() => navigation.navigate('TokenUsage', {})}>
-          <Text style={styles.label}>Usage</Text>
-          <View style={styles.arrowContainer}>
-            <Text style={styles.text}>{`USD ${cost}`}</Text>
-            <Image
-              style={styles.arrowImage}
-              source={
-                isDark
-                  ? require('../assets/back_dark.png')
-                  : require('../assets/back.png')
-              }
-            />
-          </View>
-        </TouchableOpacity>
         {!isMac && (
           <View style={styles.switchContainer}>
             <Text style={styles.label}>Haptic Feedback</Text>
@@ -714,77 +646,6 @@ function SettingsScreen(): React.JSX.Element {
             />
           </View>
         )}
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.itemContainer}
-          onPress={() => Linking.openURL(GITHUB_LINK)}>
-          <Text style={styles.label}>Configuration Guide</Text>
-          <Image
-            style={styles.arrowImage}
-            source={
-              isDark
-                ? require('../assets/back_dark.png')
-                : require('../assets/back.png')
-            }
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.itemContainer}
-          onPress={() =>
-            Linking.openURL(GITHUB_LINK + '/discussions/new?category=general')
-          }>
-          <Text style={styles.label}>Submit Feedback</Text>
-          <Image
-            style={styles.arrowImage}
-            source={
-              isDark
-                ? require('../assets/back_dark.png')
-                : require('../assets/back.png')
-            }
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.itemContainer}
-          onPress={() =>
-            Linking.openURL(
-              GITHUB_LINK + '/issues/new?template=bug_report.yaml'
-            )
-          }>
-          <Text style={styles.label}>Report an Issue</Text>
-          <Image
-            style={styles.arrowImage}
-            source={
-              isDark
-                ? require('../assets/back_dark.png')
-                : require('../assets/back.png')
-            }
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.itemContainer}
-          activeOpacity={1}
-          onPress={handleCheckUpgrade}>
-          <Text style={styles.label}>App Version</Text>
-          <View style={styles.arrowContainer}>
-            <Text style={styles.text}>
-              {packageJson.version +
-                (Platform.OS === 'ios' && getBuildNumber()
-                  ? ` (${getBuildNumber()})`
-                  : '') +
-                (upgradeInfo.needUpgrade ? ` → ${upgradeInfo.version}` : '')}
-            </Text>
-            <Image
-              style={styles.arrowImage}
-              source={
-                isDark
-                  ? require('../assets/back_dark.png')
-                  : require('../assets/back.png')
-              }
-            />
-          </View>
-        </TouchableOpacity>
         <TouchableOpacity
           style={styles.clearDataButton}
           activeOpacity={0.7}

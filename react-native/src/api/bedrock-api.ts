@@ -6,7 +6,6 @@ import {
   ModelTag,
   SystemPrompt,
   TokenResponse,
-  UpgradeInfo,
   Usage,
 } from '../types/Chat.ts';
 import {
@@ -306,30 +305,6 @@ export const requestToken = async (): Promise<TokenResponse | null> => {
   } catch (error) {
     console.log('Error fetching token:', error);
     return null;
-  }
-};
-
-export const requestUpgradeInfo = async (
-  os: string,
-  version: string
-): Promise<UpgradeInfo> => {
-  const url = getApiPrefix() + '/upgrade';
-  const options = {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      os: os,
-      version: version,
-    }),
-    reactNative: { textStreaming: true },
-  };
-
-  try {
-    const response = await fetch(url, options);
-    return await response.json();
-  } catch (error) {
-    console.log('Error fetching upgrade info:', error);
-    return { needUpgrade: false, version: '', url: '' };
   }
 };
 
