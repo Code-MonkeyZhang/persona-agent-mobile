@@ -160,11 +160,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 });
               }}>
               <Image
-                source={
-                  isDark
-                    ? require('../assets/bedrock_dark.png')
-                    : require('../assets/bedrock.png')
-                }
+                source={require('../assets/openai_api.png')}
                 style={styles.settingsLeftImg}
               />
               <Text style={styles.settingsText}>Chat</Text>

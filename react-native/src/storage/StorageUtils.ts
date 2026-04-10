@@ -5,20 +5,11 @@ import {
   ChatMode,
   SwiftChatMessage,
   Model,
-  SystemPrompt,
-  Usage,
-  TokenResponse,
   OpenAICompatConfig,
   ModelTag,
+  Usage,
 } from '../types/Chat.ts';
 import uuid from 'uuid';
-import {
-  DefaultRegion,
-  DefaultVoiceSystemPrompts,
-  getDefaultSystemPrompts,
-  getDefaultTextModels,
-  VoiceIDList,
-} from './Constants.ts';
 
 export const storage = new MMKV();
 
@@ -42,54 +33,15 @@ const messageListKey = keyPrefix + 'messageList';
 const sessionIdPrefix = keyPrefix + 'sessionId/';
 const currentSessionIdKey = keyPrefix + 'currentSessionId';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
-const apiUrlKey = keyPrefix + 'apiUrlKey';
-const apiKeyTag = keyPrefix + 'apiKeyTag';
-const ollamaApiUrlKey = keyPrefix + 'ollamaApiUrlKey';
-const ollamaApiKeyTag = keyPrefix + 'ollamaApiKeyTag';
-const deepSeekApiKeyTag = keyPrefix + 'deepSeekApiKeyTag';
-const openAIApiKeyTag = keyPrefix + 'openAIApiKeyTag';
-const openAICompatApiKeyTag = keyPrefix + 'openAICompatApiKeyTag';
-const openAICompatApiURLKey = keyPrefix + 'openAICompatApiURLKey';
-const openAICompatModelsKey = keyPrefix + 'openAICompatModelsKey';
-const openAICompatConfigsKey = keyPrefix + 'openAICompatConfigsKey';
-const regionKey = keyPrefix + 'regionKey';
 const textModelKey = keyPrefix + 'textModelKey';
-
 const allModelKey = keyPrefix + 'allModelKey';
-
-const modelUsageKey = keyPrefix + 'modelUsageKey';
-const systemPromptsKey = keyPrefix + 'systemPromptsKey';
-const currentSystemPromptKey = keyPrefix + 'currentSystemPromptKey';
-const currentVoiceSystemPromptKey = keyPrefix + 'currentVoiceSystemPromptKey';
-
-const currentPromptIdKey = keyPrefix + 'currentPromptIdKey';
-const openAIProxyEnabledKey = keyPrefix + 'openAIProxyEnabledKey';
-const thinkingEnabledKey = keyPrefix + 'thinkingEnabledKey';
 const reasoningExpandedKey = keyPrefix + 'reasoningExpandedKey';
 const modelOrderKey = keyPrefix + 'modelOrderKey';
-const voiceIdKey = keyPrefix + 'voiceIdKey';
-const tokenInfoKey = keyPrefix + 'tokenInfo';
-const bedrockConfigModeKey = keyPrefix + 'bedrockConfigModeKey';
-const bedrockApiKeyTag = keyPrefix + 'bedrockApiKeyTag';
-
-let currentApiUrl: string | undefined;
-let currentApiKey: string | undefined;
-let currentOllamaApiUrl: string | undefined;
-let currentOllamaApiKey: string | undefined;
-let currentDeepSeekApiKey: string | undefined;
-let currentOpenAIApiKey: string | undefined;
-let currentOpenAICompatApiKey: string | undefined;
-let currentOpenAICompatApiURL: string | undefined;
-let currentRegion: string | undefined;
+const openAICompatConfigsKey = keyPrefix + 'openAICompatConfigsKey';
 
 let currentTextModel: Model | undefined;
-let currentSystemPrompts: SystemPrompt[] | undefined;
-let currentOpenAIProxyEnabled: boolean | undefined;
-let currentThinkingEnabled: boolean | undefined;
 let currentReasoningExpanded: boolean | undefined;
 let currentModelOrder: Model[] | undefined;
-let currentBedrockConfigMode: string | undefined;
-let currentBedrockApiKey: string | undefined;
 let currentOpenAICompatibleConfig: OpenAICompatConfig[] | undefined;
 
 export function saveMessages(
@@ -159,141 +111,12 @@ export function getSessionId() {
   return storage.getNumber(currentSessionIdKey) ?? 0;
 }
 
-export function saveKeys(apiUrl: string, apiKey: string) {
-  if (apiUrl.endsWith('/')) {
-    apiUrl = apiUrl.slice(0, -1);
-  }
-  saveApiUrl(apiUrl);
-  saveApiKey(apiKey);
-  currentApiKey = apiKey;
-  currentApiUrl = apiUrl;
-}
-
-export function getApiUrl(): string {
-  if (currentApiUrl) {
-    return currentApiUrl;
-  } else {
-    currentApiUrl = storage.getString(apiUrlKey) ?? '';
-    return currentApiUrl;
-  }
-}
-
-export function getOllamaApiUrl(): string {
-  if (currentOllamaApiUrl) {
-    return currentOllamaApiUrl;
-  } else {
-    currentOllamaApiUrl = storage.getString(ollamaApiUrlKey) ?? '';
-    return currentOllamaApiUrl;
-  }
-}
-
-export function getApiKey(): string {
-  if (currentApiKey) {
-    return currentApiKey;
-  } else {
-    currentApiKey = encryptStorage.getString(apiKeyTag) ?? '';
-    return currentApiKey;
-  }
-}
-
-export function getDeepSeekApiKey(): string {
-  if (currentDeepSeekApiKey) {
-    return currentDeepSeekApiKey;
-  } else {
-    currentDeepSeekApiKey = encryptStorage.getString(deepSeekApiKeyTag) ?? '';
-    return currentDeepSeekApiKey;
-  }
-}
-
-export function getOpenAIApiKey(): string {
-  if (currentOpenAIApiKey) {
-    return currentOpenAIApiKey;
-  } else {
-    currentOpenAIApiKey = encryptStorage.getString(openAIApiKeyTag) ?? '';
-    return currentOpenAIApiKey;
-  }
-}
-
-export function getOpenAICompatApiKey(): string {
-  if (currentOpenAICompatApiKey) {
-    return currentOpenAICompatApiKey;
-  } else {
-    currentOpenAICompatApiKey =
-      encryptStorage.getString(openAICompatApiKeyTag) ?? '';
-    return currentOpenAICompatApiKey;
-  }
-}
-
-export function getOpenAICompatApiURL(): string {
-  if (currentOpenAICompatApiURL) {
-    return currentOpenAICompatApiURL;
-  } else {
-    currentOpenAICompatApiURL = storage.getString(openAICompatApiURLKey) ?? '';
-    return currentOpenAICompatApiURL;
-  }
-}
-
-export function getOpenAICompatModels(): string {
-  return storage.getString(openAICompatModelsKey) ?? '';
-}
-
 export function saveHapticEnabled(enabled: boolean) {
   storage.set(hapticEnabledKey, enabled);
 }
 
 export function getHapticEnabled() {
   return storage.getBoolean(hapticEnabledKey) ?? true;
-}
-
-export function saveApiUrl(apiUrl: string) {
-  storage.set(apiUrlKey, apiUrl);
-}
-
-export function saveApiKey(apiKey: string) {
-  encryptStorage.set(apiKeyTag, apiKey);
-}
-
-export function saveOllamaApiURL(apiUrl: string) {
-  currentOllamaApiUrl = apiUrl;
-  storage.set(ollamaApiUrlKey, apiUrl);
-}
-
-export function getOllamaApiKey(): string {
-  if (currentOllamaApiKey) {
-    return currentOllamaApiKey;
-  } else {
-    currentOllamaApiKey = encryptStorage.getString(ollamaApiKeyTag) ?? '';
-    return currentOllamaApiKey;
-  }
-}
-
-export function saveOllamaApiKey(apiKey: string) {
-  currentOllamaApiKey = apiKey;
-  encryptStorage.set(ollamaApiKeyTag, apiKey);
-}
-
-export function saveDeepSeekApiKey(apiKey: string) {
-  currentDeepSeekApiKey = apiKey;
-  encryptStorage.set(deepSeekApiKeyTag, apiKey);
-}
-
-export function saveOpenAIApiKey(apiKey: string) {
-  currentOpenAIApiKey = apiKey;
-  encryptStorage.set(openAIApiKeyTag, apiKey);
-}
-
-export function saveRegion(region: string) {
-  currentRegion = region;
-  storage.set(regionKey, region);
-}
-
-export function getRegion() {
-  if (currentRegion) {
-    return currentRegion;
-  } else {
-    currentRegion = storage.getString(regionKey) ?? DefaultRegion;
-    return currentRegion;
-  }
 }
 
 export function saveTextModel(model: Model) {
@@ -309,12 +132,19 @@ export function getTextModel(): Model {
     if (modelString.length > 0) {
       currentTextModel = JSON.parse(modelString) as Model;
     } else {
-      currentTextModel = getDefaultTextModels()[0];
+      const allModels = getAllModels().textModel;
+      currentTextModel =
+        allModels.length > 0
+          ? allModels[0]
+          : ({
+              modelId: '',
+              modelName: '',
+              modelTag: ModelTag.OpenAICompatible,
+            } as Model);
     }
     return currentTextModel;
   }
 }
-
 
 export function saveAllModels(allModels: AllModel) {
   storage.set(allModelKey, JSON.stringify(allModels));
@@ -326,162 +156,8 @@ export function getAllModels() {
     return JSON.parse(modelString) as AllModel;
   }
   return {
-    textModel: getDefaultTextModels(),
+    textModel: [],
   };
-}
-
-
-export function saveVoiceId(voiceId: string) {
-  storage.set(voiceIdKey, voiceId);
-}
-
-export function getVoiceId() {
-  return storage.getString(voiceIdKey) ?? VoiceIDList[0].voiceId;
-}
-
-export function getModelUsage(): Usage[] {
-  const usage = storage.getString(modelUsageKey);
-  return usage ? JSON.parse(usage) : [];
-}
-
-export function updateTotalUsage(usage: Usage) {
-  const currentUsage = getModelUsage();
-  const modelIndex = currentUsage.findIndex(
-    m => m.modelName === usage.modelName
-  );
-  if (modelIndex >= 0) {
-    currentUsage[modelIndex].inputTokens += usage.inputTokens;
-    currentUsage[modelIndex].outputTokens += usage.outputTokens;
-  } else {
-    currentUsage.push(usage);
-  }
-  storage.set(modelUsageKey, JSON.stringify(currentUsage));
-}
-
-export function saveCurrentSystemPrompt(prompts: SystemPrompt | null) {
-  storage.set(currentSystemPromptKey, prompts ? JSON.stringify(prompts) : '');
-}
-
-export function getCurrentSystemPrompt(): SystemPrompt | null {
-  const promptString = storage.getString(currentSystemPromptKey) ?? '';
-  if (promptString.length > 0) {
-    return JSON.parse(promptString) as SystemPrompt;
-  }
-  return null;
-}
-
-export function saveCurrentVoiceSystemPrompt(prompts: SystemPrompt | null) {
-  storage.set(
-    currentVoiceSystemPromptKey,
-    prompts ? JSON.stringify(prompts) : ''
-  );
-}
-
-export function getCurrentVoiceSystemPrompt(): SystemPrompt | null {
-  const promptString = storage.getString(currentVoiceSystemPromptKey) ?? '';
-  if (promptString.length > 0) {
-    return JSON.parse(promptString) as SystemPrompt;
-  }
-  return null;
-}
-
-
-export function saveSystemPrompts(prompts: SystemPrompt[], type?: string) {
-  // get all prompt
-  currentSystemPrompts = prompts;
-  const promptsString = storage.getString(systemPromptsKey) ?? '';
-  let allPrompts: SystemPrompt[] = [];
-
-  if (promptsString.length > 0) {
-    allPrompts = JSON.parse(promptsString) as SystemPrompt[];
-  }
-  const updatedPrompts = [
-    ...allPrompts.filter(p => p.promptType !== type),
-    ...prompts,
-  ];
-  storage.set(systemPromptsKey, JSON.stringify(updatedPrompts));
-}
-
-export function saveAllSystemPrompts(prompts: SystemPrompt[]) {
-  storage.set(systemPromptsKey, JSON.stringify(prompts));
-}
-
-export function getSystemPrompts(type?: string): SystemPrompt[] {
-  if (
-    currentSystemPrompts &&
-    currentSystemPrompts.length > 0 &&
-    currentSystemPrompts[0].promptType === type
-  ) {
-    return currentSystemPrompts;
-  }
-  const promptsString = storage.getString(systemPromptsKey) ?? '';
-  if (promptsString.length > 0) {
-    currentSystemPrompts = JSON.parse(promptsString) as SystemPrompt[];
-    if (
-      currentSystemPrompts.filter(p => p.promptType === 'voice').length === 0
-    ) {
-      currentSystemPrompts = currentSystemPrompts.concat(
-        DefaultVoiceSystemPrompts
-      );
-      saveAllSystemPrompts(currentSystemPrompts);
-    }
-    if (currentSystemPrompts.some(p => p.id === -3)) {
-      currentSystemPrompts = currentSystemPrompts.filter(p => p.id !== -3);
-      saveAllSystemPrompts(currentSystemPrompts);
-    }
-  } else {
-    currentSystemPrompts = getDefaultSystemPrompts();
-    saveAllSystemPrompts(currentSystemPrompts);
-  }
-  currentSystemPrompts = type
-    ? currentSystemPrompts.filter(p => p.promptType === type)
-    : currentSystemPrompts.filter(p => p.promptType === undefined);
-  if (currentSystemPrompts.length === 0) {
-    // fix the crash issue
-    currentSystemPrompts = getDefaultSystemPrompts();
-    currentSystemPrompts = type
-      ? currentSystemPrompts.filter(p => p.promptType === type)
-      : currentSystemPrompts.filter(p => p.promptType === undefined);
-    saveAllSystemPrompts(getDefaultSystemPrompts());
-  }
-  return currentSystemPrompts;
-}
-
-export function getPromptId() {
-  return storage.getNumber(currentPromptIdKey) ?? 0;
-}
-
-export function savePromptId(promptId: number) {
-  storage.set(currentPromptIdKey, promptId);
-}
-
-export function saveOpenAIProxyEnabled(enabled: boolean) {
-  currentOpenAIProxyEnabled = enabled;
-  storage.set(openAIProxyEnabledKey, enabled);
-}
-
-export function getOpenAIProxyEnabled() {
-  if (currentOpenAIProxyEnabled !== undefined) {
-    return currentOpenAIProxyEnabled;
-  } else {
-    currentOpenAIProxyEnabled =
-      storage.getBoolean(openAIProxyEnabledKey) ?? false;
-    return currentOpenAIProxyEnabled;
-  }
-}
-
-export function saveThinkingEnabled(enabled: boolean) {
-  currentThinkingEnabled = enabled;
-  storage.set(thinkingEnabledKey, enabled);
-}
-
-export function getThinkingEnabled() {
-  if (currentThinkingEnabled !== undefined) {
-    return currentThinkingEnabled;
-  } else {
-    currentThinkingEnabled = storage.getBoolean(thinkingEnabledKey) ?? true;
-    return currentThinkingEnabled;
-  }
 }
 
 export function saveReasoningExpanded(expanded: boolean) {
@@ -498,7 +174,6 @@ export function getReasoningExpanded() {
   }
 }
 
-// Model order functions
 export function saveModelOrder(models: Model[]) {
   currentModelOrder = models;
   storage.set(modelOrderKey, JSON.stringify(models));
@@ -518,7 +193,6 @@ export function getModelOrder(): Model[] {
   }
 }
 
-// Update model order when a model is used
 export function updateTextModelUsageOrder(model: Model) {
   const currentOrder = getModelOrder();
   const updatedOrder = [
@@ -529,7 +203,6 @@ export function updateTextModelUsageOrder(model: Model) {
   return updatedOrder;
 }
 
-// Get merged model order - combines history with current available models
 export function getMergedModelOrder(): Model[] {
   const historyModels = getModelOrder();
   const currentTextModels = getAllModels().textModel;
@@ -551,63 +224,6 @@ export function getMergedModelOrder(): Model[] {
   return mergedModels;
 }
 
-// token related methods
-export function saveTokenInfo(tokenInfo: TokenResponse) {
-  encryptStorage.set(tokenInfoKey, JSON.stringify(tokenInfo));
-}
-
-export function getTokenInfo(): TokenResponse | null {
-  const tokenInfoStr = encryptStorage.getString(tokenInfoKey);
-  if (tokenInfoStr) {
-    return JSON.parse(tokenInfoStr) as TokenResponse;
-  }
-  return null;
-}
-
-export function isTokenValid(): boolean {
-  const tokenInfo = getTokenInfo();
-  if (!tokenInfo) {
-    return false;
-  }
-  const expirationDate = new Date(tokenInfo.expiration).getTime();
-  const now = new Date().getTime();
-  return expirationDate > now + 10 * 60 * 1000;
-}
-
-// Bedrock configuration mode functions
-export function saveBedrockConfigMode(mode: string) {
-  currentBedrockConfigMode = mode;
-  storage.set(bedrockConfigModeKey, mode);
-}
-
-export function getBedrockConfigMode(): string {
-  if (currentBedrockConfigMode) {
-    return currentBedrockConfigMode;
-  } else {
-    currentBedrockConfigMode =
-      storage.getString(bedrockConfigModeKey) ??
-      (getApiUrl().length > 0 ? 'swiftchat' : 'bedrock');
-    return currentBedrockConfigMode;
-  }
-}
-
-// Bedrock API key functions
-export function saveBedrockApiKey(apiKey: string) {
-  currentBedrockApiKey = apiKey;
-  encryptStorage.set(bedrockApiKeyTag, apiKey);
-}
-
-export function getBedrockApiKey(): string {
-  if (currentBedrockApiKey) {
-    return currentBedrockApiKey;
-  } else {
-    currentBedrockApiKey = encryptStorage.getString(bedrockApiKeyTag) ?? '';
-    return currentBedrockApiKey;
-  }
-}
-
-
-// OpenAI Compatible configurations functions
 export function saveOpenAICompatConfigs(configs: OpenAICompatConfig[]) {
   currentOpenAICompatibleConfig = configs;
   encryptStorage.set(openAICompatConfigsKey, JSON.stringify(configs));
@@ -628,36 +244,6 @@ export function getOpenAICompatConfigs(): OpenAICompatConfig[] {
   }
 }
 
-// Migration function to convert old single config to new multi-config format
-export function migrateOpenAICompatConfig() {
-  const existingConfigs = getOpenAICompatConfigs();
-  if (existingConfigs.length > 0) {
-    return; // Already migrated
-  }
-
-  const baseUrl = getOpenAICompatApiURL();
-  const apiKey = getOpenAICompatApiKey();
-  const modelIds = getOpenAICompatModels();
-
-  if (baseUrl || apiKey || modelIds) {
-    const domain = extractDomainFromUrl(baseUrl);
-    const newConfig: OpenAICompatConfig = {
-      id: uuid.v4(),
-      baseUrl,
-      apiKey,
-      modelIds,
-      name: domain || 'OpenAI Compatible',
-    };
-    saveOpenAICompatConfigs([newConfig]);
-
-    // Clear old storage keys
-    storage.delete(openAICompatApiURLKey);
-    encryptStorage.delete(openAICompatApiKeyTag);
-    storage.delete(openAICompatModelsKey);
-  }
-}
-
-// Helper function to extract domain from URL
 export function extractDomainFromUrl(url: string): string {
   if (!url) {
     return '';
@@ -675,22 +261,16 @@ export function extractDomainFromUrl(url: string): string {
   }
 }
 
-// Clear all chat history and related data
 export function clearAllChatHistory(): void {
-  // Get all message sessions and delete them
   const chatList = getMessageList();
   chatList.forEach(chat => {
     storage.delete(sessionIdPrefix + chat.id);
   });
 
-  // Clear the message list
   storage.delete(messageListKey);
-
-  // Clear current session ID
   storage.delete(currentSessionIdKey);
 }
 
-// Generate OpenAI Compatible models from configs
 export function generateOpenAICompatModels(
   configs: OpenAICompatConfig[]
 ): Model[] {

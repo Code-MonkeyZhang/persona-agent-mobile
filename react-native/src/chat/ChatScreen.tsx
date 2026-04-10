@@ -18,7 +18,7 @@ import {
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
 import { ColorScheme, useTheme } from '../theme';
-import { invokeBedrockWithCallBack, requestToken } from '../api/bedrock-api';
+import { invokeOpenAIWithCallBack } from '../api/open-api';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
@@ -29,10 +29,8 @@ import {
   getMessagesBySessionId,
   getSessionId,
   getTextModel,
-  isTokenValid,
   saveMessageList,
   saveMessages,
-  updateTotalUsage,
 } from '../storage/StorageUtils.ts';
 import {
   ChatMode,
@@ -350,11 +348,6 @@ function ChatScreen(): React.JSX.Element {
           saveCurrentMessages();
         }
       }
-      if (nextAppState === 'active') {
-        if (!isTokenValid()) {
-          requestToken().then();
-        }
-      }
     };
     const subscription = AppState.addEventListener(
       'change',
@@ -513,9 +506,8 @@ function ChatScreen(): React.JSX.Element {
         let latencyMs = 0;
         let metrics: Metrics | undefined;
 
-        invokeBedrockWithCallBack(
+        invokeOpenAIWithCallBack(
           bedrockMessages.current,
-          modeRef.current,
           null,
           () => isCanceled.current,
           controllerRef.current,
@@ -543,7 +535,6 @@ function ChatScreen(): React.JSX.Element {
                   totalTokens:
                     (prevUsage?.totalTokens || 0) + usageInfo.totalTokens,
                 }));
-                updateTotalUsage(usageInfo);
                 const renderSec =
                   (new Date().getTime() - startRequestTime - latencyMs) / 1000;
                 const speed = usageInfo.outputTokens / renderSec;

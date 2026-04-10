@@ -23,7 +23,6 @@ export enum ChatStatus {
 
 export interface EventData {
   id?: number;
-  prompt?: SystemPrompt;
   url?: string;
   script?: string;
   data?: string;
@@ -41,16 +40,8 @@ export type Model = {
 };
 
 export enum ModelTag {
-  Bedrock = 'Bedrock',
-  OpenAI = 'OpenAI',
   OpenAICompatible = 'OpenAICompatible',
-  DeepSeek = 'DeepSeek',
-  Ollama = 'Ollama',
 }
-
-export type OllamaModel = {
-  name: string;
-};
 
 export type OpenAICompatConfig = {
   id: string;
@@ -102,15 +93,6 @@ export type Usage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-
-};
-
-export type UsagePrice = {
-  modelName: string;
-  inputPrice: number;
-  outputPrice: number;
-  totalPrice: number;
-
 };
 
 export interface SwiftChatMessage extends IMessage {
@@ -124,51 +106,6 @@ export interface SwiftChatMessage extends IMessage {
 interface SwiftChatUser extends User {
   modelTag?: string;
 }
-
-export interface SystemPrompt {
-  id: number;
-  name: string;
-  prompt: string;
-  includeHistory: boolean;
-  promptType?: string; // 'image' 'voice' or undefined
-  allowInterruption?: boolean;
-}
-
-export interface BedrockChunk {
-  contentBlockDelta: {
-    delta: Delta;
-  };
-  metadata: {
-    usage: Usage;
-  };
-  detail: string;
-}
-
-export interface BedrockAPIChunk {
-  delta: Delta;
-  usage: Usage;
-  stopReason: string;
-  Message: string;
-  message: string;
-}
-
-export interface Delta {
-  text: string;
-  reasoningContent: ReasoningContent;
-}
-
-export interface ReasoningContent {
-  text: string;
-}
-
-export type TokenResponse = {
-  accessKeyId: string;
-  secretAccessKey: string;
-  sessionToken: string;
-  expiration: string;
-  error: string;
-  apiKey?: string;
-};
 
 export interface Metrics {
   latencyMs: string;

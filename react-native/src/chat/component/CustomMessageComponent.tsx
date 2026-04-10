@@ -222,13 +222,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     if (!currentMessage || !currentMessage.user) {
       return {
         userName: '',
-        modelIcon: isDark
-          ? require('../../assets/bedrock_dark.png')
-          : require('../../assets/bedrock.png'),
+        modelIcon: require('../../assets/openai_api.png'),
       };
     }
     const user = currentMessage.user;
-    const userName = user.name ?? 'Bedrock';
+    const userName = user.name ?? 'AI';
     const currentModelTag = getModelTagByUserName(user.modelTag, userName);
 
     const modelIcon = getModelIcon(currentModelTag, undefined, isDark);

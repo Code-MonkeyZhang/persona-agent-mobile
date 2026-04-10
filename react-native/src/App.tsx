@@ -17,7 +17,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
 import { configureErrorHandling } from './utils/ErrorUtils';
-import { migrateOpenAICompatConfig } from './storage/StorageUtils.ts';
+
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -145,7 +145,6 @@ const AppWithTheme = () => {
 const App = () => {
   React.useEffect(() => {
     configureErrorHandling();
-    migrateOpenAICompatConfig();
   }, []);
 
   return (

@@ -1,13 +1,9 @@
 import {
   FileInfo,
   FileType,
-  ModelTag,
   SwiftChatMessage,
 } from '../../types/Chat.ts';
 import { getFileBytes, getFileTextContent } from './FileUtils.ts';
-import { EXTRA_DOCUMENT_FORMATS } from '../component/CustomAddFileComponent.tsx';
-import { getModelTag } from '../../utils/ModelUtils.ts';
-import { getTextModel } from '../../storage/StorageUtils.ts';
 
 export async function getBedrockMessagesFromChatMessages(
   messages: SwiftChatMessage[]
@@ -24,7 +20,6 @@ export async function getBedrockMessage(
   message: SwiftChatMessage
 ): Promise<BedrockMessage> {
   const content: MessageContent[] = [{ text: message.text }];
-  const modelTag = getModelTag(getTextModel());
   if (message.image) {
     const files = JSON.parse(message.image) as FileInfo[];
     for (const file of files) {
@@ -56,28 +51,13 @@ export async function getBedrockMessage(
             fileName = normalizeFilename(fileName);
           }
           const fileFormat = file.format;
-          if (
-            EXTRA_DOCUMENT_FORMATS.includes(fileFormat) ||
-            modelTag !== ModelTag.Bedrock
-          ) {
-            try {
-              const fileTextContent = await getFileTextContent(fileUrl);
-              (
-                content[0] as TextContent
-              ).text += `\n\n[File: ${fileName}.${fileFormat}]\n${fileTextContent}`;
-            } catch (error) {
-              console.warn('Error reading text content from:', fileName, error);
-            }
-          } else {
-            content.push({
-              document: {
-                format: file.format.toLowerCase(),
-                name: fileName + '_' + new Date().getTime(),
-                source: {
-                  bytes: fileBytes,
-                },
-              },
-            });
+          try {
+            const fileTextContent = await getFileTextContent(fileUrl);
+            (
+              content[0] as TextContent
+            ).text += `\n\n[File: ${fileName}.${fileFormat}]\n${fileTextContent}`;
+          } catch (error) {
+            console.warn('Error reading text content from:', fileName, error);
           }
         }
       } catch (error) {

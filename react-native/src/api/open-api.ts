@@ -1,19 +1,15 @@
-import { ModelTag, SystemPrompt, Usage } from '../types/Chat.ts';
-import {
-  getApiUrl,
-  getDeepSeekApiKey,
-  getOpenAIApiKey,
-  getOpenAIProxyEnabled,
-  getTextModel,
-} from '../storage/StorageUtils.ts';
+import { ModelTag, Usage } from '../types/Chat.ts';
+import { getTextModel } from '../storage/StorageUtils.ts';
 import {
   BedrockMessage,
   ImageContent,
   OpenAIMessage,
   TextContent,
 } from '../chat/util/BedrockMessageConvertor.ts';
-import { isDev } from './bedrock-api.ts';
-import { GITHUB_LINK } from '../settings/SettingsScreen.tsx';
+
+const GITHUB_LINK = 'https://github.com/aws-samples/swift-chat';
+
+type SystemPromptLike = { prompt: string };
 
 type CallbackFunction = (
   result: string,
@@ -26,7 +22,7 @@ const OpenRouterTag = ': OPENROUTER PROCESSING';
 
 export const invokeOpenAIWithCallBack = async (
   messages: BedrockMessage[],
-  prompt: SystemPrompt | null,
+  prompt: SystemPromptLike | null,
   shouldStop: () => boolean,
   controller: AbortController,
   callback: CallbackFunction
@@ -52,11 +48,6 @@ export const invokeOpenAIWithCallBack = async (
     signal: controller.signal,
     reactNative: { textStreaming: true },
   };
-  const proxyRequestUrl = getProxyRequestURL();
-  if (proxyRequestUrl.length > 0) {
-    options.headers['request_url' as keyof typeof options.headers] =
-      proxyRequestUrl;
-  }
   if (isOpenRouter) {
     options.headers['HTTP-Referer' as keyof typeof options.headers] =
       GITHUB_LINK;
@@ -270,7 +261,7 @@ type ChatResponse = {
 
 function getOpenAIMessages(
   messages: BedrockMessage[],
-  prompt: SystemPrompt | null
+  prompt: SystemPromptLike | null
 ): OpenAIMessage[] {
   return [
     ...(prompt ? [{ role: 'system', content: prompt.prompt }] : []),
@@ -308,13 +299,7 @@ function getOpenAIMessages(
 }
 
 function getApiKey(): string {
-  if (getTextModel().modelTag === ModelTag.OpenAICompatible) {
-    return getTextModel().apiKey ?? '';
-  } else if (getTextModel().modelId.includes('deepseek')) {
-    return getDeepSeekApiKey();
-  } else {
-    return getOpenAIApiKey();
-  }
+  return getTextModel().apiKey ?? '';
 }
 
 function isOpenRouterRequest(): boolean {
@@ -324,30 +309,6 @@ function isOpenRouterRequest(): boolean {
   return false;
 }
 
-function getProxyRequestURL(): string {
-  if (getTextModel().modelTag === ModelTag.OpenAICompatible) {
-    return getTextModel().apiUrl! + '/chat/completions';
-  } else if (getTextModel().modelId.includes('deepseek')) {
-    return '';
-  } else {
-    return 'https://api.openai.com/v1/chat/completions';
-  }
-}
-
 function getApiURL(): string {
-  if (getTextModel().modelTag === ModelTag.OpenAICompatible) {
-    if (getOpenAIProxyEnabled()) {
-      return (isDev ? 'http://localhost:8080' : getApiUrl()) + '/api/openai';
-    } else {
-      return getTextModel().apiUrl! + '/chat/completions';
-    }
-  } else if (getTextModel().modelId.includes('deepseek')) {
-    return 'https://api.deepseek.com/chat/completions';
-  } else {
-    if (getOpenAIProxyEnabled()) {
-      return (isDev ? 'http://localhost:8080' : getApiUrl()) + '/api/openai';
-    } else {
-      return 'https://api.openai.com/v1/chat/completions';
-    }
-  }
+  return getTextModel().apiUrl! + '/chat/completions';
 }
