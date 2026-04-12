@@ -1,4 +1,3 @@
-import { ChatMode, SavedApp, SystemPrompt } from './Chat.ts';
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 /**
@@ -11,7 +10,6 @@ export type DrawerParamList = {
   Bedrock: {
     sessionId?: number;
     tapIndex?: number;
-    mode?: ChatMode;
   };
   Settings: NonNullable<unknown>;
 };
@@ -19,8 +17,7 @@ export type DrawerParamList = {
 /**
  * RouteParamList - 整个应用根导航器的页面参数表
  * 管理应用所有页面的跳转数据，范围比 DrawerParamList 更大：
- *   包含侧边栏（Drawer）、聊天页、设置页、Token用量页、提示词编辑页、
- *   App列表页、App详情页、创建App页、图片列表页
+ *   包含侧边栏（Drawer）、聊天页、设置页、Token用量页、图片列表页
  * 每个页面声明了自己跳转时需要接收哪些数据，TypeScript 会在编译时检查传参是否正确
  */
 export type RouteParamList = {
@@ -28,21 +25,6 @@ export type RouteParamList = {
   Bedrock: {
     sessionId?: number;
     tapIndex?: number;
-    mode?: ChatMode;
-    editAppCode?: string;
-    editAppName?: string;
-    editTimestamp?: number;
   };
   Settings: NonNullable<unknown>;
-  TokenUsage: NonNullable<unknown>;
-  Prompt: {
-    prompt?: SystemPrompt;
-    promptType?: string | undefined;
-  };
-  AppGallery: NonNullable<unknown>;
-  AppViewer: {
-    app: SavedApp;
-  };
-  CreateApp: NonNullable<unknown>;
-  ImageGallery: NonNullable<unknown>;
 };

@@ -13,7 +13,7 @@ import {
   DrawerContentComponentProps,
   useDrawerStatus,
 } from '@react-navigation/drawer';
-import { Chat, ChatMode } from '../types/Chat.ts';
+import { Chat } from '../types/Chat.ts';
 import {
   deleteMessagesBySessionId,
   getMessageList,
@@ -157,51 +157,16 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 navigation.navigate('Bedrock', {
                   sessionId: -1,
                   tapIndex: -1,
-                  mode: ChatMode.Text,
                 });
               }}>
               <Image
-                source={
-                  isDark
-                    ? require('../assets/bedrock_dark.png')
-                    : require('../assets/bedrock.png')
-                }
+                source={require('../assets/openai_api.png')}
                 style={styles.settingsLeftImg}
               />
               <Text style={styles.settingsText}>Chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsTouch}
-              onPress={() => {
-                setDrawerToPermanent();
-                navigation.navigate('ImageGallery');
-              }}>
-              <Image
-                source={
-                  isDark
-                    ? require('../assets/image_dark.png')
-                    : require('../assets/image.png')
-                }
-                style={styles.settingsLeftImg}
-              />
-              <Text style={styles.settingsText}>Image</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsTouch}
-              onPress={() => {
-                setDrawerToPermanent();
-                navigation.navigate('AppGallery');
-              }}>
-              <Image
-                source={
-                  isDark
-                    ? require('../assets/app_dark.png')
-                    : require('../assets/app.png')
-                }
-                style={styles.appLeftImg}
-              />
-              <Text style={styles.settingsText}>App</Text>
-            </TouchableOpacity>
+
+
           </View>
         }
         renderItem={({ item }) => {
@@ -317,10 +282,7 @@ const createStyles = (colors: ColorScheme) =>
       height: 24,
       borderRadius: 12,
     },
-    appLeftImg: {
-      width: 24,
-      height: 24,
-    },
+
     flatList: {
       marginVertical: 4,
     },

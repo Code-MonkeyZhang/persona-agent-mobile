@@ -39,7 +39,7 @@ import FileViewer from 'react-native-file-viewer';
 import { isMac } from '../../App.tsx';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
-import ImageSpinner from './ImageSpinner.tsx';
+import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { getModelIcon, getModelTagByUserName } from '../../utils/ModelUtils.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
@@ -49,13 +49,11 @@ import {
   getReasoningExpanded,
   saveReasoningExpanded,
 } from '../../storage/StorageUtils.ts';
-import CitationList from './CitationList';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态、编辑回调等属性 */
 interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
   chatStatus: ChatStatus;
   isLastAIMessage?: boolean;
-  searchPhase?: string;
   onReasoningToggle?: (
     expanded: boolean,
     height: number,
@@ -67,7 +65,6 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
     newText?: string
   ) => void;
   flatListRef?: RefObject<FlatList<SwiftChatMessage>>;
-  isAppMode?: boolean;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -77,12 +74,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   currentMessage,
   chatStatus,
   isLastAIMessage,
-  searchPhase,
   onReasoningToggle,
   messageIndex,
   regenerateFromUserMessage,
   flatListRef,
-  isAppMode,
 }) => {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -107,8 +102,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     (currentMessage?.text === '...' || currentMessage?.text === '');
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
-  // Force re-render key for Android citation badge layout fix
-  const [citationRenderKey, setCitationRenderKey] = useState(0);
   const { drawerType } = useAppContext();
   const chatScreenWidth =
     isMac && drawerType === 'permanent' ? screenWidth - 300 : screenWidth;
@@ -229,13 +222,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     if (!currentMessage || !currentMessage.user) {
       return {
         userName: '',
-        modelIcon: isDark
-          ? require('../../assets/bedrock_dark.png')
-          : require('../../assets/bedrock.png'),
+        modelIcon: require('../../assets/openai_api.png'),
       };
     }
     const user = currentMessage.user;
-    const userName = user.name ?? 'Bedrock';
+    const userName = user.name ?? 'AI';
     const currentModelTag = getModelTagByUserName(user.modelTag, userName);
 
     const modelIcon = getModelIcon(currentModelTag, undefined, isDark);
@@ -286,24 +277,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         handleImagePress,
         colors,
         isDark,
-        currentMessage?.citations || [],
-        onReasoningToggle,
-        currentMessage?.htmlCode,
-        currentMessage?.diffCode,
-        isAppMode,
-        currentMessage?.isLastHtml
+        [],
+        onReasoningToggle
       ),
-    [
-      handleImagePress,
-      colors,
-      isDark,
-      currentMessage?.citations,
-      onReasoningToggle,
-      currentMessage?.htmlCode,
-      currentMessage?.diffCode,
-      isAppMode,
-      currentMessage?.isLastHtml,
-    ]
+    [handleImagePress, colors, isDark, onReasoningToggle]
   );
 
   const customTokenizer = useMemo(() => new CustomTokenizer(), []);
@@ -473,25 +450,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     }
   }, [handleReasoningCopy, reasoningCopied]);
 
-  // Android: Force re-render citation badges after streaming completes
-  // to fix inline layout issues that occur during streaming
-  useEffect(() => {
-    if (
-      isAndroid &&
-      chatStatus !== ChatStatus.Running &&
-      chatStatusRef.current === ChatStatus.Running &&
-      currentMessage?.citations &&
-      currentMessage.citations.length > 0
-    ) {
-      // Delay slightly to ensure the streaming has fully stopped
-      const timer = setTimeout(() => {
-        setCitationRenderKey(prev => prev + 1);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    chatStatusRef.current = chatStatus;
-  }, [chatStatus, currentMessage?.citations]);
-
   const messageContent = useMemo(() => {
     if (!currentMessage) {
       return null;
@@ -500,7 +458,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     if (!isUser.current) {
       return (
         <Markdown
-          key={citationRenderKey}
           value={currentMessage.text}
           styles={customMarkedStyles}
           renderer={customMarkdownRenderer}
@@ -531,7 +488,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     chatScreenWidth,
     styles.questionContainer,
     styles.questionText,
-    citationRenderKey,
     handleLongPressEdit,
   ]);
 
@@ -630,14 +586,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         {hasReasoning && reasoningSection}
         {showLoading && (
           <View style={styles.loadingContainer}>
-            <ImageSpinner
+            <LoadingSpinner
               visible={true}
               size={18}
               source={require('../../assets/loading.png')}
             />
-            {searchPhase && (
-              <Text style={styles.searchPhaseText}>{searchPhase}</Text>
-            )}
           </View>
         )}
         {!isLoading && !isEdit && (
@@ -713,10 +666,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
         {!isUser.current &&
           chatStatus !== ChatStatus.Running &&
-          currentMessage.citations && (
-            <CitationList citations={currentMessage.citations} />
-          )}
-        {((isLastAIMessage && chatStatus !== ChatStatus.Running) ||
+          ((isLastAIMessage && chatStatus !== ChatStatus.Running) ||
           forceShowButtons) &&
           messageActionButtons}
         {currentMessage.image && (
@@ -833,11 +783,6 @@ const createStyles = (colors: ColorScheme) =>
       marginTop: 12,
       marginBottom: 10,
     },
-    searchPhaseText: {
-      marginLeft: 8,
-      fontSize: 14,
-      color: colors.textTertiary,
-    },
     actionButtonsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -917,12 +862,8 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     prevProps.currentMessage?.image === nextProps.currentMessage?.image &&
     prevProps.currentMessage?.reasoning ===
       nextProps.currentMessage?.reasoning &&
-    prevProps.currentMessage?.htmlCode === nextProps.currentMessage?.htmlCode &&
-    prevProps.currentMessage?.isLastHtml ===
-      nextProps.currentMessage?.isLastHtml &&
     prevProps.chatStatus === nextProps.chatStatus &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
-    prevProps.searchPhase === nextProps.searchPhase &&
     prevProps.messageIndex === nextProps.messageIndex
   );
 });

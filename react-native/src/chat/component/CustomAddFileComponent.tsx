@@ -13,7 +13,7 @@ import {
   launchCamera,
   launchImageLibrary,
 } from 'react-native-image-picker';
-import { ChatMode, FileInfo, FileType } from '../../types/Chat.ts';
+import { FileInfo, FileType } from '../../types/Chat.ts';
 import {
   pick,
   types,
@@ -41,7 +41,6 @@ const eventEmitter = FilePasteModule
 interface CustomRenderActionsProps {
   onFileSelected: (files: FileInfo[]) => void;
   mode?: 'default' | 'list';
-  chatMode?: ChatMode;
 }
 
 const DefaultIcon = () => {
@@ -66,17 +65,13 @@ const ListIcon = ({ textColor }: { textColor: string }) => (
 export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
   onFileSelected,
   mode = 'default',
-  chatMode = ChatMode.Text,
 }) => {
   const { colors } = useTheme();
-  const chatModeRef = useRef(chatMode);
 
-  // Create a memoized ListIcon component with theme colors
   const ThemedListIcon = React.useCallback(
     () => <ListIcon textColor={colors.textSecondary} />,
     [colors.textSecondary]
   );
-  chatModeRef.current = chatMode;
 
   // Process files from DocumentPickerResponse array
   const processFiles = useCallback(
@@ -225,17 +220,10 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
   }, []);
 
   const handleChooseFiles = async () => {
-    let chooseType = [];
-    const isImageMode = chatModeRef.current === ChatMode.Image;
     try {
-      if (isImageMode) {
-        chooseType = [types.images];
-      } else {
-        chooseType = [types.allFiles];
-      }
       const pickResults = await pick({
-        allowMultiSelection: !isImageMode,
-        type: chooseType,
+        allowMultiSelection: true,
+        type: [types.allFiles],
       });
       const files = await processFiles(pickResults);
       if (files.length > 0) {
@@ -277,10 +265,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
         'Take Camera': () => {
           launchCamera({
             saveToPhotos: false,
-            mediaType:
-              chatModeRef.current === ChatMode.Text && isVideoSupported()
-                ? 'mixed'
-                : 'photo',
+            mediaType: isVideoSupported() ? 'mixed' : 'photo',
             videoQuality: 'high',
             durationLimit: 30,
             includeBase64: false,
@@ -295,11 +280,8 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
         },
         'Choose From Photos': () => {
           launchImageLibrary({
-            selectionLimit: chatModeRef.current === ChatMode.Text ? 0 : 2,
-            mediaType:
-              chatModeRef.current === ChatMode.Text && isVideoSupported()
-                ? 'mixed'
-                : 'photo',
+            selectionLimit: 0,
+            mediaType: isVideoSupported() ? 'mixed' : 'photo',
             includeBase64: false,
             includeExtra: true,
             assetRepresentationMode: 'current',

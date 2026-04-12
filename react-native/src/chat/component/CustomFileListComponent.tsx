@@ -30,7 +30,6 @@ interface CustomFileProps {
 export enum DisplayMode {
   Edit = 'edit',
   Display = 'display',
-  GenImage = 'genImage',
 }
 
 const MAX_VIDEO_SIZE = 8;
@@ -171,9 +170,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
       ratio = ratio < 1 ? 1 : ratio;
     }
     const isHideDelete = file.type === FileType.video && !file.videoUrl;
-    const isShowDelete =
-      mode === DisplayMode.GenImage ||
-      (mode === DisplayMode.Edit && !isHideDelete);
+    const isShowDelete = mode === DisplayMode.Edit && !isHideDelete;
     return (
       <View
         key={itemKey}
@@ -218,7 +215,6 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
             }
             if (
               isMac ||
-              mode === DisplayMode.GenImage ||
               file.type === FileType.document ||
               file.type === FileType.video
             ) {

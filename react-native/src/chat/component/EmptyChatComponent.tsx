@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import ImageSpinner from './ImageSpinner';
+import LoadingSpinner from './LoadingSpinner';
 import { ChatMode } from '../../types/Chat.ts';
 import { useNavigation } from '@react-navigation/native';
 import { RouteParamList } from '../../types/RouteTypes.ts';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { getImageModel, getTextModel } from '../../storage/StorageUtils.ts';
+import { getTextModel } from '../../storage/StorageUtils.ts';
 import { useTheme, ColorScheme } from '../../theme';
 
 const isAndroid = Platform.OS === 'android';
@@ -39,10 +39,7 @@ export const EmptyChatComponent = ({
     }
   }, [event]);
 
-  const modelName =
-    chatMode === ChatMode.Text
-      ? currentTextModel.modelName
-      : getImageModel().modelName;
+  const modelName = currentTextModel.modelName;
 
   const styles = createStyles(colors);
 
@@ -53,7 +50,7 @@ export const EmptyChatComponent = ({
           navigation.navigate('Settings', {});
         }}>
         {isLoadingMessages ? (
-          <ImageSpinner
+          <LoadingSpinner
             visible={true}
             size={24}
             isRotate={!isAndroid}

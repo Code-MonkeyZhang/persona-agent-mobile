@@ -23,16 +23,11 @@ export enum ChatStatus {
 
 export interface EventData {
   id?: number;
-  prompt?: SystemPrompt;
-  // WebView search events
   url?: string;
   script?: string;
   data?: string;
   error?: string;
   code?: number;
-  // App mode events
-  htmlCode?: string;
-  diffCode?: string;
 }
 
 export type Model = {
@@ -45,16 +40,8 @@ export type Model = {
 };
 
 export enum ModelTag {
-  Bedrock = 'Bedrock',
-  OpenAI = 'OpenAI',
   OpenAICompatible = 'OpenAICompatible',
-  DeepSeek = 'DeepSeek',
-  Ollama = 'Ollama',
 }
-
-export type OllamaModel = {
-  name: string;
-};
 
 export type OpenAICompatConfig = {
   id: string;
@@ -66,18 +53,11 @@ export type OpenAICompatConfig = {
 
 export type AllModel = {
   textModel: Model[];
-  imageModel: Model[];
 };
 
 export enum ChatMode {
   Text = 'Text',
-  Image = 'Image',
 }
-
-export type ImageRes = {
-  image: string;
-  error: string;
-};
 
 export enum PressMode {
   Click = 'Click',
@@ -88,12 +68,6 @@ export interface DropdownItem {
   label: string;
   value: string;
 }
-
-export type UpgradeInfo = {
-  needUpgrade: boolean;
-  version: string;
-  url: string;
-};
 
 export enum FileType {
   document = 'document',
@@ -119,19 +93,6 @@ export type Usage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  imageCount?: number;
-  smallImageCount?: number;
-  largeImageCount?: number;
-};
-
-export type UsagePrice = {
-  modelName: string;
-  inputPrice: number;
-  outputPrice: number;
-  totalPrice: number;
-  smallImagePrice: number;
-  mediumImagePrice: number;
-  largeImagePrice: number;
 };
 
 export interface SwiftChatMessage extends IMessage {
@@ -140,69 +101,13 @@ export interface SwiftChatMessage extends IMessage {
   user: SwiftChatUser;
   metrics?: Metrics;
   citations?: Citation[];
-  htmlCode?: string;
-  diffCode?: string;
-  isLastHtml?: boolean;
 }
 
 interface SwiftChatUser extends User {
   modelTag?: string;
 }
 
-export interface SystemPrompt {
-  id: number;
-  name: string;
-  prompt: string;
-  includeHistory: boolean;
-  promptType?: string; // 'image' 'voice' or undefined
-  allowInterruption?: boolean;
-}
-
-export interface BedrockChunk {
-  contentBlockDelta: {
-    delta: Delta;
-  };
-  metadata: {
-    usage: Usage;
-  };
-  detail: string;
-}
-
-export interface BedrockAPIChunk {
-  delta: Delta;
-  usage: Usage;
-  stopReason: string;
-  Message: string;
-  message: string;
-}
-
-export interface Delta {
-  text: string;
-  reasoningContent: ReasoningContent;
-}
-
-export interface ReasoningContent {
-  text: string;
-}
-
-export type TokenResponse = {
-  accessKeyId: string;
-  secretAccessKey: string;
-  sessionToken: string;
-  expiration: string;
-  error: string;
-  apiKey?: string;
-};
-
 export interface Metrics {
   latencyMs: string;
   speed: string;
-}
-
-export interface SavedApp {
-  id: string;
-  name: string;
-  htmlCode: string;
-  screenshotPath?: string;
-  createdAt: number;
 }

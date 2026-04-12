@@ -17,42 +17,33 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { voiceChatService } from './service/VoiceChatService';
-import AudioWaveformComponent, {
-  AudioWaveformRef,
-} from './component/AudioWaveformComponent';
 import { ColorScheme, useTheme } from '../theme';
-import { invokeBedrockWithCallBack, requestToken } from '../api/bedrock-api';
+import { invokeOpenAIWithCallBack } from '../api/open-api';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
-  getCurrentSystemPrompt,
-  getCurrentVoiceSystemPrompt,
-  getImageModel,
-  getLastVirtualTryOnImgFile,
   getMessagesBySessionId,
   getSessionId,
   getTextModel,
-  isTokenValid,
-  saveCurrentImageSystemPrompt,
-  saveCurrentSystemPrompt,
-  saveCurrentVoiceSystemPrompt,
-  saveLastVirtualTryOnImgFile,
   saveMessageList,
   saveMessages,
-  updateTotalUsage,
+  getServerAddress,
+  getServerAgentId,
+  saveServerAgentId,
+  getServerSessionId,
+  saveServerSessionId,
 } from '../storage/StorageUtils.ts';
+import { NanoAgentClient, fetchAgents } from '../api/nano-agent-api';
 import {
   ChatMode,
   ChatStatus,
   FileInfo,
   Metrics,
   SwiftChatMessage,
-  SystemPrompt,
   Usage,
 } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
@@ -75,58 +66,21 @@ import {
 import HeaderTitle from './component/HeaderTitle.tsx';
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
-import { webSearchOrchestrator } from '../websearch/services/WebSearchOrchestrator.ts';
-import { Citation } from '../types/Chat.ts';
-import {
-  setLatestHtmlCode,
-  clearLatestHtmlCode,
-  getLatestHtmlCode,
-  replaceHtmlWithPlaceholder,
-  replaceDiffWithPlaceholder,
-} from './util/DiffUtils.ts';
 
 const BOT_ID = 2;
-const APP_PROMPT_NAME = 'App';
 
-/**
- * Find the latest htmlCode from AI messages
- * Traverse all AI messages to find the first one with htmlCode
- */
-const findLatestHtmlCode = (messages: SwiftChatMessage[]): string => {
-  const aiMessages = messages.filter(m => m.user._id === BOT_ID);
-  for (const msg of aiMessages) {
-    if (msg.htmlCode) {
-      return msg.htmlCode;
-    }
-  }
-  return '';
-};
-
-/**
- * Check if any AI message has diffCode (for detecting failed diff apply case)
- */
-const hasAnyDiffCode = (messages: SwiftChatMessage[]): boolean => {
-  const aiMessages = messages.filter(m => m.user._id === BOT_ID);
-  return aiMessages.some(msg => msg.diffCode);
-};
-
-const createBotMessage = (mode: string, isAppMode: boolean = false) => {
+const createBotMessage = () => {
   return {
     _id: uuid.v4(),
-    text: mode === ChatMode.Text ? textPlaceholder : imagePlaceholder,
+    text: textPlaceholder,
     createdAt: new Date(),
     user: {
       _id: BOT_ID,
-      name:
-        mode === ChatMode.Text
-          ? getTextModel().modelName
-          : getImageModel().modelName,
-      modelTag: mode === ChatMode.Text ? getTextModel().modelTag : undefined,
+      name: getTextModel().modelName,
+      modelTag: getTextModel().modelTag,
     },
-    isLastHtml: isAppMode ? true : undefined,
   };
 };
-const imagePlaceholder = '![](bedrock://imgProgress)';
 const textPlaceholder = '...';
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 let currentMode = ChatMode.Text;
@@ -139,26 +93,15 @@ function ChatScreen(): React.JSX.Element {
   const route = useRoute<ChatScreenRouteProp>();
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
-  const mode = route.params?.mode ?? currentMode;
-  const editAppCode = route.params?.editAppCode;
-  const editAppName = route.params?.editAppName;
-  const editTimestamp = route.params?.editTimestamp;
-  const modeRef = useRef(mode);
-  const isNovaSonic =
-    getTextModel().modelId.includes('sonic') &&
-    modeRef.current === ChatMode.Text;
+  const modeRef = useRef(currentMode);
 
   // ==================== 状态声明 ====================
   const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
-  const [systemPrompt, setSystemPrompt] = useState<SystemPrompt | null>(
-    isNovaSonic ? getCurrentVoiceSystemPrompt : getCurrentSystemPrompt
-  );
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
-  const [usage, setUsage] = useState<Usage>();
+  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);  const [usage, setUsage] = useState<Usage>();
   const [userScrolled, setUserScrolled] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
@@ -175,39 +118,17 @@ function ChatScreen(): React.JSX.Element {
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
   const usageRef = useRef(usage);
-  const systemPromptRef = useRef(systemPrompt);
   const drawerTypeRef = useRef(drawerType);
-  const isVoiceLoading = useRef(false);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
-  const [isShowVoiceLoading, setIsShowVoiceLoading] = useState(false);
-  const audioWaveformRef = useRef<AudioWaveformRef>(null);
-  const [searchPhase, setSearchPhase] = useState<string>('');
-
-  // App mode state
-  const isAppModeRef = useRef(false);
-  const endVoiceConversationRef = useRef<(() => Promise<boolean>) | null>(null);
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
-
-  // ==================== 语音聊天 ====================
-  const endVoiceConversation = useCallback(async () => {
-    audioWaveformRef.current?.resetAudioLevels();
-    if (isVoiceLoading.current) {
-      return Promise.resolve(false);
-    }
-    isVoiceLoading.current = true;
-    setIsShowVoiceLoading(true);
-    await voiceChatService.endConversation();
-    setChatStatus(ChatStatus.Init);
-    isVoiceLoading.current = false;
-    setIsShowVoiceLoading(false);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    endVoiceConversationRef.current = endVoiceConversation;
-  }, [endVoiceConversation]);
+  /** 当前活跃的 NanoAgentClient 实例，未连接时为 null */
+  const nanoAgentRef = useRef<NanoAgentClient | null>(null);
+  /** 当前聊天对应的服务器会话 UUID，尚未创建时为 null */
+  const serverSessionIdRef = useRef<string | null>(null);
+  /** 服务器地址缓存，从 MMKV 加载 */
+  const serverAddressRef = useRef(getServerAddress());
 
   // ==================== Ref 同步 & 副作用 ====================
   // update refs value with state
@@ -237,30 +158,97 @@ function ChatScreen(): React.JSX.Element {
     selectedFilesRef.current = selectedFiles;
   }, [selectedFiles]);
 
-  // Initialize voice chat service
-  useEffect(() => {
-    // Set up voice chat service callbacks
-    voiceChatService.setCallbacks(
-      // Handle transcript received
-      (role, text) => {
-        handleVoiceChatTranscript(role, text);
-      },
-      // Handle error
-      message => {
-        if (getTextModel().modelId.includes('sonic')) {
-          handleVoiceChatTranscript('ASSISTANT', message);
-          endVoiceConversationRef.current?.();
-          saveCurrentMessages();
-          console.log('Voice chat error:', message);
-        }
-      }
-    );
+  // ==================== Nano-Agent 初始化 ====================
+  /**
+   * 屏幕获得焦点时初始化 NanoAgentClient。
+   * 使用 useFocusEffect 而非 useEffect，确保从设置页返回后能重新检测。
+   *
+   * 流程：读取服务器地址 → 获取 agent → 注册回调 → connect → 存入 nanoAgentRef。
+   * 离开屏幕时自动 disconnect 并置空 ref。
+   */
+  useFocusEffect(
+    React.useCallback(() => {
+      const address = getServerAddress();
+      console.log(`[ChatScreen] nano-agent init (focus), serverAddress="${address}"`);
 
-    // Clean up on unmounting
-    return () => {
-      voiceChatService.cleanup();
-    };
-  }, []);
+      if (nanoAgentRef.current) {
+        console.log('[ChatScreen] nano-agent already connected, skip');
+        return;
+      }
+
+      if (!address) {
+        return;
+      }
+      serverAddressRef.current = address;
+
+      let cancelled = false;
+      const client = new NanoAgentClient();
+
+      (async () => {
+        try {
+          let agentId = getServerAgentId();
+          if (!agentId) {
+            console.log('[ChatScreen] no cached agentId, fetching agents...');
+            const agents = await fetchAgents(address);
+            if (cancelled || agents.length === 0) return;
+            agentId = agents[0].id;
+            saveServerAgentId(agentId);
+          }
+          console.log(`[ChatScreen] using agentId=${agentId}`);
+
+          client.onStepComplete = (content, thinking) => {
+            if (isCanceled.current) return;
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: content || prevMessages[0].text,
+                reasoning: thinking || prevMessages[0].reasoning,
+              };
+              return newMessages;
+            });
+          };
+
+          client.onComplete = () => {
+            if (isCanceled.current) return;
+            trigger(HapticFeedbackTypes.notificationSuccess);
+            setChatStatus(ChatStatus.Complete);
+          };
+
+          client.onError = (message) => {
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: 'Error: ' + message,
+              };
+              return newMessages;
+            });
+            setChatStatus(ChatStatus.Complete);
+          };
+
+          client.onTitleUpdated = (_sessionId, title) => {
+            // future: update local messageList title
+          };
+
+          await client.connect(address);
+          if (cancelled) return;
+          nanoAgentRef.current = client;
+          console.log('[ChatScreen] nano-agent client ready');
+        } catch (e) {
+          console.log(`[ChatScreen] nano-agent init failed: ${e instanceof Error ? e.message : e}`);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        client.disconnect();
+        nanoAgentRef.current = null;
+      };
+    }, [])
+  );
 
   // ==================== 新建聊天 & 导航栏 ====================
   // start new chat
@@ -269,33 +257,46 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       sessionIdRef.current = getSessionId() + 1;
       isNewChatRef.current = true;
+      serverSessionIdRef.current = null;
       sendEventRef.current('updateHistorySelectedId', {
         id: sessionIdRef.current,
       });
 
       setMessages([]);
       bedrockMessages.current = [];
-      clearLatestHtmlCode();
       setUsage(undefined);
+
+      if (nanoAgentRef.current && serverAddressRef.current) {
+        const agentId = getServerAgentId();
+        if (agentId) {
+          console.log(`[ChatScreen] startNewChat: creating server session, agentId=${agentId}`);
+          nanoAgentRef.current
+            .createSession(agentId, serverAddressRef.current)
+            .then(serverSessionId => {
+              serverSessionIdRef.current = serverSessionId;
+              saveServerSessionId(sessionIdRef.current, serverSessionId);
+              nanoAgentRef.current?.subscribe(serverSessionId);
+              console.log(`[ChatScreen] startNewChat: server session created, localId=${sessionIdRef.current} serverId=${serverSessionId}`);
+            })
+            .catch((e: Error) => {
+              console.log(`[ChatScreen] startNewChat: session creation failed: ${e.message}`);
+              // session creation failed
+            });
+        }
+      }
+
       showKeyboard();
     }, [])
   );
 
   // header text and right button click
   React.useLayoutEffect(() => {
-    currentMode = mode;
-    systemPromptRef.current = systemPrompt;
+    currentMode = ChatMode.Text;
     const headerOptions: HeaderOptions = {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
         <HeaderTitle
-          title={
-            mode === ChatMode.Text
-              ? systemPrompt
-                ? systemPrompt.name
-                : 'Chat'
-              : 'Image'
-          }
+          title={'Chat'}
           usage={usage}
           onDoubleTap={scrollToTop}
         />
@@ -324,7 +325,7 @@ function ChatScreen(): React.JSX.Element {
       ),
     };
     navigation.setOptions(headerOptions);
-  }, [usage, navigation, mode, systemPrompt, isDark]);
+  }, [usage, navigation, isDark]);
 
   // ==================== 会话切换 & 消息加载 ====================
   // sessionId changes (start new chat or click another session)
@@ -334,24 +335,12 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       if (chatStatusRef.current === ChatStatus.Running) {
-        // there are still a request sending, abort the request and save current messages
         controllerRef.current?.abort();
         chatStatusRef.current = ChatStatus.Init;
-        if (modeRef.current === ChatMode.Image) {
-          if (messagesRef.current[0].text === imagePlaceholder) {
-            messagesRef.current[0].text = 'Request interrupted';
-          }
-        }
         saveCurrentMessages();
       }
-      if (modeRef.current !== mode) {
-        // when change chat mode, clear system prompt and files
-        modeRef.current = mode;
-        setTimeout(() => {
-          sendEventRef.current?.('unSelectSystemPrompt');
-        }, 50);
-        setSelectedFiles([]);
-      }
+      modeRef.current = ChatMode.Text;
+      setSelectedFiles([]);
       setChatStatus(ChatStatus.Init);
       sendEventRef.current('');
       setUsage(undefined);
@@ -362,26 +351,11 @@ function ChatScreen(): React.JSX.Element {
       // click from history
       setMessages([]);
       isNewChatRef.current = false;
-      endVoiceConversationRef.current?.();
       setIsLoadingMessages(true);
       const msg = getMessagesBySessionId(initialSessionId);
       sessionIdRef.current = initialSessionId;
       setUsage((msg[0] as SwiftChatMessage).usage);
-      // restore htmlCode from history
-      const restoredHtmlCode = findLatestHtmlCode(msg as SwiftChatMessage[]);
-      setLatestHtmlCode(restoredHtmlCode);
 
-      if (restoredHtmlCode || hasAnyDiffCode(msg as SwiftChatMessage[])) {
-        isAppModeRef.current = true;
-        sendEventRef.current?.('selectAppPrompt');
-      } else {
-        setSystemPrompt(null);
-        saveCurrentSystemPrompt(null);
-        saveCurrentVoiceSystemPrompt(null);
-        saveCurrentImageSystemPrompt(null);
-        //notify to unselect prompt
-        sendEventRef.current?.('unSelectSystemPrompt');
-      }
       getBedrockMessagesFromChatMessages(msg).then(currentMessage => {
         bedrockMessages.current = currentMessage;
       });
@@ -398,29 +372,9 @@ function ChatScreen(): React.JSX.Element {
         }, 200);
       }
     }
-  }, [initialSessionId, mode, tapIndex]);
+  }, [initialSessionId, tapIndex]);
 
   // ==================== 事件监听 ====================
-  // editAppCode handler - for editing saved apps from AppGallery
-  useEffect(() => {
-    if (editAppCode && editTimestamp) {
-      startNewChat.current();
-      setUsage(undefined);
-      setLatestHtmlCode(editAppCode);
-      isAppModeRef.current = true;
-      setTimeout(() => {
-        sendEventRef.current?.('selectAppPrompt');
-        // Pre-fill the input with app name hint
-        if (editAppName && textInputViewRef.current) {
-          const hintText = `Edit [${editAppName}]: `;
-          textInputViewRef.current.setNativeProps({ text: hintText });
-          inputTextRef.current = hintText;
-          setHasInputText(true);
-        }
-      }, 100);
-    }
-  }, [editAppCode, editAppName, editTimestamp]);
-
   // deleteChat listener
   useEffect(() => {
     if (event?.event === 'deleteChat' && event.params) {
@@ -434,50 +388,6 @@ function ChatScreen(): React.JSX.Element {
         bedrockMessages.current = [];
         setMessages([]);
       }
-    }
-  }, [event]);
-
-  // htmlCodeGenerated listener for App mode - update message.htmlCode for persistence
-  useEffect(() => {
-    if (event?.event === 'htmlCodeGenerated' && event.params?.htmlCode) {
-      const { htmlCode } = event.params;
-      setMessages(prevMessages => {
-        // update isLastHtml for all messages
-        const newMessages = prevMessages.map((msg, index) => {
-          if (index === 0) {
-            return { ...msg, htmlCode: htmlCode, isLastHtml: true };
-          } else if (msg.isLastHtml) {
-            return { ...msg, isLastHtml: false };
-          }
-          return msg;
-        });
-        return newMessages;
-      });
-    }
-  }, [event]);
-
-  // diffApplied listener for App mode - update message.htmlCode and save diffCode
-  // Note: placeholder replacement is done in ChatStatus.Complete handler
-  useEffect(() => {
-    if (event?.event === 'diffApplied' && event.params?.diffCode) {
-      const { htmlCode, diffCode } = event.params;
-      setMessages(prevMessages => {
-        // update isLastHtml for all messages
-        const newMessages = prevMessages.map((msg, index) => {
-          if (index === 0) {
-            return {
-              ...msg,
-              htmlCode: htmlCode,
-              diffCode: diffCode,
-              isLastHtml: true,
-            };
-          } else if (msg.isLastHtml) {
-            return { ...msg, isLastHtml: false };
-          }
-          return msg;
-        });
-        return newMessages;
-      });
     }
   }, [event]);
 
@@ -535,18 +445,12 @@ function ChatScreen(): React.JSX.Element {
       if (messagesRef.current.length <= 1) {
         return;
       }
-      // In App mode, replace HTML/diff with placeholder to save context tokens
-      const msg = messagesRef.current[0];
-      if (isAppModeRef.current && msg.htmlCode) {
-        msg.text = replaceHtmlWithPlaceholder(msg.text, msg.htmlCode);
-      }
-      if (isAppModeRef.current && msg.diffCode && msg.htmlCode) {
-        msg.text = replaceDiffWithPlaceholder(msg.text, msg.diffCode);
-      }
       saveCurrentMessages();
-      getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
-        bedrockMessages.current.push(currentMsg);
-      });
+      if (!nanoAgentRef.current) {
+        getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
+          bedrockMessages.current.push(currentMsg);
+        });
+      }
       if (drawerTypeRef.current === 'permanent') {
         sendEventRef.current('updateHistory');
         setTimeout(() => {
@@ -569,11 +473,6 @@ function ChatScreen(): React.JSX.Element {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         if (chatStatusRef.current === ChatStatus.Running) {
           saveCurrentMessages();
-        }
-      }
-      if (nextAppState === 'active') {
-        if (!isTokenValid()) {
-          requestToken().then();
         }
       }
     };
@@ -708,85 +607,39 @@ function ChatScreen(): React.JSX.Element {
 
   // invoke bedrock api
   useEffect(() => {
+    if (nanoAgentRef.current) {
+      return;
+    }
+
     const lastMessage = messages[0];
     if (
       lastMessage &&
       lastMessage.user &&
       lastMessage.user._id === BOT_ID &&
-      lastMessage.text ===
-        (modeRef.current === ChatMode.Text
-          ? textPlaceholder
-          : imagePlaceholder) &&
+      lastMessage.text === textPlaceholder &&
       chatStatusRef.current === ChatStatus.Running
     ) {
-      if (modeRef.current === ChatMode.Image) {
-        sendEventRef.current('onImageStart');
-      }
 
       // Wrap in async function to support await
       (async () => {
-        // Create AbortController before web search so it can be used throughout
         controllerRef.current = new AbortController();
         isCanceled.current = false;
 
-        // Get the last user message (the one after bot message)
         const userMessage = messages.length > 1 ? messages[1]?.text : null;
 
-        let webSearchSystemPrompt;
-        let webSearchCitations: Citation[] | undefined;
-        // Execute web search only in text mode with user message
-        if (userMessage && modeRef.current === ChatMode.Text) {
-          try {
-            const webSearchResult = await webSearchOrchestrator.execute(
-              userMessage,
-              bedrockMessages.current,
-              (phase: string) => {
-                setSearchPhase(phase);
-              },
-              undefined,
-              controllerRef.current
-            );
-            if (webSearchResult) {
-              webSearchSystemPrompt = webSearchResult.systemPrompt;
-              webSearchCitations = webSearchResult.citations;
-            }
-          } catch (error) {
-            // For errors, log and continue without web search
-            console.log('❌ Web search error in ChatScreen:', error);
-          }
-        }
-
-        // Check if aborted after web search completes
+        // Check if aborted
         if (isCanceled.current) {
           setChatStatus(ChatStatus.Init);
-          setSearchPhase('');
           return;
         }
 
-        // Clear searchPhase before starting AI response
-        setSearchPhase('');
         const startRequestTime = new Date().getTime();
         let latencyMs = 0;
         let metrics: Metrics | undefined;
 
-        // Prioritize web search system prompt, otherwise use user-selected system prompt
-        const effectiveSystemPrompt =
-          webSearchSystemPrompt || systemPromptRef.current;
-
-        // In App mode, temporarily prepend htmlCode to last user message
-        const currentHtmlCode = getLatestHtmlCode();
-        const lastMsgContent = bedrockMessages.current[
-          bedrockMessages.current.length - 1
-        ]?.content[0] as { text?: string };
-        const originalText = lastMsgContent?.text;
-        if (isAppModeRef.current && currentHtmlCode && originalText) {
-          lastMsgContent.text = `Current app code:\n\`\`\`html\n${currentHtmlCode}\n\`\`\`\n\nUser request: ${originalText}`;
-        }
-
-        invokeBedrockWithCallBack(
+        invokeOpenAIWithCallBack(
           bedrockMessages.current,
-          modeRef.current,
-          effectiveSystemPrompt,
+          null,
           () => isCanceled.current,
           controllerRef.current,
           (
@@ -813,7 +666,6 @@ function ChatScreen(): React.JSX.Element {
                   totalTokens:
                     (prevUsage?.totalTokens || 0) + usageInfo.totalTokens,
                 }));
-                updateTotalUsage(usageInfo);
                 const renderSec =
                   (new Date().getTime() - startRequestTime - latencyMs) / 1000;
                 const speed = usageInfo.outputTokens / renderSec;
@@ -842,7 +694,7 @@ function ChatScreen(): React.JSX.Element {
                         : msg,
                     reasoning: reasoning,
                     metrics: metrics,
-                    citations: webSearchCitations,
+                    citations: undefined,
                   };
                   return newMessages;
                 });
@@ -858,27 +710,12 @@ function ChatScreen(): React.JSX.Element {
               if (complete) {
                 setComplete();
               }
-            } else {
-              if (needStop) {
-                sendEventRef.current('onImageStop');
-              } else {
-                sendEventRef.current('onImageComplete');
-              }
-              setTimeout(() => {
-                updateMessage();
-                setComplete();
-              }, 1000);
             }
             if (needStop) {
               isCanceled.current = true;
             }
           }
         ).then();
-
-        // Restore original text after sending
-        if (originalText && lastMsgContent) {
-          lastMsgContent.text = originalText;
-        }
       })(); // Close async IIFE
     }
   }, [messages]);
@@ -893,15 +730,6 @@ function ChatScreen(): React.JSX.Element {
       // Get all history messages after the user message
       const historyMessages = messagesRef.current.slice(userMessageIndex + 1);
 
-      // Update latestHtmlCode for app mode (only if found in history)
-      if (isAppModeRef.current) {
-        const foundHtmlCode = findLatestHtmlCode(historyMessages);
-        if (foundHtmlCode) {
-          setLatestHtmlCode(foundHtmlCode);
-        }
-      }
-
-      // Create the user message (updated if newText provided)
       const userMessage: SwiftChatMessage = newText
         ? { ...messagesRef.current[userMessageIndex], text: newText }
         : messagesRef.current[userMessageIndex];
@@ -913,7 +741,7 @@ function ChatScreen(): React.JSX.Element {
         bedrockMessages.current = historyBedrockMessages;
         setChatStatus(ChatStatus.Running);
         setMessages(_previousMessages => [
-          createBotMessage(modeRef.current),
+          createBotMessage(),
           userMessage,
           ...historyMessages,
         ]);
@@ -935,32 +763,12 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
 
-    if (message[0]?.text || files.length > 0) {
-      if (!message[0]?.text) {
-        // 支持输入非文本
-        if (modeRef.current === ChatMode.Text) {
-          // use system prompt name as user prompt TODO:MVP这个要改
-          if (systemPromptRef.current) {
-            message[0].text = systemPromptRef.current.name;
-          } else {
+      if (message[0]?.text || files.length > 0) {
+        if (!message[0]?.text) {
+          if (modeRef.current === ChatMode.Text) {
             message[0].text = getFileTypeSummary(files);
           }
-        } else {
-          // use selected system prompt as user prompt
-          message[0].text = systemPromptRef.current?.prompt ?? 'Empty Message';
-          if (systemPromptRef.current?.id === -7) {
-            saveLastVirtualTryOnImgFile(files[0]);
-            saveCurrentImageSystemPrompt(null);
-            sendEventRef.current('unSelectSystemPrompt');
-          }
         }
-      } else {
-        // append user prompt after system prompt in image mode
-        if (modeRef.current === ChatMode.Image && systemPromptRef.current) {
-          message[0].text =
-            systemPromptRef.current?.prompt + '\n' + message[0].text;
-        }
-      }
 
       if (selectedFilesRef.current.length > 0) {
         message[0].image = JSON.stringify(selectedFilesRef.current);
@@ -969,14 +777,63 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       scrollToBottom();
 
-      getBedrockMessage(message[0]).then(currentMsg => {
-        bedrockMessages.current.push(currentMsg);
+      // nano-agent 路径：有服务器连接时走此分支
+      if (nanoAgentRef.current && serverAddressRef.current) {
+        // 先设为运行中，并在消息列表顶部插入一条空的 bot 占位消息
         setChatStatus(ChatStatus.Running);
         setMessages(previousMessages => [
-          createBotMessage(modeRef.current),
+          createBotMessage(),
           ...GiftedChat.append(previousMessages, message),
         ]);
-      });
+        const agentId = getServerAgentId();
+
+        (async () => {
+          try {
+            let sessionId = serverSessionIdRef.current;
+            // 如果还没有 server session，自动创建并订阅 WebSocket
+            if (!sessionId) {
+              console.log('[ChatScreen] onSend: no server session, auto-creating...');
+              sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+              serverSessionIdRef.current = sessionId;
+              // 把本地 sessionId 和 server sessionId 的映射存到 MMKV
+              saveServerSessionId(sessionIdRef.current, sessionId);
+              nanoAgentRef.current!.subscribe(sessionId);
+              console.log(`[ChatScreen] onSend: auto-created session ${sessionId}`);
+            }
+            // 发送聊天消息，回复会通过 WebSocket 的 step_complete/complete 事件回来
+            console.log(`[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(0, 80)}" sessionId=${sessionId}`);
+            await nanoAgentRef.current!.sendChatMessage(
+              agentId,
+              sessionId,
+              message[0].text,
+              serverAddressRef.current!
+            );
+          } catch (e) {
+            // 出错时把占位的 bot 消息文本替换为错误信息
+            const errMsg = e instanceof Error ? e.message : String(e);
+            console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: 'Error: ' + errMsg,
+              };
+              return newMessages;
+            });
+            setChatStatus(ChatStatus.Complete);
+          }
+        })();
+      } else {
+        getBedrockMessage(message[0]).then(currentMsg => {
+          bedrockMessages.current.push(currentMsg);
+          setChatStatus(ChatStatus.Running);
+          setMessages(previousMessages => [
+            createBotMessage(),
+            ...GiftedChat.append(previousMessages, message),
+          ]);
+        });
+      }
     }
   }, []);
 
@@ -984,55 +841,15 @@ function ChatScreen(): React.JSX.Element {
   // NOTE: 这个需要留着, 虽然MVP可能暂时用不上
   const handleNewFileSelected = (files: FileInfo[]) => {
     setSelectedFiles(prevFiles => {
-      const isVirtualTryOn =
-        modeRef.current === ChatMode.Image &&
-        systemPromptRef.current?.id === -7;
       return checkFileNumberLimit(
         prevFiles,
-        files,
-        modeRef.current,
-        isVirtualTryOn
+        files
       );
     });
   };
 
-  const handleVoiceChatTranscript = (role: string, text: string) => {
-    const userId = role === 'USER' ? 1 : BOT_ID;
-    if (
-      messagesRef.current.length > 0 &&
-      messagesRef.current[0].user._id === userId
-    ) {
-      if (userId === 1) {
-        text = ' ' + text;
-      }
-      setMessages(previousMessages => {
-        const newMessages = [...previousMessages];
-        if (!newMessages[0].text.includes(text)) {
-          newMessages[0] = {
-            ...newMessages[0],
-            text: newMessages[0].text + text,
-          };
-        }
-        return newMessages;
-      });
-    } else {
-      const newMessage: SwiftChatMessage = {
-        _id: uuid.v4(),
-        text: text,
-        createdAt: new Date(),
-        user: {
-          _id: userId,
-          name: role === 'USER' ? 'You' : getTextModel().modelName,
-          modelTag: role === 'USER' ? undefined : getTextModel().modelTag,
-        },
-      };
-
-      setMessages(previousMessages => [newMessage, ...previousMessages]);
-    }
-  };
-
   // ==================== UI 渲染 ====================
-  const styles = createStyles(colors, isNovaSonic);
+  const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1070,60 +887,39 @@ function ChatScreen(): React.JSX.Element {
           chatStatus !== ChatStatus.Init || selectedFiles.length > 0
         }
         /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
-        renderComposer={props => {
-          if (isNovaSonic && mode === ChatMode.Text) {
-            return <AudioWaveformComponent ref={audioWaveformRef} />;
-          }
-
-          // Default input box
-          return (
+        renderComposer={props => (
             <Composer {...props} textInputStyle={styles.composerTextInput} />
-          );
-        }}
+        )}
         /** 自定义发送按钮：根据状态切换发送/停止/语音/附件按钮 */
         renderSend={props => (
           <CustomSendComponent
             {...props}
             chatStatus={chatStatus}
-            chatMode={mode}
+            chatMode={ChatMode.Text}
             selectedFiles={selectedFiles}
-            isShowLoading={isShowVoiceLoading}
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
-              if (isNovaSonic) {
-                // End voice chat conversation
-                endVoiceConversation().then(success => {
-                  if (success) {
-                    trigger(HapticFeedbackTypes.impactMedium);
+              isCanceled.current = true;
+              if (nanoAgentRef.current) {
+                setMessages(prevMessages => {
+                  if (prevMessages.length === 0) return prevMessages;
+                  const newMessages = [...prevMessages];
+                  if (
+                    newMessages[0].text === textPlaceholder ||
+                    newMessages[0].text === ''
+                  ) {
+                    newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
                   }
+                  return newMessages;
                 });
-                saveCurrentMessages();
+                setChatStatus(ChatStatus.Complete);
               } else {
-                isCanceled.current = true;
                 controllerRef.current?.abort();
               }
             }}
             onFileSelected={files => {
               handleNewFileSelected(files);
             }}
-            onVoiceChatToggle={() => {
-              if (isVoiceLoading.current) {
-                return;
-              }
-              isVoiceLoading.current = true;
-              setIsShowVoiceLoading(true);
-              voiceChatService.startConversation().then(success => {
-                if (!success) {
-                  setChatStatus(ChatStatus.Init);
-                } else {
-                  setChatStatus(ChatStatus.Running);
-                }
-                isVoiceLoading.current = false;
-                setIsShowVoiceLoading(false);
-                trigger(HapticFeedbackTypes.impactMedium);
-              });
-            }}
-            systemPrompt={systemPrompt}
           />
         )}
         /** 自定义底部工具栏：附件文件列表、System Prompt 选择器、聊天模式切换 */
@@ -1137,51 +933,8 @@ function ChatScreen(): React.JSX.Element {
                 handleNewFileSelected(files);
               }
             }}
-            onSystemPromptUpdated={prompt => {
-              const lastPromptIsVirtualTryOn = systemPrompt?.id === -7;
-              setSystemPrompt(prompt);
-
-              // Update App mode state
-              const isAppMode = prompt?.name === APP_PROMPT_NAME;
-              isAppModeRef.current = isAppMode;
-              if (isAppMode) {
-                // Restore htmlCode from latest AI message when switching to App mode
-                // Only update if not already set (e.g., from history load)
-                if (!getLatestHtmlCode()) {
-                  setLatestHtmlCode(findLatestHtmlCode(messages));
-                }
-              } else {
-                clearLatestHtmlCode();
-              }
-
-              if (modeRef.current === ChatMode.Image) {
-                saveCurrentImageSystemPrompt(prompt);
-                if (prompt?.id === -7) {
-                  const lastVirtualTryOnImgFile = getLastVirtualTryOnImgFile();
-                  if (lastVirtualTryOnImgFile) {
-                    setSelectedFiles([lastVirtualTryOnImgFile]);
-                  }
-                } else {
-                  if (selectedFiles.length > 0 && lastPromptIsVirtualTryOn) {
-                    setSelectedFiles([]);
-                  }
-                }
-              } else if (isNovaSonic) {
-                saveCurrentVoiceSystemPrompt(prompt);
-                if (chatStatus === ChatStatus.Running) {
-                  endVoiceConversationRef.current?.();
-                }
-              } else {
-                saveCurrentSystemPrompt(prompt);
-              }
-            }}
-            onSwitchedToTextModel={() => {
-              endVoiceConversationRef.current?.();
-            }}
-            chatMode={modeRef.current}
             hasInputText={hasInputText}
             chatStatus={chatStatus}
-            systemPrompt={systemPrompt}
           />
         )}
         /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
@@ -1200,12 +953,10 @@ function ChatScreen(): React.JSX.Element {
               {...props}
               chatStatus={chatStatus}
               isLastAIMessage={isLastAIMessage}
-              searchPhase={isLastAIMessage ? searchPhase : ''}
               onReasoningToggle={handleReasoningToggle}
               messageIndex={messageIndex}
               regenerateFromUserMessage={regenerateFromUserMessage}
               flatListRef={flatListRef}
-              isAppMode={isAppModeRef.current}
             />
           );
         }}
@@ -1306,7 +1057,7 @@ function ChatScreen(): React.JSX.Element {
 }
 
 // 聊天页面的样式定义（页面背景、输入框区域等）
-const createStyles = (colors: ColorScheme, isNovaSonic: boolean) =>
+const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1334,7 +1085,7 @@ const createStyles = (colors: ColorScheme, isNovaSonic: boolean) =>
       paddingBottom: isMac ? 10 : Platform.OS === 'android' ? 8 : 2,
     },
     inputToolbarPrimary: {
-      backgroundColor: isNovaSonic ? 'transparent' : colors.chatInputBackground,
+      backgroundColor: colors.chatInputBackground,
       borderRadius: 12,
       paddingHorizontal: 0,
     },

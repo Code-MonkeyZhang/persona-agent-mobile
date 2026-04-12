@@ -19,8 +19,8 @@ import { Cell, Table, TableWrapper } from 'react-native-table-component';
 import RNFS from 'react-native-fs';
 import MDSvg from 'react-native-marked/src/components/MDSvg.tsx';
 import MDImage from 'react-native-marked/src/components/MDImage.tsx';
-import ImageProgressBar from '../ImageProgressBar.tsx';
-import { Citation, PressMode } from '../../../types/Chat.ts';
+
+import { PressMode } from '../../../types/Chat.ts';
 import MarkedList from '@jsamr/react-native-li';
 import Decimal from '@jsamr/counter-style/lib/es/presets/decimal';
 import Disc from '@jsamr/counter-style/lib/es/presets/disc';
@@ -30,8 +30,6 @@ import MathView from 'react-native-math-view';
 import { isAndroid } from '../../../utils/PlatformUtils.ts';
 import { ColorScheme } from '../../../theme';
 import MermaidCodeRenderer from './MermaidCodeRenderer';
-import HtmlCodeRenderer from './HtmlCodeRenderer';
-import CitationBadge from '../CitationBadge';
 import CopyButton from './CopyButton';
 
 const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter'));
@@ -50,10 +48,6 @@ const MemoizedCodeHighlighter = React.memo(
     isDark,
     onPreviewToggle,
     isCompleted,
-    messageHtmlCode,
-    messageDiffCode,
-    isAppMode,
-    isLastHtml,
   }: {
     text: string;
     language?: string;
@@ -65,13 +59,8 @@ const MemoizedCodeHighlighter = React.memo(
       animated: boolean
     ) => void;
     isCompleted?: boolean;
-    messageHtmlCode?: string;
-    messageDiffCode?: string;
-    isAppMode?: boolean;
-    isLastHtml?: boolean;
   }) => {
     const styles = createCustomStyles(colors);
-    // Use useRef to always capture the latest text value
     const textRef = React.useRef(text);
     textRef.current = text;
 
@@ -79,23 +68,6 @@ const MemoizedCodeHighlighter = React.memo(
     if (language === 'mermaid') {
       return (
         <MermaidCodeRenderer text={text} colors={colors} isDark={isDark} />
-      );
-    }
-
-    // Show HtmlCodeRenderer for html and code diff
-    if (language === 'html' || (isAppMode && language === 'diff')) {
-      return (
-        <HtmlCodeRenderer
-          text={text}
-          language={language}
-          colors={colors}
-          isDark={isDark}
-          onPreviewToggle={onPreviewToggle}
-          isCompleted={isCompleted}
-          messageHtmlCode={messageHtmlCode}
-          messageDiffCode={messageDiffCode}
-          isLastHtml={isLastHtml}
-        />
       );
     }
 
@@ -132,11 +104,9 @@ const MemoizedCodeHighlighter = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    // Mermaid diagrams need special handling - always re-render
     if (prevProps.language === 'mermaid' || nextProps.language === 'mermaid') {
       return false;
     }
-    // Update when text/language/theme changes
     if (
       prevProps.text !== nextProps.text ||
       prevProps.language !== nextProps.language ||
@@ -145,24 +115,7 @@ const MemoizedCodeHighlighter = React.memo(
     ) {
       return false;
     }
-    // Update once when isCompleted becomes true
     if (!prevProps.isCompleted && nextProps.isCompleted) {
-      return false;
-    }
-    // Update when messageHtmlCode changes (for preview switch)
-    if (prevProps.messageHtmlCode !== nextProps.messageHtmlCode) {
-      return false;
-    }
-    // Update when messageDiffCode changes (for diff history display)
-    if (prevProps.messageDiffCode !== nextProps.messageDiffCode) {
-      return false;
-    }
-    // Update when isAppMode changes
-    if (prevProps.isAppMode !== nextProps.isAppMode) {
-      return false;
-    }
-    // Update when isLastHtml changes
-    if (prevProps.isLastHtml !== nextProps.isLastHtml) {
       return false;
     }
     return true;
@@ -178,42 +131,28 @@ export class CustomMarkdownRenderer
   private colors: ColorScheme;
   private styles: ReturnType<typeof createCustomStyles>;
   private isDark: boolean;
-  private citations: Citation[];
   private onPreviewToggle?: (
     expanded: boolean,
     height: number,
     animated: boolean
   ) => void;
-  private messageHtmlCode?: string;
-  private messageDiffCode?: string;
-  private isAppMode?: boolean;
-  private isLastHtml?: boolean;
 
   constructor(
     private onImagePress: (pressMode: PressMode, url: string) => void,
     colors: ColorScheme,
     isDark: boolean,
-    citations: Citation[] = [],
+    _citations: never[] = [],
     onPreviewToggle?: (
       expanded: boolean,
       height: number,
       animated: boolean
-    ) => void,
-    messageHtmlCode?: string,
-    messageDiffCode?: string,
-    isAppMode?: boolean,
-    isLastHtml?: boolean
+    ) => void
   ) {
     super();
     this.colors = colors;
     this.isDark = isDark;
     this.styles = createCustomStyles(colors);
-    this.citations = citations;
     this.onPreviewToggle = onPreviewToggle;
-    this.messageHtmlCode = messageHtmlCode;
-    this.messageDiffCode = messageDiffCode;
-    this.isAppMode = isAppMode;
-    this.isLastHtml = isLastHtml;
   }
 
   getTextView(children: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -234,53 +173,11 @@ export class CustomMarkdownRenderer
     return this.getTextView(text, styles);
   }
 
-  // Parse citation marks [1], [2], [3] etc. and replace with CitationBadge components
-  private parseCitationMarks(text: string): ReactNode[] {
-    if (!this.citations || this.citations.length === 0) {
-      return [text];
+  text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
+    if (Array.isArray(text)) {
+      return this.getNodeForTextArray(text, styles);
     }
-
-    // Regular expression to match [number] pattern
-    const citationRegex = /\[(\d+)\]/g;
-    const parts: ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = citationRegex.exec(text)) !== null) {
-      const citationNumber = parseInt(match[1], 10);
-      const citation = this.citations.find(c => c.number === citationNumber);
-
-      // Add text before the citation mark
-      if (match.index > lastIndex) {
-        parts.push(text.substring(lastIndex, match.index));
-      }
-
-      // Add citation badge if we have a matching citation
-      if (citation) {
-        // Add space before citation badge
-        parts.push(' ');
-        parts.push(
-          <CitationBadge
-            key={`citation-${citationNumber}-${match.index}`}
-            number={citationNumber}
-            url={citation.url}
-          />
-        );
-        // Add space after citation badge
-      } else {
-        // If no matching citation found, keep the original text
-        parts.push(match[0]);
-      }
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add remaining text after the last match
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
-
-    return parts.length > 0 ? parts : [text];
+    return this.getTextView(text, styles);
   }
 
   codespan(text: string, styles?: TextStyle): ReactNode {
@@ -288,18 +185,6 @@ export class CustomMarkdownRenderer
       ...styles,
       ...this.styles.codeSpanText,
     });
-  }
-
-  text(text: string | ReactNode[], styles?: TextStyle): ReactNode {
-    if (Array.isArray(text)) {
-      return this.getNodeForTextArray(text, styles);
-    }
-    // Parse citation marks in the text
-    const parsedContent = this.parseCitationMarks(text);
-    if (parsedContent.length === 1 && typeof parsedContent[0] === 'string') {
-      return this.getTextView(parsedContent[0], styles);
-    }
-    return this.getTextView(parsedContent, styles);
   }
 
   strong(children: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -344,9 +229,6 @@ export class CustomMarkdownRenderer
 
   image(uri: string, alt?: string, style?: ImageStyle): ReactNode {
     const key = this.getKey();
-    if (uri.startsWith('bedrock://imgProgress')) {
-      return <ImageProgressBar key={key} />;
-    }
     if (uri.endsWith('.svg')) {
       return <MDSvg uri={uri} key={key} />;
     }
@@ -383,11 +265,6 @@ export class CustomMarkdownRenderer
       let componentKey = this.getKey();
       if (language === 'mermaid') {
         componentKey = 'mermaid-code-block';
-      } else if (
-        this.isAppMode &&
-        (language === 'html' || language === 'diff')
-      ) {
-        componentKey = 'html-code-block';
       }
       return (
         <MemoizedCodeHighlighter
@@ -398,10 +275,6 @@ export class CustomMarkdownRenderer
           isDark={this.isDark}
           onPreviewToggle={this.onPreviewToggle}
           isCompleted={isCompleted}
-          messageHtmlCode={this.messageHtmlCode}
-          messageDiffCode={this.messageDiffCode}
-          isAppMode={this.isAppMode}
-          isLastHtml={this.isLastHtml}
         />
       );
     } else {
