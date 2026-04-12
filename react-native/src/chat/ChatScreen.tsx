@@ -22,7 +22,7 @@ import { invokeOpenAIWithCallBack } from '../api/open-api';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -31,7 +31,13 @@ import {
   getTextModel,
   saveMessageList,
   saveMessages,
+  getServerAddress,
+  getServerAgentId,
+  saveServerAgentId,
+  getServerSessionId,
+  saveServerSessionId,
 } from '../storage/StorageUtils.ts';
+import { NanoAgentClient, fetchAgents } from '../api/nano-agent-api';
 import {
   ChatMode,
   ChatStatus,
@@ -117,6 +123,12 @@ function ChatScreen(): React.JSX.Element {
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
+  /** 当前活跃的 NanoAgentClient 实例，未连接时为 null */
+  const nanoAgentRef = useRef<NanoAgentClient | null>(null);
+  /** 当前聊天对应的服务器会话 UUID，尚未创建时为 null */
+  const serverSessionIdRef = useRef<string | null>(null);
+  /** 服务器地址缓存，从 MMKV 加载 */
+  const serverAddressRef = useRef(getServerAddress());
 
   // ==================== Ref 同步 & 副作用 ====================
   // update refs value with state
@@ -146,6 +158,98 @@ function ChatScreen(): React.JSX.Element {
     selectedFilesRef.current = selectedFiles;
   }, [selectedFiles]);
 
+  // ==================== Nano-Agent 初始化 ====================
+  /**
+   * 屏幕获得焦点时初始化 NanoAgentClient。
+   * 使用 useFocusEffect 而非 useEffect，确保从设置页返回后能重新检测。
+   *
+   * 流程：读取服务器地址 → 获取 agent → 注册回调 → connect → 存入 nanoAgentRef。
+   * 离开屏幕时自动 disconnect 并置空 ref。
+   */
+  useFocusEffect(
+    React.useCallback(() => {
+      const address = getServerAddress();
+      console.log(`[ChatScreen] nano-agent init (focus), serverAddress="${address}"`);
+
+      if (nanoAgentRef.current) {
+        console.log('[ChatScreen] nano-agent already connected, skip');
+        return;
+      }
+
+      if (!address) {
+        return;
+      }
+      serverAddressRef.current = address;
+
+      let cancelled = false;
+      const client = new NanoAgentClient();
+
+      (async () => {
+        try {
+          let agentId = getServerAgentId();
+          if (!agentId) {
+            console.log('[ChatScreen] no cached agentId, fetching agents...');
+            const agents = await fetchAgents(address);
+            if (cancelled || agents.length === 0) return;
+            agentId = agents[0].id;
+            saveServerAgentId(agentId);
+          }
+          console.log(`[ChatScreen] using agentId=${agentId}`);
+
+          client.onStepComplete = (content, thinking) => {
+            if (isCanceled.current) return;
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: content || prevMessages[0].text,
+                reasoning: thinking || prevMessages[0].reasoning,
+              };
+              return newMessages;
+            });
+          };
+
+          client.onComplete = () => {
+            if (isCanceled.current) return;
+            trigger(HapticFeedbackTypes.notificationSuccess);
+            setChatStatus(ChatStatus.Complete);
+          };
+
+          client.onError = (message) => {
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: 'Error: ' + message,
+              };
+              return newMessages;
+            });
+            setChatStatus(ChatStatus.Complete);
+          };
+
+          client.onTitleUpdated = (_sessionId, title) => {
+            // future: update local messageList title
+          };
+
+          await client.connect(address);
+          if (cancelled) return;
+          nanoAgentRef.current = client;
+          console.log('[ChatScreen] nano-agent client ready');
+        } catch (e) {
+          console.log(`[ChatScreen] nano-agent init failed: ${e instanceof Error ? e.message : e}`);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        client.disconnect();
+        nanoAgentRef.current = null;
+      };
+    }, [])
+  );
+
   // ==================== 新建聊天 & 导航栏 ====================
   // start new chat
   const startNewChat = useRef(
@@ -153,6 +257,7 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       sessionIdRef.current = getSessionId() + 1;
       isNewChatRef.current = true;
+      serverSessionIdRef.current = null;
       sendEventRef.current('updateHistorySelectedId', {
         id: sessionIdRef.current,
       });
@@ -160,6 +265,26 @@ function ChatScreen(): React.JSX.Element {
       setMessages([]);
       bedrockMessages.current = [];
       setUsage(undefined);
+
+      if (nanoAgentRef.current && serverAddressRef.current) {
+        const agentId = getServerAgentId();
+        if (agentId) {
+          console.log(`[ChatScreen] startNewChat: creating server session, agentId=${agentId}`);
+          nanoAgentRef.current
+            .createSession(agentId, serverAddressRef.current)
+            .then(serverSessionId => {
+              serverSessionIdRef.current = serverSessionId;
+              saveServerSessionId(sessionIdRef.current, serverSessionId);
+              nanoAgentRef.current?.subscribe(serverSessionId);
+              console.log(`[ChatScreen] startNewChat: server session created, localId=${sessionIdRef.current} serverId=${serverSessionId}`);
+            })
+            .catch((e: Error) => {
+              console.log(`[ChatScreen] startNewChat: session creation failed: ${e.message}`);
+              // session creation failed
+            });
+        }
+      }
+
       showKeyboard();
     }, [])
   );
@@ -321,9 +446,11 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       saveCurrentMessages();
-      getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
-        bedrockMessages.current.push(currentMsg);
-      });
+      if (!nanoAgentRef.current) {
+        getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
+          bedrockMessages.current.push(currentMsg);
+        });
+      }
       if (drawerTypeRef.current === 'permanent') {
         sendEventRef.current('updateHistory');
         setTimeout(() => {
@@ -480,6 +607,10 @@ function ChatScreen(): React.JSX.Element {
 
   // invoke bedrock api
   useEffect(() => {
+    if (nanoAgentRef.current) {
+      return;
+    }
+
     const lastMessage = messages[0];
     if (
       lastMessage &&
@@ -646,14 +777,63 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       scrollToBottom();
 
-      getBedrockMessage(message[0]).then(currentMsg => {
-        bedrockMessages.current.push(currentMsg);
+      // nano-agent 路径：有服务器连接时走此分支
+      if (nanoAgentRef.current && serverAddressRef.current) {
+        // 先设为运行中，并在消息列表顶部插入一条空的 bot 占位消息
         setChatStatus(ChatStatus.Running);
         setMessages(previousMessages => [
           createBotMessage(),
           ...GiftedChat.append(previousMessages, message),
         ]);
-      });
+        const agentId = getServerAgentId();
+
+        (async () => {
+          try {
+            let sessionId = serverSessionIdRef.current;
+            // 如果还没有 server session，自动创建并订阅 WebSocket
+            if (!sessionId) {
+              console.log('[ChatScreen] onSend: no server session, auto-creating...');
+              sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+              serverSessionIdRef.current = sessionId;
+              // 把本地 sessionId 和 server sessionId 的映射存到 MMKV
+              saveServerSessionId(sessionIdRef.current, sessionId);
+              nanoAgentRef.current!.subscribe(sessionId);
+              console.log(`[ChatScreen] onSend: auto-created session ${sessionId}`);
+            }
+            // 发送聊天消息，回复会通过 WebSocket 的 step_complete/complete 事件回来
+            console.log(`[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(0, 80)}" sessionId=${sessionId}`);
+            await nanoAgentRef.current!.sendChatMessage(
+              agentId,
+              sessionId,
+              message[0].text,
+              serverAddressRef.current!
+            );
+          } catch (e) {
+            // 出错时把占位的 bot 消息文本替换为错误信息
+            const errMsg = e instanceof Error ? e.message : String(e);
+            console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: 'Error: ' + errMsg,
+              };
+              return newMessages;
+            });
+            setChatStatus(ChatStatus.Complete);
+          }
+        })();
+      } else {
+        getBedrockMessage(message[0]).then(currentMsg => {
+          bedrockMessages.current.push(currentMsg);
+          setChatStatus(ChatStatus.Running);
+          setMessages(previousMessages => [
+            createBotMessage(),
+            ...GiftedChat.append(previousMessages, message),
+          ]);
+        });
+      }
     }
   }, []);
 
@@ -720,7 +900,22 @@ function ChatScreen(): React.JSX.Element {
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
               isCanceled.current = true;
-              controllerRef.current?.abort();
+              if (nanoAgentRef.current) {
+                setMessages(prevMessages => {
+                  if (prevMessages.length === 0) return prevMessages;
+                  const newMessages = [...prevMessages];
+                  if (
+                    newMessages[0].text === textPlaceholder ||
+                    newMessages[0].text === ''
+                  ) {
+                    newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
+                  }
+                  return newMessages;
+                });
+                setChatStatus(ChatStatus.Complete);
+              } else {
+                controllerRef.current?.abort();
+              }
             }}
             onFileSelected={files => {
               handleNewFileSelected(files);
