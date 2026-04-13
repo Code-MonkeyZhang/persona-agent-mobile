@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Platform,
   SafeAreaView,
@@ -16,43 +16,24 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src';
 import {
-  getAllModels,
   getHapticEnabled,
-  getTextModel,
-  saveAllModels,
-  saveTextModel,
-  updateTextModelUsageOrder,
-  generateOpenAICompatModels,
-  getOpenAICompatConfigs,
   clearAllChatHistory,
   getServerAddress,
   saveServerAddress,
 } from '../storage/StorageUtils.ts';
 import { CustomHeaderRightButton } from '../chat/component/CustomHeaderRightButton.tsx';
 import { RouteParamList } from '../types/RouteTypes.ts';
-import { DropdownItem, Model, OpenAICompatConfig } from '../types/Chat.ts';
 
 import { isMac } from '../App.tsx';
-import CustomDropdown from './DropdownComponent.tsx';
 import CustomTextInput from './CustomTextInput.tsx';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { useTheme, ColorScheme } from '../theme';
-import OpenAICompatConfigsSection from './OpenAICompatConfigsSection.tsx';
 
 function SettingsScreen(): React.JSX.Element {
   const { colors, isDark } = useTheme();
-  const allModel = getAllModels();
-  const [openAICompatConfigs, setOpenAICompatConfigs] = useState<
-    OpenAICompatConfig[]
-  >(getOpenAICompatConfigs);
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
   const navigation = useNavigation<NavigationProp<RouteParamList>>();
-  const [textModels, setTextModels] = useState<Model[]>(allModel.textModel);
-  const [selectedTextModel, setSelectedTextModel] =
-    useState<Model>(getTextModel);
   const { sendEvent } = useAppContext();
-  const sendEventRef = useRef(sendEvent);
-  const openAICompatConfigsRef = useRef(openAICompatConfigs);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [clearCountdown, setClearCountdown] = useState(10);
   const [isClearing, setIsClearing] = useState(false);
@@ -65,49 +46,6 @@ function SettingsScreen(): React.JSX.Element {
   >(savedAddress ? 'connected' : 'idle');
   const [connectionError, setConnectionError] = useState('');
 
-  const handleOpenAICompatConfigsChange = useCallback(
-    (configs: OpenAICompatConfig[]) => {
-      setOpenAICompatConfigs(configs);
-    },
-    []
-  );
-
-  const fetchAndSetModelNames = useCallback(() => {
-    const openAICompatModelList = generateOpenAICompatModels(
-      openAICompatConfigsRef.current
-    );
-    setTextModels(openAICompatModelList);
-
-    if (openAICompatModelList.length > 0) {
-      const textModel = getTextModel();
-      const targetModel = openAICompatModelList.find(
-        model => model.modelId === textModel.modelId
-      );
-      if (targetModel) {
-        setSelectedTextModel(targetModel);
-        saveTextModel(targetModel);
-        updateTextModelUsageOrder(targetModel);
-      } else {
-        setSelectedTextModel(openAICompatModelList[0]);
-        saveTextModel(openAICompatModelList[0]);
-        updateTextModelUsageOrder(openAICompatModelList[0]);
-      }
-    }
-
-    sendEventRef.current('modelChanged');
-    if (openAICompatModelList.length > 0) {
-      saveAllModels({ textModel: openAICompatModelList });
-    }
-  }, []);
-
-  const fetchAndSetModelNamesRef = useRef(fetchAndSetModelNames);
-
-  useEffect(() => {
-    return navigation.addListener('focus', () => {
-      fetchAndSetModelNamesRef.current();
-    });
-  }, [navigation]);
-
   const toggleHapticFeedback = (value: boolean) => {
     setHapticEnabled(value);
     setHapticFeedbackEnabled(value);
@@ -115,17 +53,6 @@ function SettingsScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
     }
   };
-
-  useEffect(() => {
-    const currentConfigs = openAICompatConfigsRef.current;
-    if (
-      JSON.stringify(openAICompatConfigs) === JSON.stringify(currentConfigs)
-    ) {
-      return;
-    }
-    openAICompatConfigsRef.current = openAICompatConfigs;
-    fetchAndSetModelNamesRef.current();
-  }, [openAICompatConfigs]);
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -147,11 +74,6 @@ function SettingsScreen(): React.JSX.Element {
       ),
     });
   }, [navigation, isDark]);
-
-  const textModelsData: DropdownItem[] = textModels.map(model => ({
-    label: model.modelName ?? '',
-    value: model.modelName ?? '',
-  }));
 
   const handleOpenClearDialog = () => {
     setShowClearDialog(true);
@@ -284,11 +206,6 @@ function SettingsScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
-        <OpenAICompatConfigsSection
-          isDark={isDark}
-          onConfigsChange={handleOpenAICompatConfigsChange}
-        />
-
         <Text style={styles.sectionTitle}>Server Connection</Text>
         <CustomTextInput
           label="Tunnel Address"
@@ -322,27 +239,6 @@ function SettingsScreen(): React.JSX.Element {
               `Failed${connectionError ? ': ' + connectionError : ''}`}
           </Text>
         )}
-
-        <Text style={[styles.label, styles.middleLabel]}>Select Model</Text>
-        <CustomDropdown
-          label="Chat Model"
-          data={textModelsData}
-          value={selectedTextModel.modelName}
-          onChange={(item: DropdownItem) => {
-            if (item.value !== '') {
-              const selectedModel = textModels.find(
-                model => model.modelName === item.value
-              );
-              if (selectedModel) {
-                saveTextModel(selectedModel);
-                setSelectedTextModel(selectedModel!);
-                updateTextModelUsageOrder(selectedModel);
-                sendEvent('modelChanged');
-              }
-            }
-          }}
-          placeholder="Select a model"
-        />
 
         {!isMac && (
           <View style={styles.switchContainer}>

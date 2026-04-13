@@ -1,12 +1,9 @@
 import { MMKV } from 'react-native-mmkv';
 import {
-  AllModel,
   Chat,
   ChatMode,
-  SwiftChatMessage,
   Model,
-  OpenAICompatConfig,
-  ModelTag,
+  SwiftChatMessage,
   Usage,
 } from '../types/Chat.ts';
 import uuid from 'uuid';
@@ -33,19 +30,12 @@ const messageListKey = keyPrefix + 'messageList';
 const sessionIdPrefix = keyPrefix + 'sessionId/';
 const currentSessionIdKey = keyPrefix + 'currentSessionId';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
-const textModelKey = keyPrefix + 'textModelKey';
-const allModelKey = keyPrefix + 'allModelKey';
 const reasoningExpandedKey = keyPrefix + 'reasoningExpandedKey';
-const modelOrderKey = keyPrefix + 'modelOrderKey';
-const openAICompatConfigsKey = keyPrefix + 'openAICompatConfigsKey';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const serverSessionMapKey = keyPrefix + 'serverSessionMap';
 
-let currentTextModel: Model | undefined;
 let currentReasoningExpanded: boolean | undefined;
-let currentModelOrder: Model[] | undefined;
-let currentOpenAICompatibleConfig: OpenAICompatConfig[] | undefined;
 
 export function saveMessages(
   sessionId: number,
@@ -122,45 +112,8 @@ export function getHapticEnabled() {
   return storage.getBoolean(hapticEnabledKey) ?? true;
 }
 
-export function saveTextModel(model: Model) {
-  currentTextModel = model;
-  storage.set(textModelKey, JSON.stringify(model));
-}
-
 export function getTextModel(): Model {
-  if (currentTextModel) {
-    return currentTextModel;
-  } else {
-    const modelString = storage.getString(textModelKey) ?? '';
-    if (modelString.length > 0) {
-      currentTextModel = JSON.parse(modelString) as Model;
-    } else {
-      const allModels = getAllModels().textModel;
-      currentTextModel =
-        allModels.length > 0
-          ? allModels[0]
-          : ({
-              modelId: '',
-              modelName: '',
-              modelTag: ModelTag.OpenAICompatible,
-            } as Model);
-    }
-    return currentTextModel;
-  }
-}
-
-export function saveAllModels(allModels: AllModel) {
-  storage.set(allModelKey, JSON.stringify(allModels));
-}
-
-export function getAllModels() {
-  const modelString = storage.getString(allModelKey) ?? '';
-  if (modelString.length > 0) {
-    return JSON.parse(modelString) as AllModel;
-  }
-  return {
-    textModel: [],
-  };
+  return { modelId: '', modelName: '' };
 }
 
 export function saveReasoningExpanded(expanded: boolean) {
@@ -174,93 +127,6 @@ export function getReasoningExpanded() {
   } else {
     currentReasoningExpanded = storage.getBoolean(reasoningExpandedKey) ?? true;
     return currentReasoningExpanded;
-  }
-}
-
-export function saveModelOrder(models: Model[]) {
-  currentModelOrder = models;
-  storage.set(modelOrderKey, JSON.stringify(models));
-}
-
-export function getModelOrder(): Model[] {
-  if (currentModelOrder) {
-    return currentModelOrder;
-  } else {
-    const modelOrderString = storage.getString(modelOrderKey) ?? '';
-    if (modelOrderString.length > 0) {
-      currentModelOrder = JSON.parse(modelOrderString) as Model[];
-    } else {
-      currentModelOrder = [];
-    }
-    return currentModelOrder;
-  }
-}
-
-export function updateTextModelUsageOrder(model: Model) {
-  const currentOrder = getModelOrder();
-  const updatedOrder = [
-    model,
-    ...currentOrder.filter(m => m.modelId !== model.modelId),
-  ];
-  saveModelOrder(updatedOrder);
-  return updatedOrder;
-}
-
-export function getMergedModelOrder(): Model[] {
-  const historyModels = getModelOrder();
-  const currentTextModels = getAllModels().textModel;
-  const currentModelMap = new Map<string, Model>();
-  currentTextModels.forEach(model => {
-    currentModelMap.set(model.modelId, model);
-  });
-  const mergedModels: Model[] = [];
-  historyModels.forEach(model => {
-    if (currentModelMap.has(model.modelId)) {
-      mergedModels.push(currentModelMap.get(model.modelId)!);
-      currentModelMap.delete(model.modelId);
-    }
-  });
-  currentModelMap.forEach(model => {
-    mergedModels.push(model);
-  });
-
-  return mergedModels;
-}
-
-export function saveOpenAICompatConfigs(configs: OpenAICompatConfig[]) {
-  currentOpenAICompatibleConfig = configs;
-  encryptStorage.set(openAICompatConfigsKey, JSON.stringify(configs));
-}
-
-export function getOpenAICompatConfigs(): OpenAICompatConfig[] {
-  if (currentOpenAICompatibleConfig) {
-    return currentOpenAICompatibleConfig;
-  } else {
-    const configsStr = encryptStorage.getString(openAICompatConfigsKey);
-    if (configsStr) {
-      currentOpenAICompatibleConfig = JSON.parse(
-        configsStr
-      ) as OpenAICompatConfig[];
-      return currentOpenAICompatibleConfig;
-    }
-    return [];
-  }
-}
-
-export function extractDomainFromUrl(url: string): string {
-  if (!url) {
-    return '';
-  }
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.replace('www.', '');
-    const parts = hostname.split('.');
-    if (parts.length > 1) {
-      return parts[parts.length - 2];
-    }
-    return parts[0];
-  } catch {
-    return '';
   }
 }
 
@@ -332,34 +198,3 @@ function getServerSessionMap(): Record<string, string> {
   return {};
 }
 
-export function generateOpenAICompatModels(
-  configs: OpenAICompatConfig[]
-): Model[] {
-  const openAICompatModelList: Model[] = [];
-
-  configs.forEach(config => {
-    if (config.modelIds && config.modelIds.length > 0 && config.baseUrl) {
-      const domain = extractDomainFromUrl(config.baseUrl);
-      const prefix = domain ? `${domain}/` : '';
-
-      const models = config.modelIds.split(',').map(modelId => {
-        modelId = modelId.trim().replace(/(\r\n|\n|\r)/gm, '');
-        const parts = modelId.split('/');
-        const displayName =
-          prefix + (parts.length === 2 ? parts[1] : modelId).trim();
-
-        return {
-          modelId: modelId,
-          modelName: displayName,
-          modelTag: ModelTag.OpenAICompatible,
-          uniqueId: config.id,
-          apiKey: config.apiKey ?? '',
-          apiUrl: config.baseUrl ?? '',
-        } as Model;
-      });
-      openAICompatModelList.push(...models);
-    }
-  });
-
-  return openAICompatModelList;
-}
