@@ -102,7 +102,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           const uri = await Video.compress(
             file.url,
             { progressDivider: 1, maxSize: 960 },
-            progress => {
+            (progress) => {
               setCompressionProgress(progress);
             }
           );
@@ -117,7 +117,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               file.fileName + '.' + metaData.extension
             );
             if (localFileUrl) {
-              const updatedFiles = filesRef.current.map(f =>
+              const updatedFiles = filesRef.current.map((f) =>
                 f.url === file.url
                   ? { ...f, videoUrl: localFileUrl, format: metaData.extension }
                   : f
@@ -126,7 +126,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
             }
           } else {
             // remove the video
-            const newFiles = filesRef.current.filter(f => f.url !== file.url);
+            const newFiles = filesRef.current.filter((f) => f.url !== file.url);
             onFileUpdated!(newFiles, true);
             showInfo(
               `Video too large: ${currentSize.toFixed(
@@ -139,7 +139,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           compressingFiles.current = '';
           isCompressing.current = false;
           // remove the failed video
-          const newFiles = filesRef.current.filter(f => f.url !== file.url);
+          const newFiles = filesRef.current.filter((f) => f.url !== file.url);
           onFileUpdated!(newFiles, true);
         }
       }
@@ -182,14 +182,16 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           ...(isVideo && {
             width: 72 * ratio,
           }),
-        }}>
+        }}
+      >
         {isShowDelete && (
           <TouchableOpacity
             style={styles.deleteTouchable}
             onPress={() => {
-              const newFiles = files.filter(f => f.url !== file.url);
+              const newFiles = files.filter((f) => f.url !== file.url);
               onFileUpdated!(newFiles, true);
-            }}>
+            }}
+          >
             <View style={styles.deleteLayout}>
               <Text style={styles.deleteText}>×</Text>
             </View>
@@ -221,16 +223,17 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               openInFileViewer(fullFileUrl);
             } else {
               const images = files
-                .filter(item => item.type === FileType.image)
-                .map(item => ({ uri: getFullFileUrl(item.url) }));
+                .filter((item) => item.type === FileType.image)
+                .map((item) => ({ uri: getFullFileUrl(item.url) }));
               const currentIndex = images.findIndex(
-                img => img.uri === fullFileUrl
+                (img) => img.uri === fullFileUrl
               );
               setImageUrls(images);
               setIndex(currentIndex);
               setIsVisible(true);
             }
-          }}>
+          }}
+        >
           {isImage || isVideo ? (
             <View style={styles.thumbnailContainer}>
               <Image
@@ -310,7 +313,8 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
             height: 0,
             overflow: 'hidden',
           }),
-      }}>
+      }}
+    >
       {files.map((file, fileIndex) => renderFileItem(file, fileIndex))}
 
       {mode === DisplayMode.Edit && (

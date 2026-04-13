@@ -18,7 +18,6 @@ import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
 import { ThemeProvider, useTheme } from './theme';
 import { configureErrorHandling } from './utils/ErrorUtils';
 
-
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
 export const isMac = isMacCatalyst;
@@ -82,11 +81,10 @@ const DrawerNavigator = () => {
         },
         drawerType: isMac ? drawerType : 'slide',
       }}
-      drawerContent={renderCustomDrawerContent}>
+      drawerContent={renderCustomDrawerContent}
+    >
       <Drawer.Screen name="Bedrock" component={ChatScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
-
-
     </Drawer.Navigator>
   );
 };
@@ -96,7 +94,7 @@ const DrawerNavigator = () => {
  * - Drawer: 抽屉导航器(默认首页)
  */
 const AppNavigator = () => {
-  const { colors } = useTheme();
+  useTheme();
   return (
     <Stack.Navigator initialRouteName="Drawer" screenOptions={{}}>
       <Stack.Screen
@@ -130,9 +128,10 @@ const AppWithTheme = () => {
       />
       {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
       <NavigationContainer
-        onStateChange={_ => {
+        onStateChange={(_) => {
           Keyboard.dismiss();
-        }}>
+        }}
+      >
         <AppNavigator />
       </NavigationContainer>
     </>

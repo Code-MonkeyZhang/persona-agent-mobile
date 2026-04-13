@@ -1,14 +1,11 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  ChatStatus,
-  FileInfo,
-} from '../../types/Chat.ts';
+import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import {
   CustomFileListComponent,
   DisplayMode,
 } from './CustomFileListComponent.tsx';
-import { isAndroid, isMacCatalyst } from '../../utils/PlatformUtils.ts';
+import { isMacCatalyst } from '../../utils/PlatformUtils.ts';
 
 interface CustomComposerProps {
   files: FileInfo[];
@@ -39,7 +36,8 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
           ...(isMacCatalyst && {
             paddingBottom: 18,
           }),
-        }}>
+        }}
+      >
         {(isHideFileList || files.length > 0) && (
           <CustomFileListComponent
             files={files}

@@ -9,7 +9,8 @@ export const HeaderLeftView = (navigation: NavigationProp, isDark: boolean) => {
   return (
     <TouchableOpacity
       onPress={() => navigation.goBack()}
-      style={styles.headerContainer}>
+      style={styles.headerContainer}
+    >
       <Image
         source={
           isDark

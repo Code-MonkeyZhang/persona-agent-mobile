@@ -22,7 +22,6 @@ interface EmptyChatComponentProps {
 }
 
 export const EmptyChatComponent = ({
-  chatMode,
   isLoadingMessages = false,
 }: EmptyChatComponentProps): React.ReactElement => {
   const { colors } = useTheme();
@@ -35,7 +34,8 @@ export const EmptyChatComponent = ({
       <TouchableOpacity
         onPress={() => {
           navigation.navigate('Settings', {});
-        }}>
+        }}
+      >
         {isLoadingMessages ? (
           <LoadingSpinner
             visible={true}

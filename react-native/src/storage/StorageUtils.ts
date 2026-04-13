@@ -132,7 +132,7 @@ export function getReasoningExpanded() {
 
 export function clearAllChatHistory(): void {
   const chatList = getMessageList();
-  chatList.forEach(chat => {
+  chatList.forEach((chat) => {
     storage.delete(sessionIdPrefix + chat.id);
   });
 
@@ -197,4 +197,3 @@ function getServerSessionMap(): Record<string, string> {
   }
   return {};
 }
-

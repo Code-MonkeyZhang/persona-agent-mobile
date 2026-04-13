@@ -347,7 +347,7 @@ export async function fetchAgents(
   };
   console.log(
     `${TAG} fetchAgents → ${data.agents.length} agents: ${data.agents
-      .map(a => `${a.id}(${a.name})`)
+      .map((a) => `${a.id}(${a.name})`)
       .join(', ')}`
   );
   return data.agents;

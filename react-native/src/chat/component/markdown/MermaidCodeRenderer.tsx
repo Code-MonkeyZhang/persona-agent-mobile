@@ -89,14 +89,16 @@ const MermaidCodeRenderer = forwardRef<
           <View style={styles.tabContainer}>
             <TouchableOpacity
               onPress={setMermaidMode}
-              style={[styles.tabButton, !showCode && styles.activeTab]}>
+              style={[styles.tabButton, !showCode && styles.activeTab]}
+            >
               <Text style={[styles.tabText, !showCode && styles.activeTabText]}>
                 mermaid
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={setCodeMode}
-              style={[styles.tabButton, showCode && styles.activeTab]}>
+              style={[styles.tabButton, showCode && styles.activeTab]}
+            >
               <Text style={[styles.tabText, showCode && styles.activeTabText]}>
                 code
               </Text>
@@ -123,7 +125,8 @@ const MermaidCodeRenderer = forwardRef<
               backgroundColor: colors.codeBackground,
             }}
             textStyle={styles.codeText}
-            language="mermaid">
+            language="mermaid"
+          >
             {currentText}
           </CustomCodeHighlighter>
         </Suspense>

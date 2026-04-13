@@ -21,7 +21,12 @@ import { ColorScheme, useTheme } from '../theme';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
-import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -91,7 +96,8 @@ function ChatScreen(): React.JSX.Element {
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);  const [usage, setUsage] = useState<Usage>();
+  const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
+  const [usage, setUsage] = useState<Usage>();
   const [userScrolled, setUserScrolled] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
@@ -156,7 +162,9 @@ function ChatScreen(): React.JSX.Element {
   useFocusEffect(
     React.useCallback(() => {
       const address = getServerAddress();
-      console.log(`[ChatScreen] nano-agent init (focus), serverAddress="${address}"`);
+      console.log(
+        `[ChatScreen] nano-agent init (focus), serverAddress="${address}"`
+      );
 
       if (nanoAgentRef.current) {
         console.log('[ChatScreen] nano-agent already connected, skip');
@@ -177,15 +185,19 @@ function ChatScreen(): React.JSX.Element {
           if (!agentId) {
             console.log('[ChatScreen] no cached agentId, fetching agents...');
             const agents = await fetchAgents(address);
-            if (cancelled || agents.length === 0) return;
+            if (cancelled || agents.length === 0) {
+              return;
+            }
             agentId = agents[0].id;
             saveServerAgentId(agentId);
           }
           console.log(`[ChatScreen] using agentId=${agentId}`);
 
           client.onStepComplete = (content, thinking) => {
-            setMessages(prevMessages => {
-              if (prevMessages.length === 0) return prevMessages;
+            setMessages((prevMessages) => {
+              if (prevMessages.length === 0) {
+                return prevMessages;
+              }
               const newMessages = [...prevMessages];
               newMessages[0] = {
                 ...prevMessages[0],
@@ -202,8 +214,10 @@ function ChatScreen(): React.JSX.Element {
           };
 
           client.onError = (message) => {
-            setMessages(prevMessages => {
-              if (prevMessages.length === 0) return prevMessages;
+            setMessages((prevMessages) => {
+              if (prevMessages.length === 0) {
+                return prevMessages;
+              }
               const newMessages = [...prevMessages];
               newMessages[0] = {
                 ...prevMessages[0],
@@ -214,16 +228,22 @@ function ChatScreen(): React.JSX.Element {
             setChatStatus(ChatStatus.Complete);
           };
 
-          client.onTitleUpdated = (_sessionId, title) => {
+          client.onTitleUpdated = (_sessionId, _title) => {
             // future: update local messageList title
           };
 
           await client.connect(address);
-          if (cancelled) return;
+          if (cancelled) {
+            return;
+          }
           nanoAgentRef.current = client;
           console.log('[ChatScreen] nano-agent client ready');
         } catch (e) {
-          console.log(`[ChatScreen] nano-agent init failed: ${e instanceof Error ? e.message : e}`);
+          console.log(
+            `[ChatScreen] nano-agent init failed: ${
+              e instanceof Error ? e.message : e
+            }`
+          );
         }
       })();
 
@@ -253,17 +273,23 @@ function ChatScreen(): React.JSX.Element {
       if (nanoAgentRef.current && serverAddressRef.current) {
         const agentId = getServerAgentId();
         if (agentId) {
-          console.log(`[ChatScreen] startNewChat: creating server session, agentId=${agentId}`);
+          console.log(
+            `[ChatScreen] startNewChat: creating server session, agentId=${agentId}`
+          );
           nanoAgentRef.current
             .createSession(agentId, serverAddressRef.current)
-            .then(serverSessionId => {
+            .then((serverSessionId) => {
               serverSessionIdRef.current = serverSessionId;
               saveServerSessionId(sessionIdRef.current, serverSessionId);
               nanoAgentRef.current?.subscribe(serverSessionId);
-              console.log(`[ChatScreen] startNewChat: server session created, localId=${sessionIdRef.current} serverId=${serverSessionId}`);
+              console.log(
+                `[ChatScreen] startNewChat: server session created, localId=${sessionIdRef.current} serverId=${serverSessionId}`
+              );
             })
             .catch((e: Error) => {
-              console.log(`[ChatScreen] startNewChat: session creation failed: ${e.message}`);
+              console.log(
+                `[ChatScreen] startNewChat: session creation failed: ${e.message}`
+              );
               // session creation failed
             });
         }
@@ -279,11 +305,7 @@ function ChatScreen(): React.JSX.Element {
     const headerOptions: HeaderOptions = {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
-        <HeaderTitle
-          title={'Chat'}
-          usage={usage}
-          onDoubleTap={scrollToTop}
-        />
+        <HeaderTitle title={'Chat'} usage={usage} onDoubleTap={scrollToTop} />
       ),
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
@@ -584,7 +606,7 @@ function ChatScreen(): React.JSX.Element {
         : messagesRef.current[userMessageIndex];
 
       setChatStatus(ChatStatus.Running);
-      setMessages(_previousMessages => [
+      setMessages((_previousMessages) => [
         createBotMessage(),
         userMessage,
         ...historyMessages,
@@ -597,7 +619,10 @@ function ChatScreen(): React.JSX.Element {
           try {
             let sessionId = serverSessionIdRef.current;
             if (!sessionId) {
-              sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+              sessionId = await nanoAgentRef.current!.createSession(
+                agentId,
+                serverAddressRef.current!
+              );
               serverSessionIdRef.current = sessionId;
               saveServerSessionId(sessionIdRef.current, sessionId);
               nanoAgentRef.current!.subscribe(sessionId);
@@ -611,8 +636,10 @@ function ChatScreen(): React.JSX.Element {
             );
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
-            setMessages(prevMessages => {
-              if (prevMessages.length === 0) return prevMessages;
+            setMessages((prevMessages) => {
+              if (prevMessages.length === 0) {
+                return prevMessages;
+              }
               const newMessages = [...prevMessages];
               newMessages[0] = {
                 ...prevMessages[0],
@@ -640,12 +667,12 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
 
-      if (message[0]?.text || files.length > 0) {
-        if (!message[0]?.text) {
-          if (modeRef.current === ChatMode.Text) {
-            message[0].text = getFileTypeSummary(files);
-          }
+    if (message[0]?.text || files.length > 0) {
+      if (!message[0]?.text) {
+        if (modeRef.current === ChatMode.Text) {
+          message[0].text = getFileTypeSummary(files);
         }
+      }
 
       if (selectedFilesRef.current.length > 0) {
         message[0].image = JSON.stringify(selectedFilesRef.current);
@@ -655,7 +682,7 @@ function ChatScreen(): React.JSX.Element {
       scrollToBottom();
 
       setChatStatus(ChatStatus.Running);
-      setMessages(previousMessages => [
+      setMessages((previousMessages) => [
         createBotMessage(),
         ...GiftedChat.append(previousMessages, message),
       ]);
@@ -665,14 +692,26 @@ function ChatScreen(): React.JSX.Element {
         try {
           let sessionId = serverSessionIdRef.current;
           if (!sessionId) {
-            console.log('[ChatScreen] onSend: no server session, auto-creating...');
-            sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+            console.log(
+              '[ChatScreen] onSend: no server session, auto-creating...'
+            );
+            sessionId = await nanoAgentRef.current!.createSession(
+              agentId,
+              serverAddressRef.current!
+            );
             serverSessionIdRef.current = sessionId;
             saveServerSessionId(sessionIdRef.current, sessionId);
             nanoAgentRef.current!.subscribe(sessionId);
-            console.log(`[ChatScreen] onSend: auto-created session ${sessionId}`);
+            console.log(
+              `[ChatScreen] onSend: auto-created session ${sessionId}`
+            );
           }
-          console.log(`[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(0, 80)}" sessionId=${sessionId}`);
+          console.log(
+            `[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(
+              0,
+              80
+            )}" sessionId=${sessionId}`
+          );
           await nanoAgentRef.current!.sendChatMessage(
             agentId,
             sessionId,
@@ -682,8 +721,10 @@ function ChatScreen(): React.JSX.Element {
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
-          setMessages(prevMessages => {
-            if (prevMessages.length === 0) return prevMessages;
+          setMessages((prevMessages) => {
+            if (prevMessages.length === 0) {
+              return prevMessages;
+            }
             const newMessages = [...prevMessages];
             newMessages[0] = {
               ...prevMessages[0],
@@ -700,11 +741,8 @@ function ChatScreen(): React.JSX.Element {
   // ==================== 文件 & 语音转录 ====================
   // NOTE: 这个需要留着, 虽然MVP可能暂时用不上
   const handleNewFileSelected = (files: FileInfo[]) => {
-    setSelectedFiles(prevFiles => {
-      return checkFileNumberLimit(
-        prevFiles,
-        files
-      );
+    setSelectedFiles((prevFiles) => {
+      return checkFileNumberLimit(prevFiles, files);
     });
   };
 
@@ -747,11 +785,11 @@ function ChatScreen(): React.JSX.Element {
           chatStatus !== ChatStatus.Init || selectedFiles.length > 0
         }
         /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
-        renderComposer={props => (
-            <Composer {...props} textInputStyle={styles.composerTextInput} />
+        renderComposer={(props) => (
+          <Composer {...props} textInputStyle={styles.composerTextInput} />
         )}
         /** 自定义发送按钮：根据状态切换发送/停止/语音/附件按钮 */
-        renderSend={props => (
+        renderSend={(props) => (
           <CustomSendComponent
             {...props}
             chatStatus={chatStatus}
@@ -759,8 +797,10 @@ function ChatScreen(): React.JSX.Element {
             selectedFiles={selectedFiles}
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
-              setMessages(prevMessages => {
-                if (prevMessages.length === 0) return prevMessages;
+              setMessages((prevMessages) => {
+                if (prevMessages.length === 0) {
+                  return prevMessages;
+                }
                 const newMessages = [...prevMessages];
                 if (
                   newMessages[0].text === textPlaceholder ||
@@ -772,7 +812,7 @@ function ChatScreen(): React.JSX.Element {
               });
               setChatStatus(ChatStatus.Complete);
             }}
-            onFileSelected={files => {
+            onFileSelected={(files) => {
               handleNewFileSelected(files);
             }}
           />
@@ -793,10 +833,10 @@ function ChatScreen(): React.JSX.Element {
           />
         )}
         /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
-        renderMessage={props => {
+        renderMessage={(props) => {
           // Find the index of the current message in the messages array
           const messageIndex = messages.findIndex(
-            msg => msg._id === props.currentMessage?._id
+            (msg) => msg._id === props.currentMessage?._id
           );
 
           const isLastAIMessage =
@@ -843,7 +883,7 @@ function ChatScreen(): React.JSX.Element {
         scrollToBottomComponent={CustomScrollToBottomComponent}
         scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
         /** 自定义输入框外层容器：控制背景色、边距等样式 */
-        renderInputToolbar={props => (
+        renderInputToolbar={(props) => (
           <InputToolbar
             {...props}
             containerStyle={styles.inputToolbarContainer}
@@ -887,7 +927,7 @@ function ChatScreen(): React.JSX.Element {
           },
         }}
         maxComposerHeight={isMac ? 360 : 200}
-        onInputTextChanged={text => {
+        onInputTextChanged={(text) => {
           if (
             isMac &&
             text.length > 0 &&

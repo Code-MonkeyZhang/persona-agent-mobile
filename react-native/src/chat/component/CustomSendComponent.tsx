@@ -59,12 +59,14 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
         containerStyle={styles.sendContainer}
         sendButtonProps={{
           onPress: handleSend,
-        }}>
+        }}
+      >
         <>
           {chatStatus === ChatStatus.Running && (
             <TouchableOpacity
               style={styles.stopContainer}
-              onPress={() => onStopPress()}>
+              onPress={() => onStopPress()}
+            >
               <View style={styles.circle} />
               <View style={styles.rectangle} />
             </TouchableOpacity>
@@ -84,10 +86,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
     );
   } else {
     return (
-      <CustomAddFileComponent
-        {...props}
-        onFileSelected={handleFileSelected}
-      />
+      <CustomAddFileComponent {...props} onFileSelected={handleFileSelected} />
     );
   }
 };

@@ -124,14 +124,14 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
   const handleDelete = () => {
     // update ui
-    setGroupChatHistory(prevHistory =>
-      prevHistory.filter(chat => chat.id !== deleteIdRef.current)
+    setGroupChatHistory((prevHistory) =>
+      prevHistory.filter((chat) => chat.id !== deleteIdRef.current)
     );
     sendEvent('deleteChat', { id: deleteIdRef.current });
 
     // update storage
     chatHistoryRef.current = chatHistoryRef.current.filter(
-      chat => chat.id !== deleteIdRef.current
+      (chat) => chat.id !== deleteIdRef.current
     );
     updateMessageList(chatHistoryRef.current);
     deleteMessagesBySessionId(deleteIdRef.current);
@@ -147,7 +147,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       <FlatList
         data={groupChatHistory}
         style={styles.flatList}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={
           <View>
             <TouchableOpacity
@@ -158,7 +158,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                   sessionId: -1,
                   tapIndex: -1,
                 });
-              }}>
+              }}
+            >
               <Image
                 source={
                   isDark
@@ -169,8 +170,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               />
               <Text style={styles.settingsText}>Chat</Text>
             </TouchableOpacity>
-
-
           </View>
         }
         renderItem={({ item }) => {
@@ -198,7 +197,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                     tapIndexRef.current += 1;
                   }, 0);
                 }}
-                onLongPress={gestureEvent => {
+                onLongPress={(gestureEvent) => {
                   trigger(HapticFeedbackTypes.notificationWarning);
                   gestureEvent.preventDefault();
                   setShowDialog(true);
@@ -207,8 +206,9 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 style={[
                   styles.touch,
                   isSelected &&
-                  (isMac ? styles.macTouchSelected : styles.touchSelected),
-                ]}>
+                    (isMac ? styles.macTouchSelected : styles.touchSelected),
+                ]}
+              >
                 <Text numberOfLines={1} style={styles.title}>
                   {item.title}
                 </Text>
@@ -222,7 +222,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         onPress={() => {
           setDrawerToPermanent();
           navigation.navigate('Settings');
-        }}>
+        }}
+      >
         <Image
           source={
             isDark

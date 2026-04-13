@@ -79,7 +79,7 @@ function SettingsScreen(): React.JSX.Element {
     setShowClearDialog(true);
     setClearCountdown(10);
     countdownIntervalRef.current = setInterval(() => {
-      setClearCountdown(prev => {
+      setClearCountdown((prev) => {
         if (prev <= 1) {
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
@@ -195,11 +195,11 @@ function SettingsScreen(): React.JSX.Element {
         setConnectionError('Unexpected response');
       }
     } catch (e) {
-      console.log(`[Settings] connection failed: ${e instanceof Error ? e.message : e}`);
-      setConnectionStatus('failed');
-      setConnectionError(
-        e instanceof Error ? e.message : 'Connection failed'
+      console.log(
+        `[Settings] connection failed: ${e instanceof Error ? e.message : e}`
       );
+      setConnectionStatus('failed');
+      setConnectionError(e instanceof Error ? e.message : 'Connection failed');
     }
   };
 
@@ -220,7 +220,8 @@ function SettingsScreen(): React.JSX.Element {
           ]}
           activeOpacity={0.7}
           onPress={handleConnect}
-          disabled={connectionStatus === 'connecting'}>
+          disabled={connectionStatus === 'connecting'}
+        >
           <Text style={styles.connectButtonText}>
             {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect'}
           </Text>
@@ -232,7 +233,8 @@ function SettingsScreen(): React.JSX.Element {
               connectionStatus === 'connecting' && { color: colors.info },
               connectionStatus === 'connected' && { color: colors.success },
               connectionStatus === 'failed' && { color: colors.error },
-            ]}>
+            ]}
+          >
             {connectionStatus === 'connecting' && 'Connecting...'}
             {connectionStatus === 'connected' && 'Connected'}
             {connectionStatus === 'failed' &&
@@ -252,7 +254,8 @@ function SettingsScreen(): React.JSX.Element {
         <TouchableOpacity
           style={styles.clearDataButton}
           activeOpacity={0.7}
-          onPress={handleOpenClearDialog}>
+          onPress={handleOpenClearDialog}
+        >
           <Text style={styles.clearDataButtonText}>Clear All Chat History</Text>
         </TouchableOpacity>
       </ScrollView>

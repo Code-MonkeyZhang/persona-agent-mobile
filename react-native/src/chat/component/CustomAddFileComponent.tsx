@@ -78,7 +78,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
     async (pickResults: DocumentPickerResponse[]): Promise<FileInfo[]> => {
       const files: FileInfo[] = [];
       await Promise.all(
-        pickResults.map(async pickResult => {
+        pickResults.map(async (pickResult) => {
           if (pickResult.name && pickResult.uri) {
             const fileName = getFileNameWithoutExtension(pickResult.name);
             const fileNameArr = pickResult.name.split('.');
@@ -271,7 +271,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
             includeBase64: false,
             includeExtra: true,
             presentationStyle: 'fullScreen',
-          }).then(async res => {
+          }).then(async (res) => {
             const files = await getFiles(res);
             if (files.length > 0) {
               onFileSelected(files);
@@ -285,7 +285,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
             includeBase64: false,
             includeExtra: true,
             assetRepresentationMode: 'current',
-          }).then(async res => {
+          }).then(async (res) => {
             const files = await getFiles(res);
             if (files.length > 0) {
               onFileSelected(files);
@@ -379,7 +379,7 @@ export const isVideoSupported = (): boolean => {
 const getFiles = async (res: ImagePickerResponse) => {
   const files: FileInfo[] = [];
   await Promise.all(
-    res.assets?.map(async media => {
+    res.assets?.map(async (media) => {
       if (media.fileName && media.uri) {
         const fileName = getFileNameWithoutExtension(media.fileName);
         const fileNameArr = media.fileName.split('.');
