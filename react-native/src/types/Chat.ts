@@ -33,26 +33,7 @@ export interface EventData {
 export type Model = {
   modelId: string;
   modelName: string;
-  modelTag?: string;
   uniqueId?: string;
-  apiKey?: string;
-  apiUrl?: string;
-};
-
-export enum ModelTag {
-  OpenAICompatible = 'OpenAICompatible',
-}
-
-export type OpenAICompatConfig = {
-  id: string;
-  baseUrl: string;
-  apiKey: string;
-  modelIds: string;
-  name?: string;
-};
-
-export type AllModel = {
-  textModel: Model[];
 };
 
 export enum ChatMode {
@@ -103,9 +84,7 @@ export interface SwiftChatMessage extends IMessage {
   citations?: Citation[];
 }
 
-interface SwiftChatUser extends User {
-  modelTag?: string;
-}
+interface SwiftChatUser extends User {}
 
 export interface Metrics {
   latencyMs: string;

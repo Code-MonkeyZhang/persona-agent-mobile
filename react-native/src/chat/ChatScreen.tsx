@@ -18,7 +18,6 @@ import {
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
 import { ColorScheme, useTheme } from '../theme';
-import { invokeOpenAIWithCallBack } from '../api/open-api';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
@@ -28,13 +27,11 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import {
   getMessagesBySessionId,
   getSessionId,
-  getTextModel,
   saveMessageList,
   saveMessages,
   getServerAddress,
   getServerAgentId,
   saveServerAgentId,
-  getServerSessionId,
   saveServerSessionId,
 } from '../storage/StorageUtils.ts';
 import { NanoAgentClient, fetchAgents } from '../api/nano-agent-api';
@@ -42,18 +39,12 @@ import {
   ChatMode,
   ChatStatus,
   FileInfo,
-  Metrics,
   SwiftChatMessage,
   Usage,
 } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
 import CustomSendComponent from './component/CustomSendComponent.tsx';
-import {
-  BedrockMessage,
-  getBedrockMessage,
-  getBedrockMessagesFromChatMessages,
-} from './util/BedrockMessageConvertor.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { isMac } from '../App.tsx';
@@ -76,8 +67,7 @@ const createBotMessage = () => {
     createdAt: new Date(),
     user: {
       _id: BOT_ID,
-      name: getTextModel().modelName,
-      modelTag: getTextModel().modelTag,
+      name: 'AI',
     },
   };
 };
@@ -105,16 +95,13 @@ function ChatScreen(): React.JSX.Element {
   const [userScrolled, setUserScrolled] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
-  const bedrockMessages = useRef<BedrockMessage[]>([]);
   const flatListRef = useRef<FlatList<SwiftChatMessage>>(null);
   const textInputViewRef = useRef<TextInput>(null);
   const sessionIdRef = useRef(initialSessionId || getSessionId() + 1);
-  const isCanceled = useRef(false);
   const { sendEvent, event, drawerType } = useAppContext();
   const sendEventRef = useRef(sendEvent);
   const inputTextRef = useRef('');
   const [hasInputText, setHasInputText] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
   const usageRef = useRef(usage);
@@ -197,7 +184,6 @@ function ChatScreen(): React.JSX.Element {
           console.log(`[ChatScreen] using agentId=${agentId}`);
 
           client.onStepComplete = (content, thinking) => {
-            if (isCanceled.current) return;
             setMessages(prevMessages => {
               if (prevMessages.length === 0) return prevMessages;
               const newMessages = [...prevMessages];
@@ -211,7 +197,6 @@ function ChatScreen(): React.JSX.Element {
           };
 
           client.onComplete = () => {
-            if (isCanceled.current) return;
             trigger(HapticFeedbackTypes.notificationSuccess);
             setChatStatus(ChatStatus.Complete);
           };
@@ -263,7 +248,6 @@ function ChatScreen(): React.JSX.Element {
       });
 
       setMessages([]);
-      bedrockMessages.current = [];
       setUsage(undefined);
 
       if (nanoAgentRef.current && serverAddressRef.current) {
@@ -335,7 +319,6 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       if (chatStatusRef.current === ChatStatus.Running) {
-        controllerRef.current?.abort();
         chatStatusRef.current = ChatStatus.Init;
         saveCurrentMessages();
       }
@@ -356,9 +339,6 @@ function ChatScreen(): React.JSX.Element {
       sessionIdRef.current = initialSessionId;
       setUsage((msg[0] as SwiftChatMessage).usage);
 
-      getBedrockMessagesFromChatMessages(msg).then(currentMessage => {
-        bedrockMessages.current = currentMessage;
-      });
       if (isMac) {
         setMessages(msg);
         setIsLoadingMessages(false);
@@ -385,7 +365,6 @@ function ChatScreen(): React.JSX.Element {
           id: sessionIdRef.current,
         });
         setUsage(undefined);
-        bedrockMessages.current = [];
         setMessages([]);
       }
     }
@@ -446,11 +425,6 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       saveCurrentMessages();
-      if (!nanoAgentRef.current) {
-        getBedrockMessage(messagesRef.current[0]).then(currentMsg => {
-          bedrockMessages.current.push(currentMsg);
-        });
-      }
       if (drawerTypeRef.current === 'permanent') {
         sendEventRef.current('updateHistory');
         setTimeout(() => {
@@ -596,130 +570,6 @@ function ChatScreen(): React.JSX.Element {
     []
   );
 
-  // ==================== AI 流式输出 ====================
-
-  /**
-   * 监听 messages 变化，当检测到新的 AI 占位消息（"..."）时：
-   * 1. 执行网页搜索（仅文字模式），获取搜索结果和引用
-   * 2. 调用 Bedrock API 进行流式输出，逐 token 更新 AI 回复
-   * 3. 计算延迟、速度等指标，完成后设置 ChatStatus.Complete
-   */
-
-  // invoke bedrock api
-  useEffect(() => {
-    if (nanoAgentRef.current) {
-      return;
-    }
-
-    const lastMessage = messages[0];
-    if (
-      lastMessage &&
-      lastMessage.user &&
-      lastMessage.user._id === BOT_ID &&
-      lastMessage.text === textPlaceholder &&
-      chatStatusRef.current === ChatStatus.Running
-    ) {
-
-      // Wrap in async function to support await
-      (async () => {
-        controllerRef.current = new AbortController();
-        isCanceled.current = false;
-
-        const userMessage = messages.length > 1 ? messages[1]?.text : null;
-
-        // Check if aborted
-        if (isCanceled.current) {
-          setChatStatus(ChatStatus.Init);
-          return;
-        }
-
-        const startRequestTime = new Date().getTime();
-        let latencyMs = 0;
-        let metrics: Metrics | undefined;
-
-        invokeOpenAIWithCallBack(
-          bedrockMessages.current,
-          null,
-          () => isCanceled.current,
-          controllerRef.current,
-          (
-            msg: string,
-            complete: boolean,
-            needStop: boolean,
-            usageInfo?: Usage,
-            reasoning?: string
-          ) => {
-            if (chatStatusRef.current !== ChatStatus.Running) {
-              return;
-            }
-            if (latencyMs === 0) {
-              latencyMs = new Date().getTime() - startRequestTime;
-            }
-            const updateMessage = () => {
-              if (usageInfo) {
-                setUsage(prevUsage => ({
-                  modelName: usageInfo.modelName,
-                  inputTokens:
-                    (prevUsage?.inputTokens || 0) + usageInfo.inputTokens,
-                  outputTokens:
-                    (prevUsage?.outputTokens || 0) + usageInfo.outputTokens,
-                  totalTokens:
-                    (prevUsage?.totalTokens || 0) + usageInfo.totalTokens,
-                }));
-                const renderSec =
-                  (new Date().getTime() - startRequestTime - latencyMs) / 1000;
-                const speed = usageInfo.outputTokens / renderSec;
-                if (!metrics && modeRef.current === ChatMode.Text) {
-                  metrics = {
-                    latencyMs: (latencyMs / 1000).toFixed(2),
-                    speed: speed.toFixed(speed > 100 ? 1 : 2),
-                  };
-                }
-              }
-              const previousMessage = messagesRef.current[0];
-              if (
-                previousMessage.text !== msg ||
-                previousMessage.reasoning !== reasoning ||
-                (!previousMessage.metrics && metrics)
-              ) {
-                setMessages(prevMessages => {
-                  const newMessages = [...prevMessages];
-                  newMessages[0] = {
-                    ...prevMessages[0],
-                    text:
-                      isCanceled.current &&
-                      (previousMessage.text === textPlaceholder ||
-                        previousMessage.text === '')
-                        ? 'Canceled...'
-                        : msg,
-                    reasoning: reasoning,
-                    metrics: metrics,
-                    citations: undefined,
-                  };
-                  return newMessages;
-                });
-              }
-            };
-            const setComplete = () => {
-              trigger(HapticFeedbackTypes.notificationSuccess);
-              setChatStatus(ChatStatus.Complete);
-            };
-            if (modeRef.current === ChatMode.Text) {
-              trigger(HapticFeedbackTypes.selection);
-              updateMessage();
-              if (complete) {
-                setComplete();
-              }
-            }
-            if (needStop) {
-              isCanceled.current = true;
-            }
-          }
-        ).then();
-      })(); // Close async IIFE
-    }
-  }, [messages]);
-
   // ==================== 发送消息 & 重新生成 ====================
   /** 重新生成：从指定用户消息重新发起 AI 回复，支持编辑后重发 */
   const regenerateFromUserMessage = useCallback(
@@ -727,26 +577,53 @@ function ChatScreen(): React.JSX.Element {
       setUserScrolled(false);
       trigger(HapticFeedbackTypes.impactMedium);
 
-      // Get all history messages after the user message
       const historyMessages = messagesRef.current.slice(userMessageIndex + 1);
 
       const userMessage: SwiftChatMessage = newText
         ? { ...messagesRef.current[userMessageIndex], text: newText }
         : messagesRef.current[userMessageIndex];
 
-      getBedrockMessagesFromChatMessages([
+      setChatStatus(ChatStatus.Running);
+      setMessages(_previousMessages => [
+        createBotMessage(),
         userMessage,
         ...historyMessages,
-      ]).then(historyBedrockMessages => {
-        bedrockMessages.current = historyBedrockMessages;
-        setChatStatus(ChatStatus.Running);
-        setMessages(_previousMessages => [
-          createBotMessage(),
-          userMessage,
-          ...historyMessages,
-        ]);
-        scrollToBottom();
-      });
+      ]);
+      scrollToBottom();
+
+      if (nanoAgentRef.current && serverAddressRef.current) {
+        const agentId = getServerAgentId();
+        (async () => {
+          try {
+            let sessionId = serverSessionIdRef.current;
+            if (!sessionId) {
+              sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+              serverSessionIdRef.current = sessionId;
+              saveServerSessionId(sessionIdRef.current, sessionId);
+              nanoAgentRef.current!.subscribe(sessionId);
+            }
+            const regeneratedText = newText ?? userMessage.text;
+            await nanoAgentRef.current!.sendChatMessage(
+              agentId,
+              sessionId,
+              regeneratedText,
+              serverAddressRef.current!
+            );
+          } catch (e) {
+            const errMsg = e instanceof Error ? e.message : String(e);
+            setMessages(prevMessages => {
+              if (prevMessages.length === 0) return prevMessages;
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                text: 'Error: ' + errMsg,
+              };
+              return newMessages;
+            });
+            setChatStatus(ChatStatus.Complete);
+          }
+        })();
+      }
     },
     []
   );
@@ -777,63 +654,46 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       scrollToBottom();
 
-      // nano-agent 路径：有服务器连接时走此分支
-      if (nanoAgentRef.current && serverAddressRef.current) {
-        // 先设为运行中，并在消息列表顶部插入一条空的 bot 占位消息
-        setChatStatus(ChatStatus.Running);
-        setMessages(previousMessages => [
-          createBotMessage(),
-          ...GiftedChat.append(previousMessages, message),
-        ]);
-        const agentId = getServerAgentId();
+      setChatStatus(ChatStatus.Running);
+      setMessages(previousMessages => [
+        createBotMessage(),
+        ...GiftedChat.append(previousMessages, message),
+      ]);
+      const agentId = getServerAgentId();
 
-        (async () => {
-          try {
-            let sessionId = serverSessionIdRef.current;
-            // 如果还没有 server session，自动创建并订阅 WebSocket
-            if (!sessionId) {
-              console.log('[ChatScreen] onSend: no server session, auto-creating...');
-              sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
-              serverSessionIdRef.current = sessionId;
-              // 把本地 sessionId 和 server sessionId 的映射存到 MMKV
-              saveServerSessionId(sessionIdRef.current, sessionId);
-              nanoAgentRef.current!.subscribe(sessionId);
-              console.log(`[ChatScreen] onSend: auto-created session ${sessionId}`);
-            }
-            // 发送聊天消息，回复会通过 WebSocket 的 step_complete/complete 事件回来
-            console.log(`[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(0, 80)}" sessionId=${sessionId}`);
-            await nanoAgentRef.current!.sendChatMessage(
-              agentId,
-              sessionId,
-              message[0].text,
-              serverAddressRef.current!
-            );
-          } catch (e) {
-            // 出错时把占位的 bot 消息文本替换为错误信息
-            const errMsg = e instanceof Error ? e.message : String(e);
-            console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
-            setMessages(prevMessages => {
-              if (prevMessages.length === 0) return prevMessages;
-              const newMessages = [...prevMessages];
-              newMessages[0] = {
-                ...prevMessages[0],
-                text: 'Error: ' + errMsg,
-              };
-              return newMessages;
-            });
-            setChatStatus(ChatStatus.Complete);
+      (async () => {
+        try {
+          let sessionId = serverSessionIdRef.current;
+          if (!sessionId) {
+            console.log('[ChatScreen] onSend: no server session, auto-creating...');
+            sessionId = await nanoAgentRef.current!.createSession(agentId, serverAddressRef.current!);
+            serverSessionIdRef.current = sessionId;
+            saveServerSessionId(sessionIdRef.current, sessionId);
+            nanoAgentRef.current!.subscribe(sessionId);
+            console.log(`[ChatScreen] onSend: auto-created session ${sessionId}`);
           }
-        })();
-      } else {
-        getBedrockMessage(message[0]).then(currentMsg => {
-          bedrockMessages.current.push(currentMsg);
-          setChatStatus(ChatStatus.Running);
-          setMessages(previousMessages => [
-            createBotMessage(),
-            ...GiftedChat.append(previousMessages, message),
-          ]);
-        });
-      }
+          console.log(`[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(0, 80)}" sessionId=${sessionId}`);
+          await nanoAgentRef.current!.sendChatMessage(
+            agentId,
+            sessionId,
+            message[0].text,
+            serverAddressRef.current!
+          );
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
+          setMessages(prevMessages => {
+            if (prevMessages.length === 0) return prevMessages;
+            const newMessages = [...prevMessages];
+            newMessages[0] = {
+              ...prevMessages[0],
+              text: 'Error: ' + errMsg,
+            };
+            return newMessages;
+          });
+          setChatStatus(ChatStatus.Complete);
+        }
+      })();
     }
   }, []);
 
@@ -899,23 +759,18 @@ function ChatScreen(): React.JSX.Element {
             selectedFiles={selectedFiles}
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
-              isCanceled.current = true;
-              if (nanoAgentRef.current) {
-                setMessages(prevMessages => {
-                  if (prevMessages.length === 0) return prevMessages;
-                  const newMessages = [...prevMessages];
-                  if (
-                    newMessages[0].text === textPlaceholder ||
-                    newMessages[0].text === ''
-                  ) {
-                    newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
-                  }
-                  return newMessages;
-                });
-                setChatStatus(ChatStatus.Complete);
-              } else {
-                controllerRef.current?.abort();
-              }
+              setMessages(prevMessages => {
+                if (prevMessages.length === 0) return prevMessages;
+                const newMessages = [...prevMessages];
+                if (
+                  newMessages[0].text === textPlaceholder ||
+                  newMessages[0].text === ''
+                ) {
+                  newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
+                }
+                return newMessages;
+              });
+              setChatStatus(ChatStatus.Complete);
             }}
             onFileSelected={files => {
               handleNewFileSelected(files);

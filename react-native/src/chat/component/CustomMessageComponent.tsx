@@ -41,7 +41,6 @@ import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
-import { getModelIcon, getModelTagByUserName } from '../../utils/ModelUtils.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
 import { useAppContext } from '../../history/AppProvider.tsx';
 import { useTheme, ColorScheme } from '../../theme';
@@ -225,13 +224,12 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         modelIcon: require('../../assets/openai_api.png'),
       };
     }
-    const user = currentMessage.user;
-    const userName = user.name ?? 'AI';
-    const currentModelTag = getModelTagByUserName(user.modelTag, userName);
-
-    const modelIcon = getModelIcon(currentModelTag, undefined, isDark);
-    return { userName, modelIcon };
-  }, [currentMessage, isDark]);
+    const userName = currentMessage.user.name ?? 'AI';
+    return {
+      userName,
+      modelIcon: require('../../assets/openai_api.png'),
+    };
+  }, [currentMessage]);
 
   const headerContent = useMemo(() => {
     return (
@@ -666,8 +664,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
         {!isUser.current &&
           chatStatus !== ChatStatus.Running &&
-          ((isLastAIMessage && chatStatus !== ChatStatus.Running) ||
-          forceShowButtons) &&
+          (isLastAIMessage || forceShowButtons) &&
           messageActionButtons}
         {currentMessage.image && (
           <CustomFileListComponent
