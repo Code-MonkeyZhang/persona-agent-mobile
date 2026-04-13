@@ -7,7 +7,6 @@ import {
   View,
 } from 'react-native';
 import LoadingSpinner from './LoadingSpinner';
-import { ChatMode } from '../../types/Chat.ts';
 import { useNavigation } from '@react-navigation/native';
 import { RouteParamList } from '../../types/RouteTypes.ts';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
@@ -17,7 +16,6 @@ const isAndroid = Platform.OS === 'android';
 type NavigationProp = DrawerNavigationProp<RouteParamList>;
 
 interface EmptyChatComponentProps {
-  chatMode: ChatMode;
   isLoadingMessages?: boolean;
 }
 

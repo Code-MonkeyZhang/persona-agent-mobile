@@ -9,10 +9,10 @@ export interface Citation {
 }
 
 export type Chat = {
-  id: number;
+  id: string;
   title: string;
-  mode: string;
-  timestamp: number;
+  updatedAt: number;
+  createdAt: number;
 };
 
 export enum ChatStatus {
@@ -22,12 +22,13 @@ export enum ChatStatus {
 }
 
 export interface EventData {
-  id?: number;
+  id?: number | string;
   url?: string;
   script?: string;
   data?: string;
   error?: string;
   code?: number;
+  title?: string;
 }
 
 export type Model = {
@@ -35,10 +36,6 @@ export type Model = {
   modelName: string;
   uniqueId?: string;
 };
-
-export enum ChatMode {
-  Text = 'Text',
-}
 
 export enum PressMode {
   Click = 'Click',

@@ -1,18 +1,12 @@
 import { Send, SendProps } from 'react-native-gifted-chat';
 import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import {
-  ChatMode,
-  ChatStatus,
-  FileInfo,
-  SwiftChatMessage,
-} from '../../types/Chat.ts';
+import { ChatStatus, FileInfo, SwiftChatMessage } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { useTheme, ColorScheme } from '../../theme';
 
 interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
   chatStatus: ChatStatus;
-  chatMode: ChatMode;
   selectedFiles: FileInfo[];
   onStopPress: () => void;
   onFileSelected: (files: FileInfo[]) => void;
@@ -20,7 +14,6 @@ interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
 
 const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   chatStatus,
-  chatMode,
   selectedFiles,
   onStopPress,
   onFileSelected,
@@ -47,10 +40,9 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   );
 
   const isShowSending =
-    chatMode === ChatMode.Text &&
-    ((text && text.length > 0) ||
-      selectedFiles.length > 0 ||
-      chatStatus === ChatStatus.Running);
+    (text && text.length > 0) ||
+    selectedFiles.length > 0 ||
+    chatStatus === ChatStatus.Running;
 
   if (isShowSending) {
     return (

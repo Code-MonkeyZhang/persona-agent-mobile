@@ -1,5 +1,10 @@
+import uuid from 'uuid';
+import type { SwiftChatMessage } from '../types/Chat.ts';
+
 /** 日志标签前缀 */
 const TAG = '[NanoAgent]';
+
+const BOT_ID = 2;
 
 /** nano-agent 服务器通过 WebSocket 下发的所有消息类型 */
 type ServerMessage =
@@ -91,6 +96,43 @@ function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
       reject(new Error('Request timeout'));
     };
     xhr.send(JSON.stringify(body));
+  });
+}
+
+/**
+ * HTTP DELETE，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
+ * @param url 完整请求地址
+ * @returns 响应体文本
+ */
+function httpDelete(url: string): Promise<string> {
+  console.log(`${TAG} DELETE ${url}`);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.timeout = 10000;
+    xhr.open('DELETE', url, true);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.onload = () => {
+      console.log(
+        `${TAG} DELETE ${url} → ${xhr.status} ${xhr.responseText.substring(
+          0,
+          200
+        )}`
+      );
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.responseText);
+      } else {
+        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
+      }
+    };
+    xhr.onerror = () => {
+      console.log(`${TAG} DELETE ${url} → network error`);
+      reject(new Error('Network error'));
+    };
+    xhr.ontimeout = () => {
+      console.log(`${TAG} DELETE ${url} → timeout`);
+      reject(new Error('Request timeout'));
+    };
+    xhr.send();
   });
 }
 
@@ -351,4 +393,105 @@ export async function fetchAgents(
       .join(', ')}`
   );
   return data.agents;
+}
+
+interface SessionMeta {
+  id: string;
+  agentId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+}
+
+interface Session extends SessionMeta {
+  messages: ServerChatMessage[];
+}
+
+interface ServerChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content?: string;
+  thinking?: string;
+}
+
+/**
+ * 获取指定 agent 的所有会话列表，按 updatedAt 降序。
+ */
+export async function fetchSessions(
+  serverAddress: string,
+  agentId: string
+): Promise<SessionMeta[]> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { sessions: SessionMeta[] };
+  console.log(`${TAG} fetchSessions → ${data.sessions.length} sessions`);
+  return data.sessions;
+}
+
+/**
+ * 获取指定会话的完整消息列表。
+ */
+export async function fetchSessionMessages(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string
+): Promise<Session> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { session: Session };
+  console.log(
+    `${TAG} fetchSessionMessages → ${data.session.messages.length} messages`
+  );
+  return data.session;
+}
+
+/**
+ * 删除指定会话。
+ */
+export async function deleteSession(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string
+): Promise<void> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
+  await httpDelete(url);
+  console.log(`${TAG} deleteSession → ${sessionId}`);
+}
+
+/**
+ * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 SwiftChatMessage[]。
+ *
+ * 处理逻辑：过滤 system 消息 → 为每条消息生成 uuid → 反转为倒序（GiftedChat 要求）。
+ * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条消息间隔 1 秒近似处理。
+ */
+export function convertToSwiftChatMessages(
+  serverMessages: ServerChatMessage[],
+  sessionCreatedAt: number
+): SwiftChatMessage[] {
+  const result: SwiftChatMessage[] = [];
+  for (const msg of serverMessages) {
+    if (msg.role === 'system') {
+      continue;
+    }
+
+    if (msg.role === 'user') {
+      const text = typeof msg.content === 'string' ? msg.content : '';
+      result.push({
+        _id: uuid.v4(),
+        text,
+        createdAt: new Date(sessionCreatedAt + result.length * 1000),
+        user: { _id: 1 },
+      });
+    } else if (msg.role === 'assistant') {
+      const text = msg.content || '';
+      result.push({
+        _id: uuid.v4(),
+        text,
+        reasoning: msg.thinking,
+        createdAt: new Date(sessionCreatedAt + result.length * 1000),
+        user: { _id: BOT_ID, name: 'AI' },
+      });
+    }
+  }
+  return result.reverse();
 }

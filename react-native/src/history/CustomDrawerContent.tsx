@@ -14,12 +14,8 @@ import {
   useDrawerStatus,
 } from '@react-navigation/drawer';
 import { Chat } from '../types/Chat.ts';
-import {
-  deleteMessagesBySessionId,
-  getMessageList,
-  getSessionId,
-  updateMessageList,
-} from '../storage/StorageUtils.ts';
+import { deleteSession, fetchSessions } from '../api/nano-agent-api.ts';
+import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import Dialog from 'react-native-dialog';
 import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
@@ -44,11 +40,11 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const { colors, isDark } = useTheme();
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
   const groupChatHistoryRef = useRef(groupChatHistory);
-  const chatHistoryRef = useRef(getMessageList());
+  const chatHistoryRef = useRef<Chat[]>([]);
   const [showDialog, setShowDialog] = useState<boolean>(false);
-  const deleteIdRef = useRef<number>(0);
+  const deleteIdRef = useRef<string>('');
   const drawerStatus = useDrawerStatus();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const tapIndexRef = useRef<number>(1);
   const isFirstRenderRef = useRef<boolean>(true);
   const isSlideDrawerEnabledRef = useRef<boolean>(false);
@@ -69,7 +65,17 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     if (event?.event === 'updateHistory') {
       handleUpdateHistory();
     } else if (event?.event === 'updateHistorySelectedId') {
-      setSelectedId(event.params?.id ?? null);
+      setSelectedId(event.params?.id != null ? String(event.params.id) : null);
+    } else if (event?.event === 'titleUpdated') {
+      const { id, title } = event.params ?? {};
+      if (id != null && title) {
+        const idStr = String(id);
+        setGroupChatHistory((prev) =>
+          prev.map((chat) =>
+            chat.id === idStr ? { ...chat, title: title as string } : chat
+          )
+        );
+      }
     }
   }, [event]);
 
@@ -96,12 +102,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     if (drawerStatus === 'open') {
       trigger(HapticFeedbackTypes.soft);
       trigger(HapticFeedbackTypes.selection);
-      if (
-        groupChatHistoryRef.current.length > 1 &&
-        getSessionId() === groupChatHistoryRef.current[1].id
-      ) {
-        return;
-      }
       handleUpdateHistory();
     } else {
       trigger(HapticFeedbackTypes.selection);
@@ -109,11 +109,30 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     }
   }, [drawerStatus, navigation]);
 
-  const handleUpdateHistory = () => {
-    const messageList = getMessageList();
-    chatHistoryRef.current = messageList;
-    const flatListData = groupMessagesByDate(messageList);
-    setGroupChatHistory(flatListData);
+  /**
+   * 从服务器拉取会话列表并更新 UI。
+   * 会话已按 updatedAt 降序排列，直接映射为 Chat[] 即可。
+   */
+  const handleUpdateHistory = async () => {
+    const address = getServerAddress();
+    const agentId = getServerAgentId();
+    if (!address || !agentId) {
+      return;
+    }
+    try {
+      const sessions = await fetchSessions(address, agentId);
+      const chatList: Chat[] = sessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        updatedAt: s.updatedAt,
+        createdAt: s.createdAt,
+      }));
+      chatHistoryRef.current = chatList;
+      const flatListData = groupMessagesByDate(chatList);
+      setGroupChatHistory(flatListData);
+    } catch (e) {
+      console.log(`[Drawer] fetchSessions failed: ${e}`);
+    }
   };
 
   const setDrawerToPermanent = () => {
@@ -122,22 +141,28 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     }
   };
 
+  /**
+   * 删除会话：先乐观更新 UI，再调服务器 API，失败时回滚。
+   */
   const handleDelete = () => {
-    // update ui
-    setGroupChatHistory((prevHistory) =>
-      prevHistory.filter((chat) => chat.id !== deleteIdRef.current)
-    );
-    sendEvent('deleteChat', { id: deleteIdRef.current });
+    const targetId = deleteIdRef.current;
 
-    // update storage
-    chatHistoryRef.current = chatHistoryRef.current.filter(
-      (chat) => chat.id !== deleteIdRef.current
-    );
-    updateMessageList(chatHistoryRef.current);
-    deleteMessagesBySessionId(deleteIdRef.current);
+    // 乐观更新 UI
+    setGroupChatHistory((prev) => prev.filter((chat) => chat.id !== targetId));
+    sendEvent('deleteChat', { id: targetId });
+
+    const address = getServerAddress();
+    const agentId = getServerAgentId();
+    if (address && agentId) {
+      deleteSession(address, agentId, targetId).catch(() => {
+        // 失败回滚：重新拉取完整列表
+        console.log('[Drawer] deleteSession failed, reloading');
+        handleUpdateHistory();
+      });
+    }
 
     trigger(HapticFeedbackTypes.soft);
-    deleteIdRef.current = 0;
+    deleteIdRef.current = '';
   };
 
   const styles = createStyles(colors);
@@ -147,7 +172,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       <FlatList
         data={groupChatHistory}
         style={styles.flatList}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View>
             <TouchableOpacity
@@ -155,7 +180,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               onPress={() => {
                 setDrawerToPermanent();
                 navigation.navigate('Bedrock', {
-                  sessionId: -1,
+                  sessionId: '',
                   tapIndex: -1,
                 });
               }}
@@ -173,7 +198,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           </View>
         }
         renderItem={({ item }) => {
-          if (item.id < 0) {
+          if (item.id.startsWith('-')) {
             return (
               <View style={styles.sectionContainer}>
                 <View style={styles.sectionDivider} />
@@ -192,7 +217,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                     navigation.navigate('Bedrock', {
                       sessionId: item.id,
                       tapIndex: tapIndexRef.current,
-                      mode: item.mode,
                     });
                     tapIndexRef.current += 1;
                   }, 0);

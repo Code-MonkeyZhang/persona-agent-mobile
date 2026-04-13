@@ -30,18 +30,17 @@ import {
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
-  getMessagesBySessionId,
-  getSessionId,
-  saveMessageList,
-  saveMessages,
   getServerAddress,
   getServerAgentId,
   saveServerAgentId,
-  saveServerSessionId,
 } from '../storage/StorageUtils.ts';
-import { NanoAgentClient, fetchAgents } from '../api/nano-agent-api';
 import {
-  ChatMode,
+  NanoAgentClient,
+  fetchAgents,
+  fetchSessionMessages,
+  convertToSwiftChatMessages,
+} from '../api/nano-agent-api.ts';
+import {
   ChatStatus,
   FileInfo,
   SwiftChatMessage,
@@ -78,7 +77,6 @@ const createBotMessage = () => {
 };
 const textPlaceholder = '...';
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
-let currentMode = ChatMode.Text;
 
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
@@ -88,7 +86,6 @@ function ChatScreen(): React.JSX.Element {
   const route = useRoute<ChatScreenRouteProp>();
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
-  const modeRef = useRef(currentMode);
 
   // ==================== 状态声明 ====================
   const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
@@ -103,7 +100,8 @@ function ChatScreen(): React.JSX.Element {
   const messagesRef = useRef(messages);
   const flatListRef = useRef<FlatList<SwiftChatMessage>>(null);
   const textInputViewRef = useRef<TextInput>(null);
-  const sessionIdRef = useRef(initialSessionId || getSessionId() + 1);
+  /** 服务器会话 UUID，空字符串表示尚未创建 */
+  const sessionIdRef = useRef(initialSessionId || '');
   const { sendEvent, event, drawerType } = useAppContext();
   const sendEventRef = useRef(sendEvent);
   const inputTextRef = useRef('');
@@ -118,8 +116,6 @@ function ChatScreen(): React.JSX.Element {
   const isNewChatRef = useRef(!initialSessionId);
   /** 当前活跃的 NanoAgentClient 实例，未连接时为 null */
   const nanoAgentRef = useRef<NanoAgentClient | null>(null);
-  /** 当前聊天对应的服务器会话 UUID，尚未创建时为 null */
-  const serverSessionIdRef = useRef<string | null>(null);
   /** 服务器地址缓存，从 MMKV 加载 */
   const serverAddressRef = useRef(getServerAddress());
 
@@ -228,8 +224,11 @@ function ChatScreen(): React.JSX.Element {
             setChatStatus(ChatStatus.Complete);
           };
 
-          client.onTitleUpdated = (_sessionId, _title) => {
-            // future: update local messageList title
+          /**
+           * 服务器更新会话标题时，通过 AppContext 跨组件通信通知 Drawer 更新。
+           */
+          client.onTitleUpdated = (sessionId, title) => {
+            sendEventRef.current('titleUpdated', { id: sessionId, title });
           };
 
           await client.connect(address);
@@ -256,16 +255,16 @@ function ChatScreen(): React.JSX.Element {
   );
 
   // ==================== 新建聊天 & 导航栏 ====================
-  // start new chat
+  /**
+   * 开始新聊天：置空会话 ID，清空消息，然后在服务器上创建新会话。
+   * 创建完成后更新 sessionIdRef 并订阅 WebSocket 事件。
+   */
   const startNewChat = useRef(
     useCallback(() => {
       trigger(HapticFeedbackTypes.impactMedium);
-      sessionIdRef.current = getSessionId() + 1;
+      sessionIdRef.current = '';
       isNewChatRef.current = true;
-      serverSessionIdRef.current = null;
-      sendEventRef.current('updateHistorySelectedId', {
-        id: sessionIdRef.current,
-      });
+      sendEventRef.current('updateHistorySelectedId', { id: '' });
 
       setMessages([]);
       setUsage(undefined);
@@ -273,24 +272,17 @@ function ChatScreen(): React.JSX.Element {
       if (nanoAgentRef.current && serverAddressRef.current) {
         const agentId = getServerAgentId();
         if (agentId) {
-          console.log(
-            `[ChatScreen] startNewChat: creating server session, agentId=${agentId}`
-          );
           nanoAgentRef.current
             .createSession(agentId, serverAddressRef.current)
-            .then((serverSessionId) => {
-              serverSessionIdRef.current = serverSessionId;
-              saveServerSessionId(sessionIdRef.current, serverSessionId);
-              nanoAgentRef.current?.subscribe(serverSessionId);
-              console.log(
-                `[ChatScreen] startNewChat: server session created, localId=${sessionIdRef.current} serverId=${serverSessionId}`
-              );
+            .then((newSessionId) => {
+              sessionIdRef.current = newSessionId;
+              sendEventRef.current('updateHistorySelectedId', {
+                id: newSessionId,
+              });
+              nanoAgentRef.current?.subscribe(newSessionId);
             })
             .catch((e: Error) => {
-              console.log(
-                `[ChatScreen] startNewChat: session creation failed: ${e.message}`
-              );
-              // session creation failed
+              console.log(`[ChatScreen] createSession failed: ${e.message}`);
             });
         }
       }
@@ -301,7 +293,6 @@ function ChatScreen(): React.JSX.Element {
 
   // header text and right button click
   React.useLayoutEffect(() => {
-    currentMode = ChatMode.Text;
     const headerOptions: HeaderOptions = {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
@@ -342,37 +333,46 @@ function ChatScreen(): React.JSX.Element {
       }
       if (chatStatusRef.current === ChatStatus.Running) {
         chatStatusRef.current = ChatStatus.Init;
-        saveCurrentMessages();
       }
-      modeRef.current = ChatMode.Text;
       setSelectedFiles([]);
       setChatStatus(ChatStatus.Init);
       sendEventRef.current('');
       setUsage(undefined);
-      if (initialSessionId === 0 || initialSessionId === -1) {
+      if (initialSessionId === '' || initialSessionId === '-1') {
         startNewChat.current();
         return;
       }
-      // click from history
+      // click from history — 从服务器拉取消息
       setMessages([]);
       isNewChatRef.current = false;
       setIsLoadingMessages(true);
-      const msg = getMessagesBySessionId(initialSessionId);
       sessionIdRef.current = initialSessionId;
-      setUsage((msg[0] as SwiftChatMessage).usage);
 
-      if (isMac) {
-        setMessages(msg);
-        setIsLoadingMessages(false);
-        scrollToBottom();
-        showKeyboard();
-      } else {
-        setTimeout(() => {
-          setMessages(msg);
+      (async () => {
+        try {
+          const agentId = getServerAgentId();
+          const session = await fetchSessionMessages(
+            serverAddressRef.current,
+            agentId,
+            initialSessionId
+          );
+          const swiftMessages = convertToSwiftChatMessages(
+            session.messages,
+            session.createdAt
+          );
+          setMessages(swiftMessages);
+          nanoAgentRef.current?.subscribe(initialSessionId);
+        } catch (e) {
+          console.log(`[ChatScreen] loadSession failed: ${e}`);
+        } finally {
           setIsLoadingMessages(false);
-          scrollToBottom();
-        }, 200);
-      }
+          if (isMac) {
+            scrollToBottom();
+          } else {
+            setTimeout(scrollToBottom, 200);
+          }
+        }
+      })();
     }
   }, [initialSessionId, tapIndex]);
 
@@ -382,9 +382,9 @@ function ChatScreen(): React.JSX.Element {
     if (event?.event === 'deleteChat' && event.params) {
       const { id } = event.params;
       if (sessionIdRef.current === id) {
-        sessionIdRef.current = getSessionId() + 1;
+        sessionIdRef.current = '';
         sendEventRef.current('updateHistorySelectedId', {
-          id: sessionIdRef.current,
+          id: '',
         });
         setUsage(undefined);
         setMessages([]);
@@ -439,14 +439,13 @@ function ChatScreen(): React.JSX.Element {
     };
   }, []);
 
-  // ==================== 消息完成 & 保存 ====================
-  // handle message complete update bedrockMessage and saveMessage
+  // ==================== 消息完成 ====================
+  // handle message complete — 通知 drawer 刷新列表
   useEffect(() => {
     if (chatStatus === ChatStatus.Complete) {
       if (messagesRef.current.length <= 1) {
         return;
       }
-      saveCurrentMessages();
       if (drawerTypeRef.current === 'permanent') {
         sendEventRef.current('updateHistory');
         setTimeout(() => {
@@ -463,51 +462,13 @@ function ChatScreen(): React.JSX.Element {
     }
   }, [chatStatus]);
 
-  // app goes to background and save running messages.
+  // app goes to background — 不再保存消息（server-first）
   useEffect(() => {
-    const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
-        if (chatStatusRef.current === ChatStatus.Running) {
-          saveCurrentMessages();
-        }
-      }
-    };
-    const subscription = AppState.addEventListener(
-      'change',
-      handleAppStateChange
-    );
+    const subscription = AppState.addEventListener('change', () => {});
     return () => {
       subscription.remove();
     };
   }, []);
-
-  // save the current message
-  const saveCurrentMessages = () => {
-    if (messagesRef.current.length === 0) {
-      return;
-    }
-    const currentSessionId = getSessionId();
-    if (isNewChatRef.current) {
-      if (sessionIdRef.current <= currentSessionId) {
-        //update sessionID
-        sessionIdRef.current = currentSessionId + 1;
-        setTimeout(() => {
-          sendEventRef.current('updateHistorySelectedId', {
-            id: sessionIdRef.current,
-          });
-        }, 100);
-      }
-    }
-    saveMessages(sessionIdRef.current, messagesRef.current, usageRef.current!);
-    if (isNewChatRef.current) {
-      saveMessageList(
-        sessionIdRef.current,
-        messagesRef.current[messagesRef.current.length - 1],
-        modeRef.current
-      );
-      isNewChatRef.current = false;
-    }
-  };
 
   // ==================== 滚动控制 ====================
   const { width: screenWidth, height: screenHeight } = screenDimensions;
@@ -617,14 +578,13 @@ function ChatScreen(): React.JSX.Element {
         const agentId = getServerAgentId();
         (async () => {
           try {
-            let sessionId = serverSessionIdRef.current;
+            let sessionId = sessionIdRef.current;
             if (!sessionId) {
               sessionId = await nanoAgentRef.current!.createSession(
                 agentId,
                 serverAddressRef.current!
               );
-              serverSessionIdRef.current = sessionId;
-              saveServerSessionId(sessionIdRef.current, sessionId);
+              sessionIdRef.current = sessionId;
               nanoAgentRef.current!.subscribe(sessionId);
             }
             const regeneratedText = newText ?? userMessage.text;
@@ -669,9 +629,7 @@ function ChatScreen(): React.JSX.Element {
 
     if (message[0]?.text || files.length > 0) {
       if (!message[0]?.text) {
-        if (modeRef.current === ChatMode.Text) {
-          message[0].text = getFileTypeSummary(files);
-        }
+        message[0].text = getFileTypeSummary(files);
       }
 
       if (selectedFilesRef.current.length > 0) {
@@ -690,7 +648,7 @@ function ChatScreen(): React.JSX.Element {
 
       (async () => {
         try {
-          let sessionId = serverSessionIdRef.current;
+          let sessionId = sessionIdRef.current;
           if (!sessionId) {
             console.log(
               '[ChatScreen] onSend: no server session, auto-creating...'
@@ -699,8 +657,7 @@ function ChatScreen(): React.JSX.Element {
               agentId,
               serverAddressRef.current!
             );
-            serverSessionIdRef.current = sessionId;
-            saveServerSessionId(sessionIdRef.current, sessionId);
+            sessionIdRef.current = sessionId;
             nanoAgentRef.current!.subscribe(sessionId);
             console.log(
               `[ChatScreen] onSend: auto-created session ${sessionId}`
@@ -776,24 +733,20 @@ function ChatScreen(): React.JSX.Element {
         inverted={true}
         /** 空聊天页面：无消息时显示的欢迎界面 */
         renderChatEmpty={() => (
-          <EmptyChatComponent
-            chatMode={modeRef.current}
-            isLoadingMessages={isLoadingMessages}
-          />
+          <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
         )}
         alwaysShowSend={
           chatStatus !== ChatStatus.Init || selectedFiles.length > 0
         }
-        /** 自定义输入框：Nova Sonic 语音模式显示音频波形，否则显示普通文本输入框 */
+        /** 自定义输入框：显示普通文本输入框 */
         renderComposer={(props) => (
           <Composer {...props} textInputStyle={styles.composerTextInput} />
         )}
-        /** 自定义发送按钮：根据状态切换发送/停止/语音/附件按钮 */
+        /** 自定义发送按钮：根据状态切换发送/停止/附件按钮 */
         renderSend={(props) => (
           <CustomSendComponent
             {...props}
             chatStatus={chatStatus}
-            chatMode={ChatMode.Text}
             selectedFiles={selectedFiles}
             onStopPress={() => {
               trigger(HapticFeedbackTypes.notificationWarning);
@@ -817,7 +770,7 @@ function ChatScreen(): React.JSX.Element {
             }}
           />
         )}
-        /** 自定义底部工具栏：附件文件列表、System Prompt 选择器、聊天模式切换 */
+        /** 自定义底部工具栏：附件文件列表 */
         renderChatFooter={() => (
           <CustomChatFooter
             files={selectedFiles}

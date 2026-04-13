@@ -18,48 +18,48 @@ export function groupMessagesByDate(messages: Chat[]) {
   const ago4week = todayTimestamp - 34 * oneDayMs;
   let currentMonthTimestamp = 0;
   let currentMonthTitle = '';
-  messages.forEach(message => {
+  messages.forEach((message) => {
     let groupTitle = '';
-    if (message.timestamp >= todayTimestamp) {
+    if (message.updatedAt >= todayTimestamp) {
       groupTitle = 'Today';
-    } else if (message.timestamp >= yesterday) {
+    } else if (message.updatedAt >= yesterday) {
       groupTitle = 'Yesterday';
-    } else if (message.timestamp >= ago2days) {
+    } else if (message.updatedAt >= ago2days) {
       groupTitle = '2 days ago';
-    } else if (message.timestamp >= ago3days) {
+    } else if (message.updatedAt >= ago3days) {
       groupTitle = '3 days ago';
-    } else if (message.timestamp >= ago4days) {
+    } else if (message.updatedAt >= ago4days) {
       groupTitle = '4 days ago';
-    } else if (message.timestamp >= ago5days) {
+    } else if (message.updatedAt >= ago5days) {
       groupTitle = '5 days ago';
-    } else if (message.timestamp >= ago6days) {
+    } else if (message.updatedAt >= ago6days) {
       groupTitle = '6 days ago';
-    } else if (message.timestamp >= lastWeek) {
+    } else if (message.updatedAt >= lastWeek) {
       groupTitle = 'Last week';
-    } else if (message.timestamp >= ago2week) {
+    } else if (message.updatedAt >= ago2week) {
       groupTitle = '2 weeks ago';
-    } else if (message.timestamp >= ago3week) {
+    } else if (message.updatedAt >= ago3week) {
       groupTitle = '3 weeks ago';
-    } else if (message.timestamp >= ago4week) {
+    } else if (message.updatedAt >= ago4week) {
       groupTitle = '4 weeks ago';
     } else {
       if (
         currentMonthTimestamp !== 0 &&
-        message.timestamp >= currentMonthTimestamp
+        message.updatedAt >= currentMonthTimestamp
       ) {
         groupTitle = currentMonthTitle;
       } else {
-        groupTitle = formatTimestampToYearMonth(message.timestamp);
+        groupTitle = formatTimestampToYearMonth(message.updatedAt);
         currentMonthTitle = groupTitle;
         currentMonthTimestamp = getFirstDayOfMonthTimestamp(groupTitle);
       }
     }
     if (!groupTitleSet.has(groupTitle)) {
       groupChat.push({
-        id: -(groupTitleSet.size + 1),
-        mode: '',
-        timestamp: 0,
+        id: String(-(groupTitleSet.size + 1)),
         title: groupTitle,
+        updatedAt: 0,
+        createdAt: 0,
       });
       groupTitleSet.add(groupTitle);
     }
