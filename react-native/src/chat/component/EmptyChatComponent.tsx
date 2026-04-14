@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useAppContext } from '../../history/AppProvider';
+import React from 'react';
 import {
   Text,
   Platform,
@@ -8,38 +7,23 @@ import {
   View,
 } from 'react-native';
 import LoadingSpinner from './LoadingSpinner';
-import { ChatMode } from '../../types/Chat.ts';
 import { useNavigation } from '@react-navigation/native';
 import { RouteParamList } from '../../types/RouteTypes.ts';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { getTextModel } from '../../storage/StorageUtils.ts';
 import { useTheme, ColorScheme } from '../../theme';
 
 const isAndroid = Platform.OS === 'android';
 type NavigationProp = DrawerNavigationProp<RouteParamList>;
 
 interface EmptyChatComponentProps {
-  chatMode: ChatMode;
   isLoadingMessages?: boolean;
 }
 
 export const EmptyChatComponent = ({
-  chatMode,
   isLoadingMessages = false,
 }: EmptyChatComponentProps): React.ReactElement => {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { event } = useAppContext();
-  const [currentTextModel, setCurrentTextModel] = useState(getTextModel());
-
-  // Listen for model change events
-  useEffect(() => {
-    if (event?.event === 'modelChanged') {
-      setCurrentTextModel(getTextModel());
-    }
-  }, [event]);
-
-  const modelName = currentTextModel.modelName;
 
   const styles = createStyles(colors);
 
@@ -48,7 +32,8 @@ export const EmptyChatComponent = ({
       <TouchableOpacity
         onPress={() => {
           navigation.navigate('Settings', {});
-        }}>
+        }}
+      >
         {isLoadingMessages ? (
           <LoadingSpinner
             visible={true}
@@ -57,7 +42,7 @@ export const EmptyChatComponent = ({
             source={require('../../assets/loading.png')}
           />
         ) : (
-          <Text style={styles.greetingText}>Hi, I'm {modelName}</Text>
+          <Text style={styles.greetingText}>Hi, I&apos;m AI</Text>
         )}
       </TouchableOpacity>
     </View>

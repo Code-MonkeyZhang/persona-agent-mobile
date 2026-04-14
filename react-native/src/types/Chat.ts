@@ -9,10 +9,10 @@ export interface Citation {
 }
 
 export type Chat = {
-  id: number;
+  id: string;
   title: string;
-  mode: string;
-  timestamp: number;
+  updatedAt: number;
+  createdAt: number;
 };
 
 export enum ChatStatus {
@@ -22,42 +22,20 @@ export enum ChatStatus {
 }
 
 export interface EventData {
-  id?: number;
+  id?: number | string;
   url?: string;
   script?: string;
   data?: string;
   error?: string;
   code?: number;
+  title?: string;
 }
 
 export type Model = {
   modelId: string;
   modelName: string;
-  modelTag?: string;
   uniqueId?: string;
-  apiKey?: string;
-  apiUrl?: string;
 };
-
-export enum ModelTag {
-  OpenAICompatible = 'OpenAICompatible',
-}
-
-export type OpenAICompatConfig = {
-  id: string;
-  baseUrl: string;
-  apiKey: string;
-  modelIds: string;
-  name?: string;
-};
-
-export type AllModel = {
-  textModel: Model[];
-};
-
-export enum ChatMode {
-  Text = 'Text',
-}
 
 export enum PressMode {
   Click = 'Click',
@@ -103,9 +81,7 @@ export interface SwiftChatMessage extends IMessage {
   citations?: Citation[];
 }
 
-interface SwiftChatUser extends User {
-  modelTag?: string;
-}
+interface SwiftChatUser extends User {}
 
 export interface Metrics {
   latencyMs: string;

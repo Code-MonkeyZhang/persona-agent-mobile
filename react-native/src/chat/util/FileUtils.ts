@@ -86,12 +86,14 @@ export const checkFileNumberLimit = (
   prevFiles: FileInfo[],
   newFiles: FileInfo[]
 ) => {
-  const existingImages = prevFiles.filter(file => file.type === FileType.image);
-  const existingDocs = prevFiles.filter(
-    file => file.type === FileType.document
+  const existingImages = prevFiles.filter(
+    (file) => file.type === FileType.image
   );
-  const newImages = newFiles.filter(file => file.type === FileType.image);
-  const newDocs = newFiles.filter(file => file.type === FileType.document);
+  const existingDocs = prevFiles.filter(
+    (file) => file.type === FileType.document
+  );
+  const newImages = newFiles.filter((file) => file.type === FileType.image);
+  const newDocs = newFiles.filter((file) => file.type === FileType.document);
 
   const totalImages = existingImages.length + newImages.length;
   const totalDocs = existingDocs.length + newDocs.length;
@@ -108,9 +110,9 @@ export const checkFileNumberLimit = (
       return prevFiles;
     }
     const existingVideos = prevFiles.filter(
-      file => file.type === FileType.video
+      (file) => file.type === FileType.video
     ).length;
-    const newVideos = newFiles.filter(file => file.type === FileType.video);
+    const newVideos = newFiles.filter((file) => file.type === FileType.video);
 
     if (existingVideos + newVideos.length > MAX_NOVA_VIDEOS) {
       showInfo(`Maximum ${MAX_NOVA_VIDEOS} video allowed`);
@@ -118,9 +120,9 @@ export const checkFileNumberLimit = (
 
     const filteredNewFiles =
       existingVideos >= MAX_NOVA_VIDEOS
-        ? newFiles.filter(file => file.type !== FileType.video)
+        ? newFiles.filter((file) => file.type !== FileType.video)
         : newFiles.filter(
-            file =>
+            (file) =>
               file.type !== FileType.video ||
               newVideos.indexOf(file) < MAX_NOVA_VIDEOS - existingVideos
           );
@@ -159,9 +161,9 @@ const isNova = (): boolean => {
 };
 
 export const isAllFileReady = (files: FileInfo[]) => {
-  const videos = files.filter(file => file.type === FileType.video);
+  const videos = files.filter((file) => file.type === FileType.video);
   if (videos.length > 0) {
-    return videos.filter(video => video.videoUrl === undefined).length === 0;
+    return videos.filter((video) => video.videoUrl === undefined).length === 0;
   } else {
     return true;
   }
@@ -172,9 +174,13 @@ export const getFileTypeSummary = (files: FileInfo[]) => {
     return 'Summarize this';
   }
 
-  const imgCount = files.filter(file => file.type === FileType.image).length;
-  const docCount = files.filter(file => file.type === FileType.document).length;
-  const videoCount = files.filter(file => file.type === FileType.video).length;
+  const imgCount = files.filter((file) => file.type === FileType.image).length;
+  const docCount = files.filter(
+    (file) => file.type === FileType.document
+  ).length;
+  const videoCount = files.filter(
+    (file) => file.type === FileType.video
+  ).length;
 
   const types = [
     imgCount && `${imgCount > 1 ? 'images' : 'image'}`,

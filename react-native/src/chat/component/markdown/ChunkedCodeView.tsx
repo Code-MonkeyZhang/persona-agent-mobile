@@ -44,7 +44,8 @@ const ChunkText: FunctionComponent<ChunkTextProps> = memo(
           style={[styles.chunkText, textStyle]}
           editable={false}
           multiline
-          scrollEnabled={false}>
+          scrollEnabled={false}
+        >
           {content}
         </TextInput>
       );
@@ -82,7 +83,7 @@ const useChunkedCode = (code: string, isCompleted?: boolean): string[] => {
       completedChunksRef.current = [];
       updateCountRef.current = 0;
       lastChunkRef.current = '';
-      setUpdateTrigger(prev => prev + 1);
+      setUpdateTrigger((prev) => prev + 1);
     }
 
     const newContent = code.slice(processedLengthRef.current);
@@ -145,7 +146,7 @@ const useChunkedCode = (code: string, isCompleted?: boolean): string[] => {
     }
 
     lastChunkRef.current = rawLastChunk;
-    setUpdateTrigger(prev => prev + 1);
+    setUpdateTrigger((prev) => prev + 1);
   }, [code, isCompleted]);
 
   if (lastChunkRef.current) {
@@ -181,7 +182,8 @@ const ChunkedCodeView: FunctionComponent<ChunkedCodeViewProps> = ({
         { backgroundColor },
         scrollViewProps?.contentContainerStyle,
         containerStyle,
-      ]}>
+      ]}
+    >
       <View style={styles.chunksContainer}>
         {chunks.map((chunk, index) => (
           <ChunkText

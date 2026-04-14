@@ -82,7 +82,7 @@ class Parser {
       }
       elements.push(this._parseToken(token, styles));
     }
-    return elements.filter(element => element !== null);
+    return elements.filter((element) => element !== null);
   }
 
   private _parseToken(
@@ -143,8 +143,8 @@ class Parser {
         if (Number.isNaN(startIndex)) {
           startIndex = 1;
         }
-        const li = token.items.map(item => {
-          const children = item.tokens.flatMap(cItem => {
+        const li = token.items.map((item) => {
+          const children = item.tokens.flatMap((cItem) => {
             if (cItem.type === 'text') {
               /* getViewNode since tokens could contain a block like elements (i.e. img) */
               const childTokens = (cItem as marked.Tokens.Text).tokens || [];
@@ -270,7 +270,7 @@ class Parser {
           })
         );
 
-        const rows = token.rows.map(cols =>
+        const rows = token.rows.map((cols) =>
           cols.map((col, i) =>
             this._parse(col.tokens, {
               ...getTableColAlignmentStyle(token.align[i]),

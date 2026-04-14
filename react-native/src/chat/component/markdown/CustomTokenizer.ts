@@ -158,7 +158,7 @@ export class CustomTokenizer extends MarkedTokenizer<CustomToken> {
       raw: src,
       text: src,
       tokens: [
-        ...beforeTokens.flatMap(token =>
+        ...beforeTokens.flatMap((token) =>
           token.type === 'paragraph' ? token.tokens || [] : [token]
         ),
         ...(isDisplayMode ||
@@ -171,7 +171,7 @@ export class CustomTokenizer extends MarkedTokenizer<CustomToken> {
           ? [{ type: 'br', raw: '  \n' }]
           : []),
         ...(Array.isArray(afterTokens) ? afterTokens : [afterTokens]).flatMap(
-          token => {
+          (token) => {
             if (!token) {
               return [];
             }

@@ -100,7 +100,7 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
       const classes: string[] = node.properties?.className ?? [];
       return classes
         .map((c: string) => stylesheet[c])
-        .filter(c => !!c) as TextStyle[];
+        .filter((c) => !!c) as TextStyle[];
     },
     [stylesheet]
   );
@@ -134,20 +134,22 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
                 return (
                   <MemoizedText
                     key={`${index}-${childIndex}`}
-                    style={[...baseTextStyle, ...nodeStyles]}>
+                    style={[...baseTextStyle, ...nodeStyles]}
+                  >
                     {child.value}
                   </MemoizedText>
                 );
               } else {
                 const childStyles = getStylesForNode(child);
                 const childContent = child.children
-                  ?.map(grandChild => grandChild.value)
+                  ?.map((grandChild) => grandChild.value)
                   .join('');
 
                 return (
                   <MemoizedText
                     key={`${index}-${childIndex}`}
-                    style={[...baseTextStyle, ...childStyles]}>
+                    style={[...baseTextStyle, ...childStyles]}
+                  >
                     {childContent}
                   </MemoizedText>
                 );
@@ -211,7 +213,8 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
             },
           ]}
           editable={false}
-          multiline>
+          multiline
+        >
           {processedNodesCache.current}
         </TextInput>
       );
@@ -256,7 +259,8 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
             stylesheet.hljs,
             scrollViewProps?.contentContainerStyle,
             containerStyle,
-          ]}>
+          ]}
+        >
           <View onStartShouldSetResponder={() => true}>
             {Platform.OS === 'ios' ? renderNode(rows) : renderAndroidNode(rows)}
           </View>
@@ -292,7 +296,8 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
       CodeTag={View}
       PreTag={View}
       style={{}}
-      testID="react-native-code-highlighter">
+      testID="react-native-code-highlighter"
+    >
       {children}
     </SyntaxHighlighter>
   );

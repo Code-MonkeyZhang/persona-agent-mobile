@@ -356,7 +356,8 @@ const MermaidRenderer = forwardRef<MermaidRendererRef, MermaidRendererProps>(
         <TouchableOpacity
           onPress={() => setShowFullScreen(true)}
           activeOpacity={0.8}
-          style={styles.container}>
+          style={styles.container}
+        >
           <WebView
             ref={webViewRef}
             source={{ html: htmlContent }}

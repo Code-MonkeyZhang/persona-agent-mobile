@@ -46,7 +46,7 @@ const MemoizedCodeHighlighter = React.memo(
     language,
     colors,
     isDark,
-    onPreviewToggle,
+    onPreviewToggle: _onPreviewToggle,
     isCompleted,
   }: {
     text: string;
@@ -96,7 +96,8 @@ const MemoizedCodeHighlighter = React.memo(
             }}
             textStyle={styles.text}
             language={language ?? 'code'}
-            isCompleted={isCompleted}>
+            isCompleted={isCompleted}
+          >
             {text}
           </CustomCodeHighlighter>
         </Suspense>
@@ -243,7 +244,8 @@ export class CustomMarkdownRenderer
         activeOpacity={0.8}
         onPress={() => this.onImagePress(PressMode.Click, imgUrl)}
         onLongPress={() => this.onImagePress(PressMode.LongPress, imgUrl)}
-        key={key}>
+        key={key}
+      >
         <MDImage
           key={key}
           uri={imgUrl}
@@ -304,7 +306,8 @@ export class CustomMarkdownRenderer
             borderWidth,
             borderColor: this.isDark ? this.colors.borderLight : borderColor,
           }}
-          style={tableStyleRest}>
+          style={tableStyleRest}
+        >
           <TableWrapper style={headerTableStyle}>
             {header.map((headerCol, index) => {
               if (React.isValidElement(headerCol[0])) {
@@ -363,8 +366,9 @@ export class CustomMarkdownRenderer
         markerBoxStyle={listStyle}
         enableMarkerClipping={true}
         key={this.getKey()}
-        startIndex={startIndex}>
-        {li.map(node => node)}
+        startIndex={startIndex}
+      >
+        {li.map((node) => node)}
       </MarkedList>
     );
   }
@@ -396,12 +400,14 @@ export class CustomMarkdownRenderer
           key={getMathKey()}
           style={
             isDisplayMode ? this.styles.displayMath : this.styles.inlineMath
-          }>
+          }
+        >
           {isDisplayMode ? (
             <ScrollView
               key={getMathKey()}
               horizontal={true}
-              showsHorizontalScrollIndicator={false}>
+              showsHorizontalScrollIndicator={false}
+            >
               {mathView}
             </ScrollView>
           ) : (

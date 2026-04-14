@@ -41,7 +41,6 @@ import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
-import { getModelIcon, getModelTagByUserName } from '../../utils/ModelUtils.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
 import { useAppContext } from '../../history/AppProvider.tsx';
 import { useTheme, ColorScheme } from '../../theme';
@@ -69,7 +68,7 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
 
 const { width: screenWidth } = Dimensions.get('window');
 
-/** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、引用、操作按钮、附件）TODO:对于MVP这个需要仿照Desktop进行更改 */ 
+/** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、引用、操作按钮、附件）TODO:对于MVP这个需要仿照Desktop进行更改 */
 const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   currentMessage,
   chatStatus,
@@ -192,7 +191,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   }, [isEdit, currentMessage?.text]);
 
   const toggleButtons = useCallback(() => {
-    setForceShowButtons(prev => !prev);
+    setForceShowButtons((prev) => !prev);
   }, []);
 
   // Handle selection changes made by the user
@@ -225,13 +224,12 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         modelIcon: require('../../assets/openai_api.png'),
       };
     }
-    const user = currentMessage.user;
-    const userName = user.name ?? 'AI';
-    const currentModelTag = getModelTagByUserName(user.modelTag, userName);
-
-    const modelIcon = getModelIcon(currentModelTag, undefined, isDark);
-    return { userName, modelIcon };
-  }, [currentMessage, isDark]);
+    const userName = currentMessage.user.name ?? 'AI';
+    return {
+      userName,
+      modelIcon: require('../../assets/openai_api.png'),
+    };
+  }, [currentMessage]);
 
   const headerContent = useMemo(() => {
     return (
@@ -259,15 +257,15 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     if (pressMode === PressMode.Click) {
       FileViewer.open(url)
         .then(() => {})
-        .catch(error => {
+        .catch((error) => {
           console.log(error);
         });
     } else if (pressMode === PressMode.LongPress) {
       trigger(HapticFeedbackTypes.notificationSuccess);
       const shareOptions = { url: url, type: 'image/png', title: 'AI Image' };
       Share.open(shareOptions)
-        .then(res => console.log(res))
-        .catch(err => err && console.log(err));
+        .then((res) => console.log(res))
+        .catch((err) => err && console.log(err));
     }
   }, []);
 
@@ -338,7 +336,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         <TouchableOpacity
           style={styles.reasoningHeader}
           activeOpacity={1}
-          onPress={handleReasoningToggle}>
+          onPress={handleReasoningToggle}
+        >
           <View style={styles.reasoningHeaderContent}>
             <Image
               source={
@@ -359,10 +358,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
           </View>
           <TouchableOpacity
             hitSlop={8}
-            onPress={e => {
+            onPress={(e) => {
               e.stopPropagation();
               setReasoningCopied(true);
-            }}>
+            }}
+          >
             <Image
               source={
                 reasoningCopied
@@ -475,7 +475,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         style={{
           ...styles.questionContainer,
           maxWidth: (chatScreenWidth * 3) / 4,
-        }}>
+        }}
+      >
         <Text style={styles.questionText} selectable>
           {currentMessage.text}
         </Text>
@@ -500,14 +501,16 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         style={{
           ...styles.actionButtonsContainer,
           ...{ justifyContent: isUser.current ? 'flex-end' : 'space-between' },
-        }}>
+        }}
+      >
         <View style={styles.actionButtonInnerContainer}>
           <TouchableOpacity
             onPress={() => {
               handleCopy();
               setCopied(true);
             }}
-            style={styles.actionButton}>
+            style={styles.actionButton}
+          >
             <Image
               source={
                 copied
@@ -522,7 +525,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
           <TouchableOpacity
             onPress={() => setIsEditValue(!isEdit)}
-            style={styles.actionButton}>
+            style={styles.actionButton}
+          >
             <Image
               source={
                 isEdit
@@ -538,7 +542,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
           {showRefresh && (
             <TouchableOpacity
               onPress={handleRegenerate}
-              style={styles.actionButton}>
+              style={styles.actionButton}
+            >
               <Image
                 source={require('../../assets/refresh.png')}
                 style={styles.actionButtonIcon}
@@ -578,7 +583,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       <TouchableOpacity
         style={styles.header}
         activeOpacity={1}
-        onPress={() => setClickTitleCopied(true)}>
+        onPress={() => setClickTitleCopied(true)}
+      >
         {!isUser.current && headerContent}
         {copyButton}
       </TouchableOpacity>
@@ -600,7 +606,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
               if (nativeEvent.state === State.ACTIVE) {
                 handleShowButton();
               }
-            }}>
+            }}
+          >
             <View>{messageContent}</View>
           </TapGestureHandler>
         )}
@@ -609,7 +616,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             style={[
               isUser.current && styles.editContainer,
               isUser.current && { maxWidth: (chatScreenWidth * 3) / 4 },
-            ]}>
+            ]}
+          >
             <TextInput
               ref={textInputRef}
               selection={inputTextSelection}
@@ -619,7 +627,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
               showSoftInputOnFocus={isUser.current ? true : false}
               value={isUser.current ? editText : undefined}
               onChangeText={isUser.current ? setEditText : undefined}
-              onContentSizeChange={event => {
+              onContentSizeChange={(event) => {
                 const { height } = event.nativeEvent.contentSize;
                 setInputHeight(height);
               }}
@@ -642,14 +650,16 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
                   paddingBottom: 8,
                 }),
               }}
-              textAlignVertical="top">
+              textAlignVertical="top"
+            >
               {isUser.current ? undefined : currentMessage.text}
             </TextInput>
             {isUser.current && (
               <View style={styles.editButtonsContainer}>
                 <TouchableOpacity
                   onPress={handleEditCancel}
-                  style={styles.editCancelButton}>
+                  style={styles.editCancelButton}
+                >
                   <Text style={styles.editCancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -657,7 +667,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
                   style={[
                     styles.editSubmitButton,
                     !editText.trim() && styles.editSubmitButtonDisabled,
-                  ]}>
+                  ]}
+                >
                   <Text style={styles.editSubmitButtonText}>Send</Text>
                 </TouchableOpacity>
               </View>
@@ -666,8 +677,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
         {!isUser.current &&
           chatStatus !== ChatStatus.Running &&
-          ((isLastAIMessage && chatStatus !== ChatStatus.Running) ||
-          forceShowButtons) &&
+          (isLastAIMessage || forceShowButtons) &&
           messageActionButtons}
         {currentMessage.image && (
           <CustomFileListComponent

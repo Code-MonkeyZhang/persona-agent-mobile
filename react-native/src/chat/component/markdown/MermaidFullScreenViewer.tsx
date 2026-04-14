@@ -111,7 +111,7 @@ const MermaidFullScreenViewer: React.FC<MermaidFullScreenViewerProps> = ({
       onStart: () => {
         baseScale.value = scale.value;
       },
-      onActive: event => {
+      onActive: (event) => {
         scale.value = Math.max(0.5, Math.min(baseScale.value * event.scale, 5));
       },
       onEnd: () => {
@@ -128,7 +128,7 @@ const MermaidFullScreenViewer: React.FC<MermaidFullScreenViewerProps> = ({
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
     },
-    onActive: event => {
+    onActive: (event) => {
       translateX.value = savedTranslateX.value + event.translationX;
       translateY.value = savedTranslateY.value + event.translationY;
     },
@@ -635,7 +635,8 @@ const MermaidFullScreenViewer: React.FC<MermaidFullScreenViewerProps> = ({
       animationType="fade"
       statusBarTranslucent={true}
       supportedOrientations={['portrait', 'landscape']}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <View style={styles.modal}>
         <StatusBar
           barStyle={isDark ? 'light-content' : 'dark-content'}
@@ -682,7 +683,8 @@ const MermaidFullScreenViewer: React.FC<MermaidFullScreenViewerProps> = ({
           <TouchableOpacity
             activeOpacity={1}
             style={styles.copyButtonBottomRight}
-            onPress={copyImage}>
+            onPress={copyImage}
+          >
             <Image source={copyIconSource} style={styles.copyIcon} />
           </TouchableOpacity>
         )}
@@ -690,7 +692,8 @@ const MermaidFullScreenViewer: React.FC<MermaidFullScreenViewerProps> = ({
         {/* Save button in bottom-right */}
         <TouchableOpacity
           style={styles.saveButtonBottomRight}
-          onPress={saveImage}>
+          onPress={saveImage}
+        >
           <Image
             source={require('../../../assets/download.png')}
             style={styles.saveIcon}
