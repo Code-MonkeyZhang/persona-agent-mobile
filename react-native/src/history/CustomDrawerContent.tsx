@@ -173,30 +173,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         data={groupChatHistory}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View>
-            <TouchableOpacity
-              style={styles.settingsTouch}
-              onPress={() => {
-                setDrawerToPermanent();
-                navigation.navigate('Bedrock', {
-                  sessionId: '',
-                  tapIndex: -1,
-                });
-              }}
-            >
-              <Image
-                source={
-                  isDark
-                    ? require('../assets/edit_dark.png')
-                    : require('../assets/edit.png')
-                }
-                style={styles.settingsLeftImg}
-              />
-              <Text style={styles.settingsText}>Chat</Text>
-            </TouchableOpacity>
-          </View>
-        }
         renderItem={({ item }) => {
           if (item.id.startsWith('-')) {
             return (

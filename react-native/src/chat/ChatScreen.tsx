@@ -40,12 +40,7 @@ import {
   fetchSessionMessages,
   convertToSwiftChatMessages,
 } from '../api/nano-agent-api.ts';
-import {
-  ChatStatus,
-  FileInfo,
-  SwiftChatMessage,
-  Usage,
-} from '../types/Chat.ts';
+import { ChatStatus, FileInfo, SwiftChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
 import CustomSendComponent from './component/CustomSendComponent.tsx';
@@ -58,7 +53,6 @@ import {
   getFileTypeSummary,
   isAllFileReady,
 } from './util/FileUtils.ts';
-import HeaderTitle from './component/HeaderTitle.tsx';
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
 
@@ -94,7 +88,6 @@ function ChatScreen(): React.JSX.Element {
     Dimensions.get('window')
   );
   const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
-  const [usage, setUsage] = useState<Usage>();
   const [userScrolled, setUserScrolled] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
@@ -108,7 +101,6 @@ function ChatScreen(): React.JSX.Element {
   const [hasInputText, setHasInputText] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
-  const usageRef = useRef(usage);
   const drawerTypeRef = useRef(drawerType);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
@@ -124,8 +116,7 @@ function ChatScreen(): React.JSX.Element {
   useEffect(() => {
     messagesRef.current = messages;
     chatStatusRef.current = chatStatus;
-    usageRef.current = usage;
-  }, [chatStatus, messages, usage]);
+  }, [chatStatus, messages]);
 
   // Keep screen awake during streaming output
   useEffect(() => {
@@ -267,7 +258,6 @@ function ChatScreen(): React.JSX.Element {
       sendEventRef.current('updateHistorySelectedId', { id: '' });
 
       setMessages([]);
-      setUsage(undefined);
 
       if (nanoAgentRef.current && serverAddressRef.current) {
         const agentId = getServerAgentId();
@@ -291,20 +281,15 @@ function ChatScreen(): React.JSX.Element {
     }, [])
   );
 
-  // header text and right button click
+  // header right button click
   React.useLayoutEffect(() => {
     const headerOptions: HeaderOptions = {
-      // eslint-disable-next-line react/no-unstable-nested-components
-      headerTitle: () => (
-        <HeaderTitle title={'Chat'} usage={usage} onDoubleTap={scrollToTop} />
-      ),
+      headerTitle: () => null,
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <CustomHeaderRightButton
           onPress={() => {
-            //clear input content and selected files
             textInputViewRef?.current?.clear();
-            setUsage(undefined);
             setSelectedFiles([]);
             if (
               messagesRef.current.length > 0 &&
@@ -322,7 +307,7 @@ function ChatScreen(): React.JSX.Element {
       ),
     };
     navigation.setOptions(headerOptions);
-  }, [usage, navigation, isDark]);
+  }, [navigation, isDark]);
 
   // ==================== 会话切换 & 消息加载 ====================
   // sessionId changes (start new chat or click another session)
@@ -337,7 +322,6 @@ function ChatScreen(): React.JSX.Element {
       setSelectedFiles([]);
       setChatStatus(ChatStatus.Init);
       sendEventRef.current('');
-      setUsage(undefined);
       if (initialSessionId === '' || initialSessionId === '-1') {
         startNewChat.current();
         return;
@@ -386,7 +370,6 @@ function ChatScreen(): React.JSX.Element {
         sendEventRef.current('updateHistorySelectedId', {
           id: '',
         });
-        setUsage(undefined);
         setMessages([]);
       }
     }
@@ -490,17 +473,6 @@ function ChatScreen(): React.JSX.Element {
     },
   });
 
-  const scrollToTop = () => {
-    setUserScrolled(true);
-    if (flatListRef.current) {
-      if (messagesRef.current.length > 0) {
-        flatListRef.current.scrollToIndex({
-          index: messagesRef.current.length - 1,
-          animated: true,
-        });
-      }
-    }
-  };
   const scrollToBottom = () => {
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
@@ -553,68 +525,7 @@ function ChatScreen(): React.JSX.Element {
     []
   );
 
-  // ==================== 发送消息 & 重新生成 ====================
-  /** 重新生成：从指定用户消息重新发起 AI 回复，支持编辑后重发 */
-  const regenerateFromUserMessage = useCallback(
-    (userMessageIndex: number, newText?: string) => {
-      setUserScrolled(false);
-      trigger(HapticFeedbackTypes.impactMedium);
-
-      const historyMessages = messagesRef.current.slice(userMessageIndex + 1);
-
-      const userMessage: SwiftChatMessage = newText
-        ? { ...messagesRef.current[userMessageIndex], text: newText }
-        : messagesRef.current[userMessageIndex];
-
-      setChatStatus(ChatStatus.Running);
-      setMessages((_previousMessages) => [
-        createBotMessage(),
-        userMessage,
-        ...historyMessages,
-      ]);
-      scrollToBottom();
-
-      if (nanoAgentRef.current && serverAddressRef.current) {
-        const agentId = getServerAgentId();
-        (async () => {
-          try {
-            let sessionId = sessionIdRef.current;
-            if (!sessionId) {
-              sessionId = await nanoAgentRef.current!.createSession(
-                agentId,
-                serverAddressRef.current!
-              );
-              sessionIdRef.current = sessionId;
-              nanoAgentRef.current!.subscribe(sessionId);
-            }
-            const regeneratedText = newText ?? userMessage.text;
-            await nanoAgentRef.current!.sendChatMessage(
-              agentId,
-              sessionId,
-              regeneratedText,
-              serverAddressRef.current!
-            );
-          } catch (e) {
-            const errMsg = e instanceof Error ? e.message : String(e);
-            setMessages((prevMessages) => {
-              if (prevMessages.length === 0) {
-                return prevMessages;
-              }
-              const newMessages = [...prevMessages];
-              newMessages[0] = {
-                ...prevMessages[0],
-                text: 'Error: ' + errMsg,
-              };
-              return newMessages;
-            });
-            setChatStatus(ChatStatus.Complete);
-          }
-        })();
-      }
-    },
-    []
-  );
-
+  // ==================== 发送消息 ====================
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
   const onSend = useCallback(async (message: SwiftChatMessage[] = []) => {
     // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
@@ -678,18 +589,6 @@ function ChatScreen(): React.JSX.Element {
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
-          setMessages((prevMessages) => {
-            if (prevMessages.length === 0) {
-              return prevMessages;
-            }
-            const newMessages = [...prevMessages];
-            newMessages[0] = {
-              ...prevMessages[0],
-              text: 'Error: ' + errMsg,
-            };
-            return newMessages;
-          });
-          setChatStatus(ChatStatus.Complete);
         }
       })();
     }
@@ -803,7 +702,6 @@ function ChatScreen(): React.JSX.Element {
               isLastAIMessage={isLastAIMessage}
               onReasoningToggle={handleReasoningToggle}
               messageIndex={messageIndex}
-              regenerateFromUserMessage={regenerateFromUserMessage}
               flatListRef={flatListRef}
             />
           );
