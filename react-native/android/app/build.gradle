@@ -79,7 +79,7 @@ android {
         applicationId "com.aws.swiftchat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 86
+        versionCode 100
         versionName "2.7.0"
         ndk {
             //noinspection ChromeOsAbiSupport
