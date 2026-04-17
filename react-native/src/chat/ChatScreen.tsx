@@ -1,3 +1,7 @@
+/**
+ * @file ChatScreen.tsx
+ * @description 聊天页面主组件，管理消息收发、AI 流式回复、WebSocket 连接、Agent 切换、文件附件等功能。
+ */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Composer, GiftedChat, InputToolbar } from 'react-native-gifted-chat';
 import {
@@ -21,6 +25,7 @@ import { ColorScheme, useTheme } from '../theme';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
+import AgentSelector from './component/AgentSelector.tsx';
 import {
   RouteProp,
   useFocusEffect,
@@ -40,6 +45,7 @@ import {
   fetchSessionMessages,
   convertToSwiftChatMessages,
 } from '../api/nano-agent-api.ts';
+import type { AgentInfo } from '../api/nano-agent-api.ts';
 import { ChatStatus, FileInfo, SwiftChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
@@ -56,8 +62,13 @@ import {
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
 
+/** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
 
+/**
+ * 创建一条 AI 占位消息，在流式回复开始前插入消息列表。
+ * @returns 占位的 SwiftChatMessage，文本内容为 "..."
+ */
 const createBotMessage = () => {
   return {
     _id: uuid.v4(),
@@ -69,7 +80,11 @@ const createBotMessage = () => {
     },
   };
 };
+
+/** AI 回复加载中的占位文本 */
 const textPlaceholder = '...';
+
+/** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
@@ -89,6 +104,10 @@ function ChatScreen(): React.JSX.Element {
   );
   const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
   const [userScrolled, setUserScrolled] = useState(false);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [currentAgentId, setCurrentAgentId] = useState(
+    getServerAgentId() || ''
+  );
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
   const flatListRef = useRef<FlatList<SwiftChatMessage>>(null);
@@ -112,13 +131,13 @@ function ChatScreen(): React.JSX.Element {
   const serverAddressRef = useRef(getServerAddress());
 
   // ==================== Ref 同步 & 副作用 ====================
-  // update refs value with state
+  /** 每次状态变化后同步到 ref，供异步回调中读取最新值 */
   useEffect(() => {
     messagesRef.current = messages;
     chatStatusRef.current = chatStatus;
   }, [chatStatus, messages]);
 
-  // Keep screen awake during streaming output
+  /** AI 流式输出期间保持屏幕常亮，避免锁屏中断 */
   useEffect(() => {
     if (chatStatus === ChatStatus.Running) {
       activateKeepAwake();
@@ -168,16 +187,18 @@ function ChatScreen(): React.JSX.Element {
 
       (async () => {
         try {
-          let agentId = getServerAgentId();
-          if (!agentId) {
-            console.log('[ChatScreen] no cached agentId, fetching agents...');
-            const agents = await fetchAgents(address);
-            if (cancelled || agents.length === 0) {
-              return;
-            }
-            agentId = agents[0].id;
-            saveServerAgentId(agentId);
+          const fetchedAgents = await fetchAgents(address);
+          if (cancelled || fetchedAgents.length === 0) {
+            return;
           }
+          setAgents(fetchedAgents);
+
+          let agentId = getServerAgentId();
+          if (!agentId || !fetchedAgents.some((a) => a.id === agentId)) {
+            agentId = fetchedAgents[0].id;
+          }
+          saveServerAgentId(agentId);
+          setCurrentAgentId(agentId);
           console.log(`[ChatScreen] using agentId=${agentId}`);
 
           client.onStepComplete = (content, thinking) => {
@@ -281,10 +302,39 @@ function ChatScreen(): React.JSX.Element {
     }, [])
   );
 
-  // header right button click
+  // ==================== Agent 切换 ====================
+  /**
+   * 切换当前 Agent：保存选择、清空消息、通知侧边栏刷新。
+   * @param newAgentId 用户选中的 Agent ID
+   */
+  const handleSelectAgent = useCallback(
+    (newAgentId: string) => {
+      if (newAgentId === currentAgentId) {
+        return;
+      }
+
+      saveServerAgentId(newAgentId);
+      setCurrentAgentId(newAgentId);
+
+      setMessages([]);
+      sessionIdRef.current = '';
+
+      sendEventRef.current('agentChanged', { id: newAgentId });
+    },
+    [currentAgentId]
+  );
+
+  /** 根据主题和 Agent 列表更新导航栏标题和右侧按钮 */
   React.useLayoutEffect(() => {
     const headerOptions: HeaderOptions = {
-      headerTitle: () => null,
+      // eslint-disable-next-line react/no-unstable-nested-components
+      headerTitle: () => (
+        <AgentSelector
+          agents={agents}
+          currentAgentId={currentAgentId}
+          onSelectAgent={handleSelectAgent}
+        />
+      ),
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <CustomHeaderRightButton
@@ -307,10 +357,12 @@ function ChatScreen(): React.JSX.Element {
       ),
     };
     navigation.setOptions(headerOptions);
-  }, [navigation, isDark]);
+  }, [navigation, isDark, agents, currentAgentId, handleSelectAgent]);
 
   // ==================== 会话切换 & 消息加载 ====================
-  // sessionId changes (start new chat or click another session)
+  /**
+   * 监听路由参数变化（新建聊天或点击历史记录），加载对应的会话消息。
+   */
   useEffect(() => {
     if (tapIndex && initialSessionId) {
       if (sessionIdRef.current === initialSessionId) {
@@ -361,7 +413,7 @@ function ChatScreen(): React.JSX.Element {
   }, [initialSessionId, tapIndex]);
 
   // ==================== 事件监听 ====================
-  // deleteChat listener
+  /** 监听 AppContext 事件：删除聊天时清空当前会话 */
   useEffect(() => {
     if (event?.event === 'deleteChat' && event.params) {
       const { id } = event.params;
@@ -376,7 +428,7 @@ function ChatScreen(): React.JSX.Element {
   }, [event]);
 
   // ==================== 键盘 & 屏幕 & 生命周期 ====================
-  // keyboard show listener for scroll to bottom
+  /** 键盘弹出时自动滚到底部（仅在输入框聚焦时） */
   useEffect(() => {
     const handleKeyboardShow = () => {
       // Only scroll to bottom if the chat input is focused
@@ -395,18 +447,19 @@ function ChatScreen(): React.JSX.Element {
     };
   }, []);
 
-  // show keyboard for open the app
+  /** 首次进入页面时自动弹出键盘 */
   useEffect(() => {
     showKeyboard();
   }, []);
 
+  /** 延迟 100ms 后聚焦输入框，等待布局完成 */
   const showKeyboard = () => {
     setTimeout(() => {
       textInputViewRef.current?.focus();
     }, 100);
   };
 
-  // update screenWith and height when screen rotate
+  /** 监听屏幕旋转，更新屏幕宽高以重新计算布局 */
   useEffect(() => {
     const updateDimensions = () => {
       setScreenDimensions(Dimensions.get('window'));
@@ -423,7 +476,7 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== 消息完成 ====================
-  // handle message complete — 通知 drawer 刷新列表
+  /** AI 回复完成后通知侧边栏刷新历史列表和 Mermaid 图表 */
   useEffect(() => {
     if (chatStatus === ChatStatus.Complete) {
       if (messagesRef.current.length <= 1) {
@@ -445,7 +498,7 @@ function ChatScreen(): React.JSX.Element {
     }
   }, [chatStatus]);
 
-  // app goes to background — 不再保存消息（server-first）
+  /** App 进入后台时的生命周期监听（目前为占位，未做额外处理） */
   useEffect(() => {
     const subscription = AppState.addEventListener('change', () => {});
     return () => {
@@ -473,12 +526,19 @@ function ChatScreen(): React.JSX.Element {
     },
   });
 
+  /** 将消息列表滚动到顶部（GiftedChat 是倒序的，offset=0 即最新消息） */
   const scrollToBottom = () => {
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
     }
   };
 
+  /**
+   * 将消息列表向上或向下偏移指定高度，用于展开/收起 Reasoning 区块时保持视觉位置不跳动。
+   * @param expanded 是否展开（展开时向上偏移，收起时向下回滚）
+   * @param height 偏移的像素高度
+   * @param animated 是否带动画
+   */
   const scrollUpByHeight = (
     expanded: boolean,
     height: number,
@@ -494,18 +554,23 @@ function ChatScreen(): React.JSX.Element {
     }
   };
 
+  /** 记录当前滚动偏移量，供 scrollUpByHeight 计算新位置 */
   const handleScroll = (
     scrollEvent: NativeSyntheticEvent<NativeScrollEvent>
   ) => {
     currentScrollOffsetRef.current = scrollEvent.nativeEvent.contentOffset.y;
   };
 
+  /** 用户手动拖拽滚动时标记 userScrolled，暂停自动滚底 */
   const handleUserScroll = (_: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (chatStatusRef.current === ChatStatus.Running) {
       setUserScrolled(true);
     }
   };
 
+  /**
+   * 惯性滚动结束后的回调：如果用户在流式输出期间滚动到了接近底部的位置，自动回到底部。
+   */
   const handleMomentumScrollEnd = (
     endEvent: NativeSyntheticEvent<NativeScrollEvent>
   ) => {
@@ -517,7 +582,7 @@ function ChatScreen(): React.JSX.Element {
     }
   };
 
-  // Stable callback for reasoning toggle - avoids re-render of CustomMessageComponent
+  /** Reasoning 区块展开/收起时调整滚动位置，用 useCallback 避免消息组件重渲染 */
   const handleReasoningToggle = useCallback(
     (expanded: boolean, height: number, animated: boolean) => {
       scrollUpByHeight(expanded, height, animated);
@@ -595,7 +660,10 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== 文件 & 语音转录 ====================
-  // NOTE: 这个需要留着, 虽然MVP可能暂时用不上
+  /**
+   * 新增附件文件，会检查数量限制后合并到已有文件列表。
+   * @param files 用户选中的新文件列表
+   */
   const handleNewFileSelected = (files: FileInfo[]) => {
     setSelectedFiles((prevFiles) => {
       return checkFileNumberLimit(prevFiles, files);
@@ -802,27 +870,32 @@ function ChatScreen(): React.JSX.Element {
   );
 }
 
-// 聊天页面的样式定义（页面背景、输入框区域等）
+/** 聊天页面的样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
+    /** 整个聊天页面的容器 */
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
+    /** 消息列表的内容容器，flexGrow + justifyContent 保证消息少时内容在底部 */
     contentContainer: {
       paddingTop: 15,
       paddingBottom: 15,
       flexGrow: 1,
       justifyContent: 'flex-end',
     },
+    /** 原生 TextInput 的基础样式 */
     textInputStyle: {
       marginLeft: 10,
       lineHeight: 22,
     },
+    /** GiftedChat Composer 内部文本输入框样式 */
     composerTextInput: {
       backgroundColor: 'transparent',
       color: colors.text,
     },
+    /** 输入框区域的外层容器，控制背景色和上下内边距 */
     inputToolbarContainer: {
       backgroundColor: colors.background,
       borderTopWidth: 0,
@@ -830,6 +903,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingTop: 0,
       paddingBottom: isMac ? 10 : Platform.OS === 'android' ? 8 : 2,
     },
+    /** 输入框主区域（圆角背景框） */
     inputToolbarPrimary: {
       backgroundColor: colors.chatInputBackground,
       borderRadius: 12,

@@ -1,3 +1,8 @@
+/**
+ * @file CustomFileListComponent.tsx
+ * @description 聊天附件文件列表组件，支持图片预览、视频压缩、文档查看、删除附件等操作。
+ *              有编辑（Edit）和展示（Display）两种模式，分别用于输入栏和消息气泡中。
+ */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -21,27 +26,38 @@ import { showInfo } from '../util/ToastUtils.ts';
 import { ColorScheme, useTheme } from '../../theme';
 
 interface CustomFileProps {
+  /** 当前选中的文件列表 */
   files: FileInfo[];
+  /** 文件列表变化时的回调（新增或删除文件时触发） */
   onFileUpdated?: (files: FileInfo[], isUpdate?: boolean) => void;
+  /** 显示模式：Edit 显示删除按钮和添加按钮，Display 只展示缩略图 */
   mode?: DisplayMode;
+  /** 为 true 时隐藏文件列表（但仍占位接收粘贴事件） */
   isHideFileList?: boolean;
 }
 
+/** 文件列表的显示模式：Edit 可增删文件，Display 仅展示 */
 export enum DisplayMode {
   Edit = 'edit',
   Display = 'display',
 }
 
+/** 视频文件大小上限（MB），超过此大小会自动移除 */
 const MAX_VIDEO_SIZE = 8;
 
+/**
+ * 用系统默认应用打开文件（文档、视频等）。
+ * @param url 本地文件路径
+ */
 const openInFileViewer = (url: string) => {
   FileViewer.open(url)
     .then(() => {})
-    .catch(error => {
+    .catch((error) => {
       console.log(error);
     });
 };
 
+/** 视频压缩时显示在缩略图中央的圆形进度条 */
 const CircularProgress = ({
   progress,
   colors,
@@ -69,16 +85,24 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
   isHideFileList = false,
 }) => {
   const { colors, isDark } = useTheme();
+  /** 图片全屏预览是否可见 */
   const [visible, setIsVisible] = useState(false);
+  /** 当前预览的图片索引 */
   const [index, setIndex] = useState<number>(0);
+  /** 全屏预览用的图片 URL 列表 */
   const [imageUrls, setImageUrls] = useState<ImageSource[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
+  /** 当前视频压缩进度（0~1） */
   const [compressionProgress, setCompressionProgress] = useState<number>(0);
+  /** 正在压缩的视频文件 URL，防止重复压缩 */
   const compressingFiles = useRef<string>('');
+  /** files 的 ref 副本，供异步回调中读取 */
   const filesRef = useRef(files);
+  /** 是否正在压缩中，防止并发压缩多个视频 */
   const isCompressing = useRef(false);
 
+  /** 文件列表变化时同步 ref，并在编辑模式下自动滚动到末尾 */
   useEffect(() => {
     filesRef.current = files;
     if (scrollViewRef.current && mode !== DisplayMode.Display) {
@@ -88,6 +112,10 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
     }
   }, [files, mode]);
 
+  /**
+   * 遍历文件列表，对未压缩的视频逐个执行压缩。
+   * 压缩后检查大小，超限则移除并提示，否则保存本地路径并更新文件列表。
+   */
   const handleCompression = useCallback(async () => {
     for (const file of filesRef.current) {
       if (
@@ -111,7 +139,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           compressingFiles.current = '';
           const currentSize = metaData.size / 1024 / 1024;
           if (currentSize < MAX_VIDEO_SIZE) {
-            // save video to files and update video url
+            // 压缩后大小合格，保存到本地并更新文件的 videoUrl
             const localFileUrl = await saveFile(
               uri,
               file.fileName + '.' + metaData.extension
@@ -125,7 +153,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               onFileUpdated!(updatedFiles, true);
             }
           } else {
-            // remove the video
+            // 视频超过大小限制，从列表中移除并提示用户
             const newFiles = filesRef.current.filter((f) => f.url !== file.url);
             onFileUpdated!(newFiles, true);
             showInfo(
@@ -138,7 +166,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           showInfo('Video process failed');
           compressingFiles.current = '';
           isCompressing.current = false;
-          // remove the failed video
+          // 压缩失败，移除该视频并提示
           const newFiles = filesRef.current.filter((f) => f.url !== file.url);
           onFileUpdated!(newFiles, true);
         }
@@ -146,6 +174,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
     }
   }, [onFileUpdated]);
 
+  /** 文件列表变化时触发视频压缩检查 */
   useEffect(() => {
     const checkAndCompressVideos = async () => {
       await handleCompression();
@@ -153,6 +182,12 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
     checkAndCompressVideos().then();
   }, [files, handleCompression]);
 
+  /**
+   * 渲染单个文件卡片：根据文件类型显示图片缩略图、视频缩略图（带播放图标/压缩进度）或文档卡片。
+   * 点击可预览/打开文件，长按可分享文件，编辑模式下显示删除按钮。
+   * @param file 文件信息
+   * @param fileIndex 文件在列表中的索引
+   */
   const renderFileItem = (file: FileInfo, fileIndex: number) => {
     const isImage = file.type === FileType.image;
     const isDocument = file.type === FileType.document;
@@ -305,7 +340,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           marginLeft: 0,
           paddingTop: 4,
         }),
-        // allow adding files by command+v after input texts
+        // 无文件且需要隐藏时，将 ScrollView 缩为 0 高度但仍保留，用于接收 Command+V 粘贴文件事件
         ...(files.length === 0 &&
           isHideFileList && {
             opacity: 0,
@@ -322,6 +357,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
           <CustomAddFileComponent onFileSelected={onFileUpdated!} mode="list" />
         </TouchableOpacity>
       )}
+      {/* 全屏图片预览组件 */}
       <ImageView
         images={imageUrls}
         imageIndex={index}
@@ -332,15 +368,19 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
   );
 };
 
+/** 文件列表样式工厂，根据当前主题色生成各组件样式 */
 const getStyles = (colors: ColorScheme) =>
   StyleSheet.create({
+    /** 横向滚动容器 */
     scrollView: {
       paddingVertical: 8,
       backgroundColor: colors.fileListBackground,
     },
+    /** ScrollView 内容容器，控制水平内边距 */
     containerStyle: {
       paddingHorizontal: 12,
     },
+    /** 单个文件卡片的固定尺寸容器 */
     fileItem: {
       width: 72,
       height: 72,
@@ -349,6 +389,7 @@ const getStyles = (colors: ColorScheme) =>
       overflow: 'hidden',
       position: 'relative',
     },
+    /** 删除按钮的触摸区域 */
     deleteTouchable: {
       position: 'absolute',
       right: 0,
@@ -359,6 +400,7 @@ const getStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    /** 删除按钮圆形背景 */
     deleteLayout: {
       width: 20,
       height: 20,
@@ -374,6 +416,7 @@ const getStyles = (colors: ColorScheme) =>
       marginRight: -0.5,
       fontWeight: 'normal',
     },
+    /** 图片/视频缩略图容器 */
     thumbnailContainer: {
       position: 'relative',
       width: '100%',
@@ -383,6 +426,7 @@ const getStyles = (colors: ColorScheme) =>
       width: '100%',
       height: '100%',
     },
+    /** 视频缩略图上的播放按钮图标 */
     playIcon: {
       position: 'absolute',
       top: '50%',
@@ -392,6 +436,7 @@ const getStyles = (colors: ColorScheme) =>
       width: 32,
       height: 32,
     },
+    /** 文档文件的预览卡片（显示文件名 + 格式图标） */
     filePreview: {
       width: '100%',
       height: '100%',
@@ -403,6 +448,7 @@ const getStyles = (colors: ColorScheme) =>
       justifyContent: 'space-between',
       padding: 8,
     },
+    /** 格式图标 + 文字容器 */
     formatContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -422,6 +468,7 @@ const getStyles = (colors: ColorScheme) =>
       color: colors.textSecondary,
       marginTop: 2,
     },
+    /** 添加文件按钮（编辑模式下显示在文件列表末尾） */
     addButton: {
       width: 72,
       height: 72,
@@ -430,6 +477,7 @@ const getStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    /** 压缩进度条的绝对定位容器 */
     progressContainer: {
       position: 'absolute',
       top: '50%',

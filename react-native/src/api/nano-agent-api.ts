@@ -1,9 +1,15 @@
+/**
+ * @file nano-agent-api.ts
+ * @description nano-agent 服务器的客户端封装，提供 HTTP 请求（获取 Agent/会话列表等）
+ *              和 WebSocket 连接（流式接收 AI 回复）两种通信方式。
+ */
 import uuid from 'uuid';
 import type { SwiftChatMessage } from '../types/Chat.ts';
 
 /** 日志标签前缀 */
 const TAG = '[NanoAgent]';
 
+/** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
 
 /** nano-agent 服务器通过 WebSocket 下发的所有消息类型 */
@@ -143,11 +149,17 @@ function httpDelete(url: string): Promise<string> {
  * 断线自动重连，最多 5 次，线性退避。
  */
 export class NanoAgentClient {
+  /** WebSocket 连接实例 */
   private ws: WebSocket | null = null;
+  /** 当前已尝试的重连次数 */
   private reconnectAttempts = 0;
+  /** 最大重连次数 */
   private maxReconnectAttempts = 5;
+  /** 重连定时器 ID，disconnect 时需要清除 */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** connect() 的 resolve 回调，收到 connected 消息时调用 */
   private resolveConnect: (() => void) | null = null;
+  /** connect() 的 reject 回调，重连耗尽时调用 */
   private rejectConnect: ((err: Error) => void) | null = null;
 
   /** 收到 step_complete 事件时触发 */
@@ -164,7 +176,7 @@ export class NanoAgentClient {
   /** 收到 title_updated 事件时触发 */
   onTitleUpdated: ((sessionId: string, title: string) => void) | null = null;
 
-  /** WebSocket 是否处于 OPEN 状态 */
+  /** 检查 WebSocket 是否处于 OPEN 状态 */
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
@@ -185,7 +197,11 @@ export class NanoAgentClient {
     });
   }
 
-  /** 内部：创建 WebSocket 并绑定事件处理器，URL 由 http(s) 替换为 ws(s) + /ws */
+  /**
+   * 创建 WebSocket 连接并绑定 onopen/onmessage/onclose/onerror 回调。
+   * 将 http(s) 地址转换为 ws(s) + /ws 路径。
+   * @param serverAddress 服务器 HTTP 地址
+   */
   private doConnect(serverAddress: string) {
     const wsUrl = serverAddress.replace(/^https?/, 'wss') + '/ws';
     console.log(`${TAG} WebSocket connecting to ${wsUrl}`);
@@ -239,7 +255,10 @@ export class NanoAgentClient {
     };
   }
 
-  /** 内部：根据消息类型分发到对应回调 */
+  /**
+   * 根据消息类型分发到对应的外部回调。
+   * @param msg 服务器下发的消息对象
+   */
   private handleMessage(msg: ServerMessage) {
     switch (msg.type) {
       case 'connected':
@@ -275,7 +294,10 @@ export class NanoAgentClient {
     }
   }
 
-  /** 内部：线性退避重连，超过最大次数则 reject */
+  /**
+   * 线性退避重连：每次重连间隔递增 1 秒，超过最大次数则拒绝 connect Promise。
+   * @param serverAddress 服务器地址
+   */
   private attemptReconnect(serverAddress: string) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log(
@@ -300,7 +322,9 @@ export class NanoAgentClient {
     }, delay);
   }
 
-  /** 断开连接，取消重连定时器，置空 onclose 防止触发重连 */
+  /**
+   * 断开 WebSocket 连接，清除重连定时器，置空所有回调防止内存泄漏。
+   */
   disconnect() {
     console.log(`${TAG} disconnect`);
     if (this.reconnectTimer) {
@@ -374,18 +398,23 @@ export class NanoAgentClient {
   }
 }
 
+export interface AgentInfo {
+  id: string;
+  name: string;
+  description?: string;
+  defaultModel?: { provider: string; model: string };
+}
+
 /**
  * 从服务器获取可用 agent 列表。
  * @param serverAddress 服务器地址
- * @returns agent 数组，每项含 id 和 name
+ * @returns agent 数组，每项含 id、name 等字段
  */
-export async function fetchAgents(
-  serverAddress: string
-): Promise<{ id: string; name: string }[]> {
+export async function fetchAgents(serverAddress: string): Promise<AgentInfo[]> {
   const url = `${serverAddress}/api/agents`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as {
-    agents: { id: string; name: string }[];
+    agents: AgentInfo[];
   };
   console.log(
     `${TAG} fetchAgents → ${data.agents.length} agents: ${data.agents
@@ -393,6 +422,19 @@ export async function fetchAgents(
       .join(', ')}`
   );
   return data.agents;
+}
+
+/**
+ * 获取指定 agent 的完整信息（参照桌面端的 getAgent）。
+ */
+export async function fetchAgentDetail(
+  serverAddress: string,
+  agentId: string
+): Promise<AgentInfo> {
+  const url = `${serverAddress}/api/agents/${agentId}`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { agent: AgentInfo };
+  return data.agent;
 }
 
 interface SessionMeta {

@@ -1,3 +1,10 @@
+/**
+ * @file CustomSendComponent.tsx
+ * @description 聊天输入区域右侧的操作按钮组件。
+ * 根据聊天状态和输入内容，在三种形态之间切换：
+ * - 有输入文本/附件或正在回复时：显示发送按钮（回复中变为停止按钮）
+ * - 无输入且空闲时：显示附件添加按钮（CustomAddFileComponent）
+ */
 import { Send, SendProps } from 'react-native-gifted-chat';
 import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -5,10 +12,15 @@ import { ChatStatus, FileInfo, SwiftChatMessage } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { useTheme, ColorScheme } from '../../theme';
 
+/** 自定义发送按钮 Props */
 interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
+  /** 当前聊天状态（空闲/回复中/完成） */
   chatStatus: ChatStatus;
+  /** 已选中的附件文件列表 */
   selectedFiles: FileInfo[];
+  /** 停止按钮回调：中断 AI 回复 */
   onStopPress: () => void;
+  /** 文件选择回调：用户添加附件后触发 */
   onFileSelected: (files: FileInfo[]) => void;
 }
 
@@ -23,6 +35,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  /** 点击发送：将输入文本 trim 后通过 GiftedChat 的 onSend 回调发出 */
   const handleSend = useCallback(() => {
     if (onSend) {
       onSend(
@@ -32,6 +45,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
     }
   }, [onSend, text]);
 
+  /** 文件选择回调透传 */
   const handleFileSelected = useCallback(
     (files: FileInfo[]) => {
       onFileSelected(files);
@@ -39,6 +53,10 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
     [onFileSelected]
   );
 
+  /**
+   * 判断是否显示发送按钮区域（而非附件按钮）：
+   * 有输入文本、有附件、或正在回复中时显示
+   */
   const isShowSending =
     (text && text.length > 0) ||
     selectedFiles.length > 0 ||
@@ -54,6 +72,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
         }}
       >
         <>
+          {/* AI 回复中：显示停止按钮（圆形 + 方块图标） */}
           {chatStatus === ChatStatus.Running && (
             <TouchableOpacity
               style={styles.stopContainer}
@@ -63,6 +82,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
               <View style={styles.rectangle} />
             </TouchableOpacity>
           )}
+          {/* 空闲状态：显示发送箭头图标 */}
           {chatStatus !== ChatStatus.Running && (
             <Image
               source={
@@ -77,12 +97,14 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       </Send>
     );
   } else {
+    /** 无输入内容且空闲时：显示附件添加按钮 */
     return (
       <CustomAddFileComponent {...props} onFileSelected={handleFileSelected} />
     );
   }
 };
 
+/** 样式工厂函数 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     stopContainer: {

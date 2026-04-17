@@ -1,3 +1,8 @@
+/**
+ * @file CustomDrawerContent.tsx
+ * @description 侧边栏（Drawer）内容组件，显示按日期分组的会话历史列表，
+ *              支持点击切换会话、长按删除会话、底部跳转设置页。
+ */
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -38,29 +43,42 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   navigation,
 }) => {
   const { colors, isDark } = useTheme();
+  /** 按日期分组后的会话列表（含虚拟标题行），直接传给 FlatList 渲染 */
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
+  /** groupChatHistory 的 ref 副本，供异步回调中读取 */
   const groupChatHistoryRef = useRef(groupChatHistory);
+  /** 未分组的原始会话列表缓存 */
   const chatHistoryRef = useRef<Chat[]>([]);
+  /** 是否显示删除确认弹窗 */
   const [showDialog, setShowDialog] = useState<boolean>(false);
+  /** 待删除的会话 ID，长按时暂存 */
   const deleteIdRef = useRef<string>('');
   const drawerStatus = useDrawerStatus();
+  /** 当前选中的会话 ID，用于高亮显示 */
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 点击计数器，每次跳转会话时递增，用作路由参数触发 useEffect */
   const tapIndexRef = useRef<number>(1);
+  /** 是否首次渲染（Mac 端首次加载时直接拉取数据，不做 Drawer 动画） */
   const isFirstRenderRef = useRef<boolean>(true);
+  /** Mac 端控制 Drawer 切换为 slide 模式的标记 */
   const isSlideDrawerEnabledRef = useRef<boolean>(false);
   const { event, sendEvent } = useAppContext();
   const { drawerType, setDrawerType } = useAppContext();
 
   const drawerTypeRef = useRef(drawerType);
   const setDrawerTypeRef = useRef(setDrawerType);
+
+  /** 同步 drawerType 到 ref */
   useEffect(() => {
     drawerTypeRef.current = drawerType;
   }, [drawerType]);
 
+  /** 同步 groupChatHistory 到 ref */
   useEffect(() => {
     groupChatHistoryRef.current = groupChatHistory;
   }, [groupChatHistory]);
 
+  /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、标题变更、Agent 切换 */
   useEffect(() => {
     if (event?.event === 'updateHistory') {
       handleUpdateHistory();
@@ -76,9 +94,15 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           )
         );
       }
+    } else if (event?.event === 'agentChanged') {
+      handleUpdateHistory();
+      setSelectedId(null);
     }
   }, [event]);
 
+  /**
+   * 监听 Drawer 开合状态：打开时拉取最新会话列表并触感反馈，Mac 端处理 permanent/slide 模式切换。
+   */
   useEffect(() => {
     if (isMac && isFirstRenderRef.current) {
       handleUpdateHistory();
@@ -135,6 +159,9 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     }
   };
 
+  /**
+   * Mac 端点击会话时将 Drawer 切为 permanent 模式（侧边栏常驻显示）。
+   */
   const setDrawerToPermanent = () => {
     if (isMac && drawerType === 'slide') {
       setDrawerType('permanent');
@@ -174,6 +201,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         style={styles.flatList}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
+          // id 以 '-' 开头的是虚拟标题行（如 "Today"、"Yesterday"）
           if (item.id.startsWith('-')) {
             return (
               <View style={styles.sectionContainer}>
@@ -182,6 +210,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               </View>
             );
           } else {
+            // 正常会话行：点击跳转聊天页，长按弹出删除确认
             const isSelected = selectedId === item.id;
             return (
               <TouchableOpacity
@@ -217,6 +246,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           }
         }}
       />
+      {/* 底部设置按钮 */}
       <TouchableOpacity
         style={styles.settingsTouch}
         onPress={() => {
@@ -234,6 +264,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         />
         <Text style={styles.settingsText}>Settings</Text>
       </TouchableOpacity>
+      {/* 删除会话确认弹窗 */}
       <Dialog.Container visible={showDialog}>
         <Dialog.Title>Delete Message</Dialog.Title>
         <Dialog.Description>You cannot undo this action.</Dialog.Description>
@@ -255,16 +286,20 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   );
 };
 
+/** 侧边栏样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
+    /** 手机端侧边栏容器 */
     safeArea: {
       flex: 1,
       backgroundColor: colors.drawerBackground,
     },
+    /** Mac 端侧边栏容器 */
     macContainer: {
       flex: 1,
       backgroundColor: colors.drawerBackgroundMac,
     },
+    /** 底部设置按钮容器 */
     settingsTouch: {
       flexDirection: 'row',
       justifyContent: 'flex-start',
@@ -287,10 +322,11 @@ const createStyles = (colors: ColorScheme) =>
       height: 24,
       borderRadius: 12,
     },
-
+    /** 会话列表 FlatList */
     flatList: {
       marginVertical: 4,
     },
+    /** 单个会话行的触摸区域 */
     touch: {
       paddingHorizontal: 8,
       paddingVertical: 12,
@@ -298,26 +334,32 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 2,
       borderRadius: 8,
     },
+    /** 手机端选中会话的高亮背景 */
     touchSelected: {
       backgroundColor: colors.selectedBackground,
     },
+    /** Mac 端选中会话的高亮背景 */
     macTouchSelected: {
       backgroundColor: colors.selectedBackgroundMac,
     },
+    /** 日期分组标题容器（含分隔线 + 文字） */
     sectionContainer: {
       paddingHorizontal: 8,
       marginHorizontal: 12,
       marginVertical: 12,
     },
+    /** 日期分组标题上方的分隔线 */
     sectionDivider: {
       height: 1,
       backgroundColor: colors.border,
     },
+    /** 日期分组标题文字（如 "Today"、"Yesterday"） */
     sectionText: {
       marginTop: 17,
       fontSize: 14,
       color: colors.textSecondary,
     },
+    /** 会话标题文字 */
     title: {
       fontSize: 16,
       color: colors.text,

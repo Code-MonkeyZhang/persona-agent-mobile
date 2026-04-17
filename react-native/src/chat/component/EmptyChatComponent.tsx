@@ -1,3 +1,11 @@
+/**
+ * @file EmptyChatComponent.tsx
+ * @description 聊天页面无消息时的欢迎界面。
+ * - 正常状态：显示 "Hi, I'm AI" 文字，点击可跳转设置页
+ * - 加载状态：显示旋转加载动画
+ * 注意：GiftedChat 的列表是倒序渲染的（最新消息在顶部），
+ * 所以需要 scaleY: -1 来翻转布局方向。
+ */
 import React from 'react';
 import {
   Text,
@@ -15,7 +23,9 @@ import { useTheme, ColorScheme } from '../../theme';
 const isAndroid = Platform.OS === 'android';
 type NavigationProp = DrawerNavigationProp<RouteParamList>;
 
+/** 空聊天页面 Props */
 interface EmptyChatComponentProps {
+  /** 是否正在加载历史消息 */
   isLoadingMessages?: boolean;
 }
 
@@ -29,6 +39,7 @@ export const EmptyChatComponent = ({
 
   return (
     <View style={styles.emptyChatContainer}>
+      {/* 点击欢迎文字/加载动画可跳转到设置页 */}
       <TouchableOpacity
         onPress={() => {
           navigation.navigate('Settings', {});
@@ -49,6 +60,7 @@ export const EmptyChatComponent = ({
   );
 };
 
+/** 样式工厂函数 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     emptyChatContainer: {
