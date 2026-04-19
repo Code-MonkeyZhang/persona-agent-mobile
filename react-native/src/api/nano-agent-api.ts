@@ -403,6 +403,22 @@ export interface AgentInfo {
   name: string;
   description?: string;
   defaultModel?: { provider: string; model: string };
+  /** 头像标记，有值（如 "uploaded"）表示服务器上有头像图片 */
+  avatar?: string;
+}
+
+/**
+ * 拼接 Agent 头像图片的 HTTP 地址。
+ * 服务器在 `GET /api/agents/:agentId/avatar` 返回 256x256 PNG。
+ * @param agentId Agent ID
+ * @param serverAddress 服务器地址
+ * @returns 头像图片的完整 URL
+ */
+export function getAgentAvatarUrl(
+  agentId: string,
+  serverAddress: string
+): string {
+  return `${serverAddress}/api/agents/${agentId}/avatar`;
 }
 
 /**

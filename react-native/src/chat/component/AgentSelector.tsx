@@ -3,9 +3,10 @@
  * @description Agent 选择触发按钮，渲染在聊天页面导航栏中央。
  * 点击后测量按钮位置，弹出 AgentSelectionModal 下拉菜单供用户切换 Agent。
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
+  Image,
   Platform,
   StatusBar,
   StyleSheet,
@@ -15,6 +16,8 @@ import {
 } from 'react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/nano-agent-api';
+import { getAgentAvatarUrl } from '../../api/nano-agent-api';
+import { getServerAddress } from '../../storage/StorageUtils';
 import AgentSelectionModal from './AgentSelectionModal';
 
 /** Agent 选择器 Props */
@@ -75,6 +78,13 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
   const currentAgent = agents.find((a) => a.id === currentAgentId);
   const displayName = currentAgent?.name ?? 'Agent';
   const initial = displayName.charAt(0).toUpperCase();
+  const hasAvatar = !!currentAgent?.avatar;
+  const [avatarError, setAvatarError] = useState(false);
+
+  /** 切换 Agent 时重置头像加载失败状态 */
+  useEffect(() => {
+    setAvatarError(false);
+  }, [currentAgentId]);
 
   /**
    * 点击触发按钮时，测量按钮在屏幕上的位置，
@@ -113,15 +123,25 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
       >
         {/* collapsable=false 确保 Android 上 ref.measure() 能正确获取坐标 */}
         <View ref={triggerRef} collapsable={false} style={styles.triggerInner}>
-          {/* Agent 头像圆形图标，显示名称首字母 */}
-          <View
-            style={[
-              styles.triggerAvatar,
-              { backgroundColor: getAvatarColor(displayName) },
-            ]}
-          >
-            <Text style={styles.triggerAvatarText}>{initial}</Text>
-          </View>
+          {/* Agent 头像：有头像用图片，没有则显示首字母圆形图标 */}
+          {hasAvatar && !avatarError ? (
+            <Image
+              source={{
+                uri: getAgentAvatarUrl(currentAgentId, getServerAddress()),
+              }}
+              style={styles.triggerAvatar}
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <View
+              style={[
+                styles.triggerAvatar,
+                { backgroundColor: getAvatarColor(displayName) },
+              ]}
+            >
+              <Text style={styles.triggerAvatarText}>{initial}</Text>
+            </View>
+          )}
           <Text style={styles.triggerName} numberOfLines={1}>
             {displayName}
           </Text>
@@ -160,6 +180,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
     triggerAvatarText: {
       color: '#ffffff',

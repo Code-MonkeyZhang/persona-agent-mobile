@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect } from 'react';
 import {
   FlatList,
+  Image,
   Modal,
   StyleSheet,
   Text,
@@ -21,6 +22,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/nano-agent-api';
+import { getAgentAvatarUrl } from '../../api/nano-agent-api';
+import { getServerAddress } from '../../storage/StorageUtils';
 
 /** 下拉菜单 Props */
 interface AgentSelectionModalProps {
@@ -147,7 +150,7 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
   }));
 
   /** 渲染单个 Agent 列表项 */
-  const renderAgentItem = ({ item }: { item: AgentInfo }) => {
+  const renderAgentItem = ({ item }: { item: AgentInfo; index: number }) => {
     const isSelected = item.id === currentAgentId;
     const agentInitial = item.name.charAt(0).toUpperCase();
 
@@ -157,14 +160,21 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
         onPress={() => handleAgentSelect(item.id)}
         activeOpacity={0.6}
       >
-        <View
-          style={[
-            styles.agentIcon,
-            { backgroundColor: getAvatarColor(item.name) },
-          ]}
-        >
-          <Text style={styles.agentIconText}>{agentInitial}</Text>
-        </View>
+        {item.avatar ? (
+          <Image
+            source={{ uri: getAgentAvatarUrl(item.id, getServerAddress()) }}
+            style={styles.agentIcon}
+          />
+        ) : (
+          <View
+            style={[
+              styles.agentIcon,
+              { backgroundColor: getAvatarColor(item.name) },
+            ]}
+          >
+            <Text style={styles.agentIconText}>{agentInitial}</Text>
+          </View>
+        )}
         <Text style={styles.agentName}>{item.name}</Text>
       </TouchableOpacity>
     );
@@ -253,6 +263,7 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 10,
+      overflow: 'hidden',
     },
     agentIconText: {
       color: '#ffffff',
