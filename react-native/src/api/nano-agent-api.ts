@@ -405,6 +405,25 @@ export interface AgentInfo {
   defaultModel?: { provider: string; model: string };
   /** 头像标记，有值（如 "uploaded"）表示服务器上有头像图片 */
   avatar?: string;
+  systemPrompt?: string;
+  maxSteps?: number;
+  mcpNames?: string[];
+  skillNames?: string[];
+  defaultWorkspacePath?: string;
+}
+
+/** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
+export interface McpServerInfo {
+  name: string;
+  status: 'disconnected' | 'connecting' | 'connected';
+  tools: { id: string; name: string; description: string }[];
+  error?: string;
+}
+
+/** Skill 信息（对应 GET /api/skills 返回的单个 skill） */
+export interface SkillInfo {
+  name: string;
+  description: string;
 }
 
 /**
@@ -451,6 +470,30 @@ export async function fetchAgentDetail(
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { agent: AgentInfo };
   return data.agent;
+}
+
+/**
+ * 获取服务器上所有 MCP 服务器列表（含连接状态和工具信息）。
+ */
+export async function fetchMcpServers(
+  serverAddress: string
+): Promise<McpServerInfo[]> {
+  const url = `${serverAddress}/api/mcp`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { servers: McpServerInfo[] };
+  return data.servers;
+}
+
+/**
+ * 获取服务器上所有技能列表（名称 + 描述）。
+ */
+export async function fetchSkills(
+  serverAddress: string
+): Promise<SkillInfo[]> {
+  const url = `${serverAddress}/api/skills`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { skills: SkillInfo[] };
+  return data.skills;
 }
 
 interface SessionMeta {

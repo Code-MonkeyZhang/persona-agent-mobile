@@ -14,11 +14,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import LoadingSpinner from './LoadingSpinner';
+import LoadingSpinner from './LoadingSpinner.tsx';
 import { useNavigation } from '@react-navigation/native';
 import { RouteParamList } from '../../types/RouteTypes.ts';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { useTheme, ColorScheme } from '../../theme';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
 
 const isAndroid = Platform.OS === 'android';
 type NavigationProp = DrawerNavigationProp<RouteParamList>;

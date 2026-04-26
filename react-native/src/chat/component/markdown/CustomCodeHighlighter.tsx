@@ -25,7 +25,7 @@ import SyntaxHighlighter, {
 import transform, { StyleTuple } from 'css-to-react-native';
 import { isMac } from '../../../App.tsx';
 import { trimNewlines } from 'trim-newlines';
-import ChunkedCodeView from './ChunkedCodeView';
+import ChunkedCodeView from './ChunkedCodeView.tsx';
 
 type ReactStyle = Record<string, CSSProperties>;
 type HighlighterStyleSheet = { [key: string]: TextStyle };

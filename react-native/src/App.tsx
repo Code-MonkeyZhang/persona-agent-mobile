@@ -11,12 +11,13 @@ import ChatScreen from './chat/ChatScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider, useAppContext } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
+import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { isAndroid, isMacCatalyst } from './utils/PlatformUtils';
-import { ThemeProvider, useTheme } from './theme';
-import { configureErrorHandling } from './utils/ErrorUtils';
+import { isAndroid, isMacCatalyst } from './utils/PlatformUtils.ts';
+import { ThemeProvider, useTheme } from './theme/index.ts';
+import { configureErrorHandling } from './utils/ErrorUtils.ts';
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -29,7 +30,7 @@ const width = minWidth > 434 ? 300 : minWidth * 0.83;
 const Drawer = createDrawerNavigator<RouteParamList>();
 
 // 创建Stack导航器实例，用于全屏页面之间的跳转
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RouteParamList>();
 
 // 渲染自定义抽屉内容的包装器
 // CustomDrawerContent 定义了侧边栏的布局：快捷入口(Chat/Image) + 聊天历史列表 + Settings
@@ -92,15 +93,28 @@ const DrawerNavigator = () => {
  * Stack导航器 - 全屏页面栈管理
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
+ * - AgentDetail: Agent 详情页（从右侧推入全屏）
  */
 const AppNavigator = () => {
-  useTheme();
+  const { colors } = useTheme();
   return (
     <Stack.Navigator initialRouteName="Drawer" screenOptions={{}}>
       <Stack.Screen
         name="Drawer"
         component={DrawerNavigator}
         options={{ headerShown: false, headerLargeTitleShadowVisible: false }}
+      />
+      <Stack.Screen
+        name="AgentDetail"
+        component={AgentDetailScreen}
+        options={{
+          headerShown: true,
+          title: 'Agent Detail',
+          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.background },
+          headerBackTitle: 'Back',
+          animation: 'default',
+        }}
       />
     </Stack.Navigator>
   );

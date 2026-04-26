@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, Image } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { isMac } from '../App.tsx';
-import { useTheme, ColorScheme } from '../theme';
+import { useTheme, ColorScheme } from '../theme/index.ts';
 
 interface DropdownItem {
   label: string;

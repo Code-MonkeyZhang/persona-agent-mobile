@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
-import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src';
+import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import {
   getHapticEnabled,
   getServerAddress,
@@ -23,7 +23,7 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 
 import { isMac } from '../App.tsx';
 import CustomTextInput from './CustomTextInput.tsx';
-import { useTheme, ColorScheme } from '../theme';
+import { useTheme, ColorScheme } from '../theme/index.ts';
 
 function SettingsScreen(): React.JSX.Element {
   const { colors, isDark } = useTheme();

@@ -38,7 +38,7 @@ import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { useAppContext } from '../../history/AppProvider.tsx';
-import { useTheme, ColorScheme } from '../../theme';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
 import {
   getReasoningExpanded,
   saveReasoningExpanded,

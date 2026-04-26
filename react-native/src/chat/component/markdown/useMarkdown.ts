@@ -3,14 +3,14 @@ import { marked, type Tokenizer } from 'marked';
 import type {
   MarkedStyles,
   UserTheme,
-} from 'react-native-marked/src/theme/types';
-import Renderer from 'react-native-marked/src/lib/Renderer';
-import getStyles from 'react-native-marked/src/theme/styles';
+} from 'react-native-marked/src/theme/types.ts';
+import Renderer from 'react-native-marked/src/lib/Renderer.tsx';
+import getStyles from 'react-native-marked/src/theme/styles.ts';
 import type { ColorSchemeName } from 'react-native';
 import type {
   CustomToken,
   RendererInterface,
-} from 'react-native-marked/src/lib/types';
+} from 'react-native-marked/src/lib/types.ts';
 import { ChatStatus } from '../../../types/Chat.ts';
 import Parser from './Parser.tsx';
 

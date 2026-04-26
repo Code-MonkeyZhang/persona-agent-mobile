@@ -33,7 +33,7 @@ import Animated, {
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { useTheme } from '../../../theme';
+import { useTheme } from '../../../theme/index.ts';
 import { isMac } from '../../../App.tsx';
 
 interface MermaidFullScreenViewerProps {

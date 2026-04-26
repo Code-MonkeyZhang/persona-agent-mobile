@@ -10,7 +10,7 @@ import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ChatStatus, FileInfo, SwiftChatMessage } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
-import { useTheme, ColorScheme } from '../../theme';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
 
 /** 自定义发送按钮 Props */
 interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {

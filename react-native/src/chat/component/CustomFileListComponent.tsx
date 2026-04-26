@@ -15,7 +15,7 @@ import {
 import { FileInfo, FileType } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import ImageView from 'react-native-image-viewing';
-import { ImageSource } from 'react-native-image-viewing/dist/@types';
+import { ImageSource } from 'react-native-image-viewing/dist/@types/index';
 import Share from 'react-native-share';
 import FileViewer from 'react-native-file-viewer';
 import { isMac } from '../../App.tsx';
@@ -23,7 +23,7 @@ import { getFullFileUrl, saveFile } from '../util/FileUtils.ts';
 import { getVideoMetaData, Video } from 'react-native-compressor';
 import * as Progress from 'react-native-progress';
 import { showInfo } from '../util/ToastUtils.ts';
-import { ColorScheme, useTheme } from '../../theme';
+import { ColorScheme, useTheme } from '../../theme/index.ts';
 
 interface CustomFileProps {
   /** 当前选中的文件列表 */
