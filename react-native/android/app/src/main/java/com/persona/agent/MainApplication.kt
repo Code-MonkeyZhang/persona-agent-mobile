@@ -1,4 +1,4 @@
-package com.aws.swiftchat
+package com.persona.agent
 
 import android.app.Application
 import androidx.appcompat.app.AppCompatDelegate

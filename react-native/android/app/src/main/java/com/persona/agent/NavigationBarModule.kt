@@ -1,4 +1,4 @@
-package com.aws.swiftchat
+package com.persona.agent
 
 import android.graphics.Color
 import android.os.Build

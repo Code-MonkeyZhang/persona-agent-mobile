@@ -8,12 +8,12 @@
 import { Send, SendProps } from 'react-native-gifted-chat';
 import React, { useMemo, useCallback } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { ChatStatus, FileInfo, SwiftChatMessage } from '../../types/Chat.ts';
+import { ChatStatus, FileInfo, ChatMessage } from '../../types/Chat.ts';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 
 /** 自定义发送按钮 Props */
-interface CustomSendComponentProps extends SendProps<SwiftChatMessage> {
+interface CustomSendComponentProps extends SendProps<ChatMessage> {
   /** 当前聊天状态（空闲/回复中/完成） */
   chatStatus: ChatStatus;
   /** 已选中的附件文件列表 */
@@ -38,10 +38,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   /** 点击发送：将输入文本 trim 后通过 GiftedChat 的 onSend 回调发出 */
   const handleSend = useCallback(() => {
     if (onSend) {
-      onSend(
-        { text: text ? text.trim() : '' } as Partial<SwiftChatMessage>,
-        true
-      );
+      onSend({ text: text ? text.trim() : '' } as Partial<ChatMessage>, true);
     }
   }, [onSend, text]);
 

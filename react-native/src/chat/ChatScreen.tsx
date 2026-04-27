@@ -40,13 +40,13 @@ import {
   saveServerAgentId,
 } from '../storage/StorageUtils.ts';
 import {
-  NanoAgentClient,
+  ServerClient,
   fetchAgents,
   fetchSessionMessages,
-  convertToSwiftChatMessages,
-} from '../api/nano-agent-api.ts';
-import type { AgentInfo } from '../api/nano-agent-api.ts';
-import { ChatStatus, FileInfo, SwiftChatMessage } from '../types/Chat.ts';
+  convertToChatMessages,
+} from '../api/server-api.ts';
+import type { AgentInfo } from '../api/server-api.ts';
+import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
 import CustomSendComponent from './component/CustomSendComponent.tsx';
@@ -67,7 +67,7 @@ const BOT_ID = 2;
 
 /**
  * 创建一条 AI 占位消息，在流式回复开始前插入消息列表。
- * @returns 占位的 SwiftChatMessage，文本内容为 "..."
+ * @returns 占位的 ChatMessage，文本内容为 "..."
  */
 const createBotMessage = () => {
   return {
@@ -97,7 +97,7 @@ function ChatScreen(): React.JSX.Element {
   const tapIndex = route.params?.tapIndex;
 
   // ==================== 状态声明 ====================
-  const [messages, setMessages] = useState<SwiftChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
@@ -110,7 +110,7 @@ function ChatScreen(): React.JSX.Element {
   );
   const chatStatusRef = useRef(chatStatus);
   const messagesRef = useRef(messages);
-  const flatListRef = useRef<FlatList<SwiftChatMessage>>(null);
+  const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const textInputViewRef = useRef<TextInput>(null);
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef(initialSessionId || '');
@@ -125,8 +125,8 @@ function ChatScreen(): React.JSX.Element {
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
   const isNewChatRef = useRef(!initialSessionId);
-  /** 当前活跃的 NanoAgentClient 实例，未连接时为 null */
-  const nanoAgentRef = useRef<NanoAgentClient | null>(null);
+  /** 当前活跃的 ServerClient 实例，未连接时为 null */
+  const serverClientRef = useRef<ServerClient | null>(null);
   /** 服务器地址缓存，从 MMKV 加载 */
   const serverAddressRef = useRef(getServerAddress());
 
@@ -157,23 +157,23 @@ function ChatScreen(): React.JSX.Element {
     selectedFilesRef.current = selectedFiles;
   }, [selectedFiles]);
 
-  // ==================== Nano-Agent 初始化 ====================
+  // ==================== Server Client 初始化 ====================
   /**
-   * 屏幕获得焦点时初始化 NanoAgentClient。
+   * 屏幕获得焦点时初始化 ServerClient。
    * 使用 useFocusEffect 而非 useEffect，确保从设置页返回后能重新检测。
    *
-   * 流程：读取服务器地址 → 获取 agent → 注册回调 → connect → 存入 nanoAgentRef。
+   * 流程：读取服务器地址 → 获取 agent → 注册回调 → connect → 存入 serverClientRef。
    * 离开屏幕时自动 disconnect 并置空 ref。
    */
   useFocusEffect(
     React.useCallback(() => {
       const address = getServerAddress();
       console.log(
-        `[ChatScreen] nano-agent init (focus), serverAddress="${address}"`
+        `[ChatScreen] server client init (focus), serverAddress="${address}"`
       );
 
-      if (nanoAgentRef.current) {
-        console.log('[ChatScreen] nano-agent already connected, skip');
+      if (serverClientRef.current) {
+        console.log('[ChatScreen] server client already connected, skip');
         return;
       }
 
@@ -183,7 +183,7 @@ function ChatScreen(): React.JSX.Element {
       serverAddressRef.current = address;
 
       let cancelled = false;
-      const client = new NanoAgentClient();
+      const client = new ServerClient();
 
       (async () => {
         try {
@@ -247,11 +247,11 @@ function ChatScreen(): React.JSX.Element {
           if (cancelled) {
             return;
           }
-          nanoAgentRef.current = client;
-          console.log('[ChatScreen] nano-agent client ready');
+          serverClientRef.current = client;
+          console.log('[ChatScreen] server client ready');
         } catch (e) {
           console.log(
-            `[ChatScreen] nano-agent init failed: ${
+            `[ChatScreen] server client init failed: ${
               e instanceof Error ? e.message : e
             }`
           );
@@ -261,7 +261,7 @@ function ChatScreen(): React.JSX.Element {
       return () => {
         cancelled = true;
         client.disconnect();
-        nanoAgentRef.current = null;
+        serverClientRef.current = null;
       };
     }, [])
   );
@@ -280,17 +280,17 @@ function ChatScreen(): React.JSX.Element {
 
       setMessages([]);
 
-      if (nanoAgentRef.current && serverAddressRef.current) {
+      if (serverClientRef.current && serverAddressRef.current) {
         const agentId = getServerAgentId();
         if (agentId) {
-          nanoAgentRef.current
+          serverClientRef.current
             .createSession(agentId, serverAddressRef.current)
             .then((newSessionId) => {
               sessionIdRef.current = newSessionId;
               sendEventRef.current('updateHistorySelectedId', {
                 id: newSessionId,
               });
-              nanoAgentRef.current?.subscribe(newSessionId);
+              serverClientRef.current?.subscribe(newSessionId);
             })
             .catch((e: Error) => {
               console.log(`[ChatScreen] createSession failed: ${e.message}`);
@@ -392,12 +392,12 @@ function ChatScreen(): React.JSX.Element {
             agentId,
             initialSessionId
           );
-          const swiftMessages = convertToSwiftChatMessages(
+          const chatMessages = convertToChatMessages(
             session.messages,
             session.createdAt
           );
-          setMessages(swiftMessages);
-          nanoAgentRef.current?.subscribe(initialSessionId);
+          setMessages(chatMessages);
+          serverClientRef.current?.subscribe(initialSessionId);
         } catch (e) {
           console.log(`[ChatScreen] loadSession failed: ${e}`);
         } finally {
@@ -592,7 +592,7 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== 发送消息 ====================
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
-  const onSend = useCallback(async (message: SwiftChatMessage[] = []) => {
+  const onSend = useCallback(async (message: ChatMessage[] = []) => {
     // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
     setUserScrolled(false);
     // 取出当前选中的附件文件
@@ -629,23 +629,23 @@ function ChatScreen(): React.JSX.Element {
             console.log(
               '[ChatScreen] onSend: no server session, auto-creating...'
             );
-            sessionId = await nanoAgentRef.current!.createSession(
+            sessionId = await serverClientRef.current!.createSession(
               agentId,
               serverAddressRef.current!
             );
             sessionIdRef.current = sessionId;
-            nanoAgentRef.current!.subscribe(sessionId);
+            serverClientRef.current!.subscribe(sessionId);
             console.log(
               `[ChatScreen] onSend: auto-created session ${sessionId}`
             );
           }
           console.log(
-            `[ChatScreen] onSend (nano-agent): text="${message[0].text.substring(
+            `[ChatScreen] onSend: text="${message[0].text.substring(
               0,
               80
             )}" sessionId=${sessionId}`
           );
-          await nanoAgentRef.current!.sendChatMessage(
+          await serverClientRef.current!.sendChatMessage(
             agentId,
             sessionId,
             message[0].text,
@@ -653,7 +653,7 @@ function ChatScreen(): React.JSX.Element {
           );
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
-          console.log(`[ChatScreen] onSend nano-agent error: ${errMsg}`);
+          console.log(`[ChatScreen] onSend error: ${errMsg}`);
         }
       })();
     }
@@ -823,7 +823,7 @@ function ChatScreen(): React.JSX.Element {
                 inputTextRef.current.length > 0 &&
                 chatStatusRef.current !== ChatStatus.Running
               ) {
-                const msg: SwiftChatMessage = {
+                const msg: ChatMessage = {
                   text: inputTextRef.current,
                   user: { _id: 1 },
                   createdAt: new Date(),

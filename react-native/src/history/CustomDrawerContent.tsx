@@ -25,7 +25,7 @@ import {
   fetchAgentDetail,
   fetchSessions,
   getAgentAvatarUrl,
-} from '../api/nano-agent-api.ts';
+} from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import Dialog from 'react-native-dialog';
 import { useAppContext } from './AppProvider.tsx';
@@ -237,10 +237,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           {agentInfo.avatar && !agentAvatarError ? (
             <Image
               source={{
-                uri: getAgentAvatarUrl(
-                  agentInfo.id,
-                  getServerAddress() ?? ''
-                ),
+                uri: getAgentAvatarUrl(agentInfo.id, getServerAddress() ?? ''),
               }}
               style={styles.agentAvatar}
               onError={() => setAgentAvatarError(true)}

@@ -1,6 +1,6 @@
 //
 //  FilePasteModule.h
-//  SwiftChat
+//  Persona
 //
 //  Created for handling file paste events
 //

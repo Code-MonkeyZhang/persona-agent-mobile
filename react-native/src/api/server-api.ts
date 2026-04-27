@@ -1,18 +1,18 @@
 /**
- * @file nano-agent-api.ts
- * @description nano-agent 服务器的客户端封装，提供 HTTP 请求（获取 Agent/会话列表等）
+ * @file server-api.ts
+ * @description Agent Server 的客户端封装，提供 HTTP 请求（获取 Agent/会话列表等）
  *              和 WebSocket 连接（流式接收 AI 回复）两种通信方式。
  */
 import uuid from 'uuid';
-import type { SwiftChatMessage } from '../types/Chat.ts';
+import type { ChatMessage } from '../types/Chat.ts';
 
 /** 日志标签前缀 */
-const TAG = '[NanoAgent]';
+const TAG = '[ServerApi]';
 
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
 
-/** nano-agent 服务器通过 WebSocket 下发的所有消息类型 */
+/** Agent Server 通过 WebSocket 下发的所有消息类型 */
 type ServerMessage =
   | { type: 'connected'; clientId: string }
   | { type: 'subscribed'; sessionId: string }
@@ -143,12 +143,12 @@ function httpDelete(url: string): Promise<string> {
 }
 
 /**
- * nano-agent 服务器客户端（HTTP + WebSocket）。
+ * Agent Server 客户端（HTTP + WebSocket）。
  *
  * 生命周期：connect → subscribe → sendChatMessage → 回调接收结果 → disconnect。
  * 断线自动重连，最多 5 次，线性退避。
  */
-export class NanoAgentClient {
+export class ServerClient {
   /** WebSocket 连接实例 */
   private ws: WebSocket | null = null;
   /** 当前已尝试的重连次数 */
@@ -182,7 +182,7 @@ export class NanoAgentClient {
   }
 
   /**
-   * 连接到 nano-agent 服务器。
+   * 连接到 Agent Server。
    * 先断开旧连接，等待服务器发送 connected 消息后 resolve。
    * @param serverAddress 服务器地址，如 `https://xxx.trycloudflare.com`
    */
@@ -487,9 +487,7 @@ export async function fetchMcpServers(
 /**
  * 获取服务器上所有技能列表（名称 + 描述）。
  */
-export async function fetchSkills(
-  serverAddress: string
-): Promise<SkillInfo[]> {
+export async function fetchSkills(serverAddress: string): Promise<SkillInfo[]> {
   const url = `${serverAddress}/api/skills`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { skills: SkillInfo[] };
@@ -560,16 +558,16 @@ export async function deleteSession(
 }
 
 /**
- * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 SwiftChatMessage[]。
+ * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 ChatMessage[]。
  *
  * 处理逻辑：过滤 system 消息 → 为每条消息生成 uuid → 反转为倒序（GiftedChat 要求）。
  * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条消息间隔 1 秒近似处理。
  */
-export function convertToSwiftChatMessages(
+export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
   sessionCreatedAt: number
-): SwiftChatMessage[] {
-  const result: SwiftChatMessage[] = [];
+): ChatMessage[] {
+  const result: ChatMessage[] = [];
   for (const msg of serverMessages) {
     if (msg.role === 'system') {
       continue;

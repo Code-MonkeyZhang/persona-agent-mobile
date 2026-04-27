@@ -1,4 +1,4 @@
-package com.aws.swiftchat
+package com.persona.agent
 
 import android.content.res.Configuration
 import android.graphics.Color
@@ -14,7 +14,7 @@ class MainActivity : ReactActivity() {
      * Returns the name of the main component registered from JavaScript. This is used to schedule
      * rendering of the component.
      */
-    override fun getMainComponentName(): String = "SwiftChat"
+    override fun getMainComponentName(): String = "Persona"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(null)

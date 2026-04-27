@@ -23,7 +23,7 @@ import Share from 'react-native-share';
 import { MessageProps } from 'react-native-gifted-chat';
 import { CustomMarkdownRenderer } from './markdown/CustomMarkdownRenderer.tsx';
 import { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
-import { ChatStatus, PressMode, SwiftChatMessage } from '../../types/Chat.ts';
+import { ChatStatus, PressMode, ChatMessage } from '../../types/Chat.ts';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -45,7 +45,7 @@ import {
 } from '../../storage/StorageUtils.ts';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
-interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
+interface CustomMessageProps extends MessageProps<ChatMessage> {
   chatStatus: ChatStatus;
   isLastAIMessage?: boolean;
   onReasoningToggle?: (
@@ -54,7 +54,7 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
     animated: boolean
   ) => void;
   messageIndex?: number;
-  flatListRef?: RefObject<FlatList<SwiftChatMessage>>;
+  flatListRef?: RefObject<FlatList<ChatMessage>>;
 }
 
 const { width: screenWidth } = Dimensions.get('window');

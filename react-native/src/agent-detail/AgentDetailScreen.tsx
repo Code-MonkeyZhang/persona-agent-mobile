@@ -24,7 +24,7 @@ import {
   fetchMcpServers,
   fetchSkills,
   getAgentAvatarUrl,
-} from '../api/nano-agent-api.ts';
+} from '../api/server-api.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
 
 type Props = NativeStackScreenProps<RouteParamList, 'AgentDetail'>;
@@ -128,18 +128,26 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
     : '—';
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.content}
+    >
       {/* 头像 + 名称 + 描述 */}
       <View style={styles.avatarCard}>
         {hasAvatar && !avatarError ? (
           <Image
-            source={{ uri: getAgentAvatarUrl(agentId, getServerAddress() ?? '') }}
+            source={{
+              uri: getAgentAvatarUrl(agentId, getServerAddress() ?? ''),
+            }}
             style={styles.avatar}
             onError={() => setAvatarError(true)}
           />
         ) : (
           <View
-            style={[styles.avatar, { backgroundColor: getAvatarColor(displayName) }]}
+            style={[
+              styles.avatar,
+              { backgroundColor: getAvatarColor(displayName) },
+            ]}
           >
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -185,7 +193,9 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
               <Text style={styles.rowLabel}>工作区路径</Text>
             </View>
             <View style={styles.promptContainer}>
-              <Text style={styles.promptText}>{agent.defaultWorkspacePath}</Text>
+              <Text style={styles.promptText}>
+                {agent.defaultWorkspacePath}
+              </Text>
             </View>
           </>
         ) : null}
@@ -203,7 +213,13 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: getMcpStatusColor(mcp.status, mcp.error, colors) },
+                      {
+                        backgroundColor: getMcpStatusColor(
+                          mcp.status,
+                          mcp.error,
+                          colors
+                        ),
+                      },
                     ]}
                   />
                   <Text style={styles.mcpToolCount}>

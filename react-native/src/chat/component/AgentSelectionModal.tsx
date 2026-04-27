@@ -21,8 +21,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme, ColorScheme } from '../../theme';
-import type { AgentInfo } from '../../api/nano-agent-api';
-import { getAgentAvatarUrl } from '../../api/nano-agent-api';
+import type { AgentInfo } from '../../api/server-api';
+import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
 
 /** 下拉菜单 Props */

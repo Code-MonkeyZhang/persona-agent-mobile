@@ -15,8 +15,8 @@ import {
   View,
 } from 'react-native';
 import { useTheme, ColorScheme } from '../../theme';
-import type { AgentInfo } from '../../api/nano-agent-api';
-import { getAgentAvatarUrl } from '../../api/nano-agent-api';
+import type { AgentInfo } from '../../api/server-api';
+import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
 import AgentSelectionModal from './AgentSelectionModal';
 
