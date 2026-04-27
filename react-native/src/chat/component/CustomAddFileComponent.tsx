@@ -30,7 +30,7 @@ import {
 import { isMac } from '../../App.tsx';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
-import { useTheme } from '../../theme';
+import { useTheme } from '../../theme/index.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
 
 const { FilePasteModule } = NativeModules;

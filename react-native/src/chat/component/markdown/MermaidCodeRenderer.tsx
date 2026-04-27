@@ -8,15 +8,15 @@ import React, {
   useEffect,
 } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ColorScheme } from '../../../theme';
-import MermaidRenderer from './MermaidRenderer';
-import CopyButton from './CopyButton';
+import { ColorScheme } from '../../../theme/index.ts';
+import MermaidRenderer from './MermaidRenderer.tsx';
+import CopyButton from './CopyButton.tsx';
 import { vs2015, github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { Platform } from 'react-native';
 import { useAppContext } from '../../../history/AppProvider.tsx';
 
 const CustomCodeHighlighter = React.lazy(
-  () => import('./CustomCodeHighlighter')
+  () => import('./CustomCodeHighlighter.tsx')
 );
 
 interface MermaidCodeRendererProps {

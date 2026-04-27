@@ -27,4 +27,5 @@ export type RouteParamList = {
     tapIndex?: number;
   };
   Settings: NonNullable<unknown>;
+  AgentDetail: { agentId: string };
 };

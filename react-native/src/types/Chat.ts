@@ -73,15 +73,15 @@ export type Usage = {
   totalTokens: number;
 };
 
-export interface SwiftChatMessage extends IMessage {
+export interface ChatMessage extends IMessage {
   usage?: Usage;
   reasoning?: string;
-  user: SwiftChatUser;
+  user: ChatUser;
   metrics?: Metrics;
   citations?: Citation[];
 }
 
-interface SwiftChatUser extends User {}
+interface ChatUser extends User {}
 
 export interface Metrics {
   latencyMs: string;

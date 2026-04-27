@@ -13,7 +13,7 @@ const initializeStorage = () => {
   }
 
   return new MMKV({
-    id: 'swiftchat',
+    id: 'persona',
     encryptionKey: encryptionKey,
   });
 };
@@ -53,7 +53,7 @@ export function getReasoningExpanded() {
   }
 }
 
-/** 保存 nano-agent 服务器地址 */
+/** 保存 Agent Server 地址 */
 export function saveServerAddress(address: string) {
   storage.set(serverAddressKey, address);
 }

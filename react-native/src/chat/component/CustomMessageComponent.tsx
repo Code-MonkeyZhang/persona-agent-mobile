@@ -1,6 +1,6 @@
 /**
  * @file CustomMessageComponent.tsx
- * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、引用、操作按钮、附件）
+ * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、操作按钮、附件）
  */
 import React, {
   useCallback,
@@ -14,12 +14,8 @@ import {
   Dimensions,
   FlatList,
   Image,
-  NativeSyntheticEvent,
-  Platform,
   StyleSheet,
   Text,
-  TextInput,
-  TextInputSelectionChangeEventData,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,7 +23,7 @@ import Share from 'react-native-share';
 import { MessageProps } from 'react-native-gifted-chat';
 import { CustomMarkdownRenderer } from './markdown/CustomMarkdownRenderer.tsx';
 import { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
-import { ChatStatus, PressMode, SwiftChatMessage } from '../../types/Chat.ts';
+import { ChatStatus, PressMode, ChatMessage } from '../../types/Chat.ts';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -41,16 +37,15 @@ import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
-import { isAndroid } from '../../utils/PlatformUtils.ts';
 import { useAppContext } from '../../history/AppProvider.tsx';
-import { useTheme, ColorScheme } from '../../theme';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
 import {
   getReasoningExpanded,
   saveReasoningExpanded,
 } from '../../storage/StorageUtils.ts';
 
-/** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态、编辑回调等属性 */
-interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
+/** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
+interface CustomMessageProps extends MessageProps<ChatMessage> {
   chatStatus: ChatStatus;
   isLastAIMessage?: boolean;
   onReasoningToggle?: (
@@ -59,24 +54,17 @@ interface CustomMessageProps extends MessageProps<SwiftChatMessage> {
     animated: boolean
   ) => void;
   messageIndex?: number;
-  regenerateFromUserMessage?: (
-    userMessageIndex: number,
-    newText?: string
-  ) => void;
-  flatListRef?: RefObject<FlatList<SwiftChatMessage>>;
+  flatListRef?: RefObject<FlatList<ChatMessage>>;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
 
-/** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、引用、操作按钮、附件）TODO:对于MVP这个需要仿照Desktop进行更改 */
+/** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、操作按钮、附件） */
 const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   currentMessage,
   chatStatus,
   isLastAIMessage,
   onReasoningToggle,
-  messageIndex,
-  regenerateFromUserMessage,
-  flatListRef,
 }) => {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -87,121 +75,20 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     useState(getReasoningExpanded);
   const reasoningContainerRef = useRef<View>(null);
   const reasoningContainerHeightRef = useRef<number>(0);
-  const [isEdit, setIsEdit] = useState(false);
-  const [editText, setEditText] = useState(currentMessage?.text || '');
-
-  const [inputHeight, setInputHeight] = useState(0);
   const chatStatusRef = useRef(chatStatus);
-  const textInputRef = useRef<TextInput>(null);
-  const [inputTextSelection, setInputTextSelection] = useState<
-    { start: number; end: number } | undefined
-  >(undefined);
-  const isLoading =
-    chatStatus === ChatStatus.Running &&
-    (currentMessage?.text === '...' || currentMessage?.text === '');
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
   const { drawerType } = useAppContext();
   const chatScreenWidth =
     isMac && drawerType === 'permanent' ? screenWidth - 300 : screenWidth;
 
-  const setIsEditValue = useCallback(
-    (value: boolean) => {
-      if (chatStatus !== ChatStatus.Running) {
-        setIsEdit(value);
-        if (value) {
-          // Reset editText when entering edit mode
-          setEditText(currentMessage?.text || '');
-          // Scroll to make the editing message visible above keyboard
-          if (
-            flatListRef?.current &&
-            messageIndex !== undefined &&
-            messageIndex >= 0
-          ) {
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: messageIndex,
-                animated: true,
-                viewPosition: 0,
-              });
-            }, 500);
-          }
-        } else {
-          setInputTextSelection(undefined);
-        }
-      }
-    },
-    [chatStatus, currentMessage?.text, flatListRef, messageIndex]
-  );
-
-  const handleLongPressEdit = useCallback(() => {
-    if (isUser.current && chatStatus !== ChatStatus.Running) {
-      trigger(HapticFeedbackTypes.impactMedium);
-      setIsEditValue(true);
-    }
-  }, [chatStatus, setIsEditValue]);
-
-  const handleEditSubmit = useCallback(() => {
-    if (editText.trim() && editText.trim() !== currentMessage?.text?.trim()) {
-      // For user message: messageIndex is the user message position
-      if (messageIndex !== undefined) {
-        regenerateFromUserMessage?.(messageIndex, editText.trim());
-      }
-      setIsEdit(false);
-      setInputTextSelection(undefined);
-    } else {
-      // If text unchanged, just exit edit mode
-      setIsEdit(false);
-      setInputTextSelection(undefined);
-    }
-  }, [editText, currentMessage?.text, messageIndex, regenerateFromUserMessage]);
-
-  const handleEditCancel = useCallback(() => {
-    setIsEdit(false);
-    setEditText(currentMessage?.text || '');
-    setInputTextSelection(undefined);
-  }, [currentMessage?.text]);
-
-  const handleRegenerate = useCallback(() => {
-    // For AI message: userMessageIndex = messageIndex + 1
-    if (messageIndex !== undefined) {
-      const userMessageIndex = messageIndex + 1;
-      regenerateFromUserMessage?.(userMessageIndex);
-    }
-  }, [messageIndex, regenerateFromUserMessage]);
-
-  // Focus TextInput and move cursor to end when entering edit mode
-  useEffect(() => {
-    if (isEdit && isUser.current) {
-      const timer = setTimeout(() => {
-        textInputRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    } else if (!isAndroid && isEdit && currentMessage?.text) {
-      // For non-user messages on iOS/Mac, select all text
-      const timer = setTimeout(() => {
-        textInputRef.current?.focus();
-        setInputTextSelection({
-          start: 0,
-          end: currentMessage.text.length,
-        });
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isEdit, currentMessage?.text]);
+  const isLoading =
+    chatStatus === ChatStatus.Running &&
+    (currentMessage?.text === '...' || currentMessage?.text === '');
 
   const toggleButtons = useCallback(() => {
     setForceShowButtons((prev) => !prev);
   }, []);
-
-  // Handle selection changes made by the user
-  const handleSelectionChange = useCallback(
-    (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
-      const { selection } = event.nativeEvent;
-      setInputTextSelection(selection);
-    },
-    []
-  );
 
   const handleCopy = useCallback(() => {
     const copyText = currentMessage?.text.trim() || '';
@@ -212,10 +99,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     const copyText = currentMessage?.reasoning?.trim() || '';
     Clipboard.setString(copyText);
   }, [currentMessage?.reasoning]);
-
-  const currentUser = currentMessage?.user;
-  const showRefresh =
-    !isUser.current && !currentUser?.name?.includes('Nova Sonic');
 
   const userInfo = useMemo(() => {
     if (!currentMessage || !currentMessage.user) {
@@ -468,10 +351,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     }
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        delayLongPress={300}
-        onLongPress={handleLongPressEdit}
+      <View
         style={{
           ...styles.questionContainer,
           maxWidth: (chatScreenWidth * 3) / 4,
@@ -480,7 +360,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         <Text style={styles.questionText} selectable>
           {currentMessage.text}
         </Text>
-      </TouchableOpacity>
+      </View>
     );
   }, [
     currentMessage,
@@ -489,7 +369,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     chatScreenWidth,
     styles.questionContainer,
     styles.questionText,
-    handleLongPressEdit,
   ]);
 
   const messageActionButtons = useMemo(() => {
@@ -497,12 +376,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       ? `latency ${currentMessage.metrics.latencyMs}s | ${currentMessage.metrics.speed} tok/s`
       : null;
     return (
-      <View
-        style={{
-          ...styles.actionButtonsContainer,
-          ...{ justifyContent: isUser.current ? 'flex-end' : 'space-between' },
-        }}
-      >
+      <View style={styles.actionButtonsContainer}>
         <View style={styles.actionButtonInnerContainer}>
           <TouchableOpacity
             onPress={() => {
@@ -522,48 +396,14 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
               style={styles.actionButtonIcon}
             />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setIsEditValue(!isEdit)}
-            style={styles.actionButton}
-          >
-            <Image
-              source={
-                isEdit
-                  ? isDark
-                    ? require('../../assets/select_dark.png')
-                    : require('../../assets/select.png')
-                  : require('../../assets/select_grey.png')
-              }
-              style={styles.actionButtonIcon}
-            />
-          </TouchableOpacity>
-
-          {showRefresh && (
-            <TouchableOpacity
-              onPress={handleRegenerate}
-              style={styles.actionButton}
-            >
-              <Image
-                source={require('../../assets/refresh.png')}
-                style={styles.actionButtonIcon}
-              />
-            </TouchableOpacity>
-          )}
         </View>
 
-        {metricsText && !isUser.current && (
-          <Text style={styles.metricsText}>{metricsText}</Text>
-        )}
+        {metricsText && <Text style={styles.metricsText}>{metricsText}</Text>}
       </View>
     );
   }, [
     handleCopy,
     copied,
-    isEdit,
-    handleRegenerate,
-    setIsEditValue,
-    showRefresh,
     currentMessage?.metrics,
     isDark,
     styles.actionButtonsContainer,
@@ -599,7 +439,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             />
           </View>
         )}
-        {!isLoading && !isEdit && (
+        {!isLoading && (
           <TapGestureHandler
             numberOfTaps={2}
             onHandlerStateChange={({ nativeEvent }) => {
@@ -610,70 +450,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
           >
             <View>{messageContent}</View>
           </TapGestureHandler>
-        )}
-        {isEdit && (
-          <View
-            style={[
-              isUser.current && styles.editContainer,
-              isUser.current && { maxWidth: (chatScreenWidth * 3) / 4 },
-            ]}
-          >
-            <TextInput
-              ref={textInputRef}
-              selection={inputTextSelection}
-              onSelectionChange={handleSelectionChange}
-              editable={isUser.current ? true : Platform.OS === 'android'}
-              multiline
-              showSoftInputOnFocus={isUser.current ? true : false}
-              value={isUser.current ? editText : undefined}
-              onChangeText={isUser.current ? setEditText : undefined}
-              onContentSizeChange={(event) => {
-                const { height } = event.nativeEvent.contentSize;
-                setInputHeight(height);
-              }}
-              style={{
-                ...styles.inputText,
-                ...{
-                  fontWeight: isMac ? '300' : 'normal',
-                  lineHeight: isMac ? 26 : Platform.OS === 'android' ? 24 : 28,
-                  paddingTop: Platform.OS === 'android' ? 7 : 3,
-                  marginBottom: isUser.current
-                    ? 0
-                    : -inputHeight * (isAndroid ? 0 : isMac ? 0.115 : 0.138) +
-                      (isMac ? 10 : 8),
-                },
-                ...(isUser.current && {
-                  backgroundColor: colors.messageBackground,
-                  borderRadius: 22,
-                  paddingHorizontal: 16,
-                  paddingTop: 8,
-                  paddingBottom: 8,
-                }),
-              }}
-              textAlignVertical="top"
-            >
-              {isUser.current ? undefined : currentMessage.text}
-            </TextInput>
-            {isUser.current && (
-              <View style={styles.editButtonsContainer}>
-                <TouchableOpacity
-                  onPress={handleEditCancel}
-                  style={styles.editCancelButton}
-                >
-                  <Text style={styles.editCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleEditSubmit}
-                  style={[
-                    styles.editSubmitButton,
-                    !editText.trim() && styles.editSubmitButtonDisabled,
-                  ]}
-                >
-                  <Text style={styles.editSubmitButtonText}>Send</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
         )}
         {!isUser.current &&
           chatStatus !== ChatStatus.Running &&
@@ -737,23 +513,10 @@ const createStyles = (colors: ColorScheme) =>
       paddingHorizontal: 16,
       paddingVertical: 10,
     },
-    editContainer: {
-      alignSelf: 'flex-end',
-    },
     questionText: {
       lineHeight: 24,
       fontSize: 16,
       color: colors.text,
-    },
-    inputText: {
-      fontSize: 16,
-      lineHeight: 26,
-      textAlignVertical: 'top',
-      marginTop: 1,
-      padding: 0,
-      fontWeight: '300',
-      color: colors.text,
-      letterSpacing: 0,
     },
     reasoningContainer: {
       marginBottom: 8,
@@ -796,6 +559,7 @@ const createStyles = (colors: ColorScheme) =>
     actionButtonsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginLeft: -8,
       marginTop: -2,
       marginBottom: 4,
@@ -820,36 +584,6 @@ const createStyles = (colors: ColorScheme) =>
       padding: 4,
       width: 16,
       height: 16,
-    },
-    editButtonsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      marginTop: 8,
-      gap: 8,
-    },
-    editCancelButton: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 16,
-      backgroundColor: colors.borderLight,
-    },
-    editCancelButtonText: {
-      fontSize: 14,
-      color: colors.text,
-    },
-    editSubmitButton: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 16,
-      backgroundColor: colors.primary,
-    },
-    editSubmitButtonDisabled: {
-      opacity: 0.5,
-    },
-    editSubmitButtonText: {
-      fontSize: 14,
-      color: '#FFFFFF',
-      fontWeight: '500',
     },
   });
 

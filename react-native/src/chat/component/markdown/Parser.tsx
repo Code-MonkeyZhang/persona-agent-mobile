@@ -10,7 +10,7 @@ import type {
 } from 'react-native-marked/src/lib/types';
 import { getValidURL } from 'react-native-marked/src/utils/url';
 import { getTableColAlignmentStyle } from 'react-native-marked/src/utils/table';
-import { CustomToken } from 'react-native-marked/src/lib/types.ts';
+import { CustomToken } from 'react-native-marked/src/lib/types';
 
 // Extended renderer interface with isCompleted parameter for code blocks
 interface ExtendedRendererInterface extends RendererInterface {

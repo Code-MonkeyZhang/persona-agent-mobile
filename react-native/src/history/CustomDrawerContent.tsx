@@ -1,3 +1,8 @@
+/**
+ * @file CustomDrawerContent.tsx
+ * @description 侧边栏（Drawer）内容组件，显示按日期分组的会话历史列表，
+ *              支持点击切换会话、长按删除会话、底部跳转设置页。
+ */
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -14,16 +19,22 @@ import {
   useDrawerStatus,
 } from '@react-navigation/drawer';
 import { Chat } from '../types/Chat.ts';
-import { deleteSession, fetchSessions } from '../api/nano-agent-api.ts';
+import {
+  type AgentInfo,
+  deleteSession,
+  fetchAgentDetail,
+  fetchSessions,
+  getAgentAvatarUrl,
+} from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import Dialog from 'react-native-dialog';
 import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
-import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src';
+import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { groupMessagesByDate } from './HistoryGroupUtil.ts';
 import { isMac } from '../App.tsx';
 import { DrawerActions } from '@react-navigation/native';
-import { useTheme, ColorScheme } from '../theme';
+import { useTheme, ColorScheme } from '../theme/index.ts';
 
 /**
  * 自定义侧边栏内容组件
@@ -38,29 +49,45 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   navigation,
 }) => {
   const { colors, isDark } = useTheme();
+  /** 按日期分组后的会话列表（含虚拟标题行），直接传给 FlatList 渲染 */
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
+  /** groupChatHistory 的 ref 副本，供异步回调中读取 */
   const groupChatHistoryRef = useRef(groupChatHistory);
+  /** 未分组的原始会话列表缓存 */
   const chatHistoryRef = useRef<Chat[]>([]);
+  /** 是否显示删除确认弹窗 */
   const [showDialog, setShowDialog] = useState<boolean>(false);
+  /** 待删除的会话 ID，长按时暂存 */
   const deleteIdRef = useRef<string>('');
   const drawerStatus = useDrawerStatus();
+  /** 当前选中的会话 ID，用于高亮显示 */
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 点击计数器，每次跳转会话时递增，用作路由参数触发 useEffect */
   const tapIndexRef = useRef<number>(1);
+  /** 是否首次渲染（Mac 端首次加载时直接拉取数据，不做 Drawer 动画） */
   const isFirstRenderRef = useRef<boolean>(true);
+  /** Mac 端控制 Drawer 切换为 slide 模式的标记 */
   const isSlideDrawerEnabledRef = useRef<boolean>(false);
+  /** Drawer 顶部展示的当前 Agent 信息（点击可进入详情页） */
+  const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
+  const [agentAvatarError, setAgentAvatarError] = useState(false);
   const { event, sendEvent } = useAppContext();
   const { drawerType, setDrawerType } = useAppContext();
 
   const drawerTypeRef = useRef(drawerType);
   const setDrawerTypeRef = useRef(setDrawerType);
+
+  /** 同步 drawerType 到 ref */
   useEffect(() => {
     drawerTypeRef.current = drawerType;
   }, [drawerType]);
 
+  /** 同步 groupChatHistory 到 ref */
   useEffect(() => {
     groupChatHistoryRef.current = groupChatHistory;
   }, [groupChatHistory]);
 
+  /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、标题变更、Agent 切换 */
   useEffect(() => {
     if (event?.event === 'updateHistory') {
       handleUpdateHistory();
@@ -76,9 +103,16 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           )
         );
       }
+    } else if (event?.event === 'agentChanged') {
+      handleUpdateHistory();
+      loadAgentInfo();
+      setSelectedId(null);
     }
   }, [event]);
 
+  /**
+   * 监听 Drawer 开合状态：打开时拉取最新会话列表并触感反馈，Mac 端处理 permanent/slide 模式切换。
+   */
   useEffect(() => {
     if (isMac && isFirstRenderRef.current) {
       handleUpdateHistory();
@@ -103,6 +137,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       trigger(HapticFeedbackTypes.soft);
       trigger(HapticFeedbackTypes.selection);
       handleUpdateHistory();
+      loadAgentInfo();
     } else {
       trigger(HapticFeedbackTypes.selection);
       trigger(HapticFeedbackTypes.soft);
@@ -135,6 +170,23 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     }
   };
 
+  /** 从服务器拉取当前 Agent 信息，用于 Drawer 顶部卡片展示 */
+  const loadAgentInfo = async () => {
+    const address = getServerAddress();
+    const agentId = getServerAgentId();
+    if (!address || !agentId) return;
+    try {
+      const detail = await fetchAgentDetail(address, agentId);
+      setAgentInfo(detail);
+      setAgentAvatarError(false);
+    } catch (e) {
+      console.log(`[Drawer] fetchAgentDetail failed: ${e}`);
+    }
+  };
+
+  /**
+   * Mac 端点击会话时将 Drawer 切为 permanent 模式（侧边栏常驻显示）。
+   */
   const setDrawerToPermanent = () => {
     if (isMac && drawerType === 'slide') {
       setDrawerType('permanent');
@@ -169,35 +221,58 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
   return (
     <SafeAreaView style={[isMac ? styles.macContainer : styles.safeArea]}>
+      {/* 当前 Agent 信息卡片，点击进入详情页 */}
+      {agentInfo && (
+        <TouchableOpacity
+          style={styles.agentCard}
+          activeOpacity={0.7}
+          onPress={() => {
+            const currentAgentId = getServerAgentId();
+            if (!currentAgentId) return;
+            navigation.navigate('AgentDetail', { agentId: currentAgentId });
+            setDrawerToPermanent();
+            navigation.dispatch(DrawerActions.closeDrawer());
+          }}
+        >
+          {agentInfo.avatar && !agentAvatarError ? (
+            <Image
+              source={{
+                uri: getAgentAvatarUrl(agentInfo.id, getServerAddress() ?? ''),
+              }}
+              style={styles.agentAvatar}
+              onError={() => setAgentAvatarError(true)}
+            />
+          ) : (
+            <View
+              style={[
+                styles.agentAvatar,
+                { backgroundColor: getAvatarColor(agentInfo.name) },
+              ]}
+            >
+              <Text style={styles.agentAvatarText}>
+                {agentInfo.name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.agentInfo}>
+            <Text style={styles.agentName} numberOfLines={1}>
+              {agentInfo.name}
+            </Text>
+            {agentInfo.description ? (
+              <Text style={styles.agentDesc} numberOfLines={1}>
+                {agentInfo.description}
+              </Text>
+            ) : null}
+          </View>
+          <Text style={styles.agentArrow}>›</Text>
+        </TouchableOpacity>
+      )}
       <FlatList
         data={groupChatHistory}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View>
-            <TouchableOpacity
-              style={styles.settingsTouch}
-              onPress={() => {
-                setDrawerToPermanent();
-                navigation.navigate('Bedrock', {
-                  sessionId: '',
-                  tapIndex: -1,
-                });
-              }}
-            >
-              <Image
-                source={
-                  isDark
-                    ? require('../assets/edit_dark.png')
-                    : require('../assets/edit.png')
-                }
-                style={styles.settingsLeftImg}
-              />
-              <Text style={styles.settingsText}>Chat</Text>
-            </TouchableOpacity>
-          </View>
-        }
         renderItem={({ item }) => {
+          // id 以 '-' 开头的是虚拟标题行（如 "Today"、"Yesterday"）
           if (item.id.startsWith('-')) {
             return (
               <View style={styles.sectionContainer}>
@@ -206,6 +281,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               </View>
             );
           } else {
+            // 正常会话行：点击跳转聊天页，长按弹出删除确认
             const isSelected = selectedId === item.id;
             return (
               <TouchableOpacity
@@ -241,6 +317,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           }
         }}
       />
+      {/* 底部设置按钮 */}
       <TouchableOpacity
         style={styles.settingsTouch}
         onPress={() => {
@@ -258,6 +335,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         />
         <Text style={styles.settingsText}>Settings</Text>
       </TouchableOpacity>
+      {/* 删除会话确认弹窗 */}
       <Dialog.Container visible={showDialog}>
         <Dialog.Title>Delete Message</Dialog.Title>
         <Dialog.Description>You cannot undo this action.</Dialog.Description>
@@ -279,16 +357,81 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   );
 };
 
+/** 头像背景色预设，与 AgentSelector 保持一致 */
+const AVATAR_COLORS = [
+  '#4A90D9',
+  '#50B86C',
+  '#E8913A',
+  '#D45B5B',
+  '#9B59B6',
+  '#1ABC9C',
+  '#E67E22',
+  '#3498DB',
+];
+
+function getAvatarColor(name: string): string {
+  const code = name.charCodeAt(0) || 0;
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
+}
+
+/** 侧边栏样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
+    /** 手机端侧边栏容器 */
     safeArea: {
       flex: 1,
       backgroundColor: colors.drawerBackground,
     },
+    /** Mac 端侧边栏容器 */
     macContainer: {
       flex: 1,
       backgroundColor: colors.drawerBackgroundMac,
     },
+    /** Drawer 顶部 Agent 信息卡片 */
+    agentCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginHorizontal: 12,
+      marginTop: 8,
+      marginBottom: 4,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+    },
+    agentAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    agentAvatarText: {
+      color: '#ffffff',
+      fontSize: 20,
+      fontWeight: '600',
+    },
+    agentInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    agentName: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    agentDesc: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
+    agentArrow: {
+      fontSize: 20,
+      color: colors.textTertiary,
+      marginLeft: 4,
+    },
+    /** 底部设置按钮容器 */
     settingsTouch: {
       flexDirection: 'row',
       justifyContent: 'flex-start',
@@ -311,10 +454,11 @@ const createStyles = (colors: ColorScheme) =>
       height: 24,
       borderRadius: 12,
     },
-
+    /** 会话列表 FlatList */
     flatList: {
       marginVertical: 4,
     },
+    /** 单个会话行的触摸区域 */
     touch: {
       paddingHorizontal: 8,
       paddingVertical: 12,
@@ -322,26 +466,32 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 2,
       borderRadius: 8,
     },
+    /** 手机端选中会话的高亮背景 */
     touchSelected: {
       backgroundColor: colors.selectedBackground,
     },
+    /** Mac 端选中会话的高亮背景 */
     macTouchSelected: {
       backgroundColor: colors.selectedBackgroundMac,
     },
+    /** 日期分组标题容器（含分隔线 + 文字） */
     sectionContainer: {
       paddingHorizontal: 8,
       marginHorizontal: 12,
       marginVertical: 12,
     },
+    /** 日期分组标题上方的分隔线 */
     sectionDivider: {
       height: 1,
       backgroundColor: colors.border,
     },
+    /** 日期分组标题文字（如 "Today"、"Yesterday"） */
     sectionText: {
       marginTop: 17,
       fontSize: 14,
       color: colors.textSecondary,
     },
+    /** 会话标题文字 */
     title: {
       fontSize: 16,
       color: colors.text,

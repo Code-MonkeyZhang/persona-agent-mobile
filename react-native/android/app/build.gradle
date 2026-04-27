@@ -74,12 +74,12 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.aws.swiftchat"
+    namespace "com.persona.agent"
     defaultConfig {
-        applicationId "com.aws.swiftchat"
+        applicationId "com.persona.agent"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 86
+        versionCode 100
         versionName "2.7.0"
         ndk {
             //noinspection ChromeOsAbiSupport
@@ -109,7 +109,7 @@ android {
                 variant.outputs.each { output ->
                     def outputFile = output.outputFile
                     if (outputFile != null && outputFile.name.endsWith('.apk')) {
-                        def fileName = "SwiftChat.apk"
+                        def fileName = "Persona.apk"
                         output.outputFileName = fileName
                     }
                 }

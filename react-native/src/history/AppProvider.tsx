@@ -40,7 +40,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         event,
         drawerType,
         setDrawerType,
-      }}>
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

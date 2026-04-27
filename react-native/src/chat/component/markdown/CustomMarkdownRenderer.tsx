@@ -28,11 +28,11 @@ import Disc from '@jsamr/counter-style/lib/es/presets/disc';
 // @ts-expect-error
 import MathView from 'react-native-math-view';
 import { isAndroid } from '../../../utils/PlatformUtils.ts';
-import { ColorScheme } from '../../../theme';
-import MermaidCodeRenderer from './MermaidCodeRenderer';
-import CopyButton from './CopyButton';
+import { ColorScheme } from '../../../theme/index.ts';
+import MermaidCodeRenderer from './MermaidCodeRenderer.tsx';
+import CopyButton from './CopyButton.tsx';
 
-const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter'));
+const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter.tsx'));
 let mathViewIndex = 0;
 
 function getMathKey() {
