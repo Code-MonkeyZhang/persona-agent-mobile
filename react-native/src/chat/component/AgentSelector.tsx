@@ -30,27 +30,6 @@ interface AgentSelectorProps {
   onSelectAgent: (agentId: string) => void;
 }
 
-/**
- * 头像背景色预设列表，根据 Agent 名称首字符的 charCode 取模分配颜色，
- * 保证同名 Agent 的头像颜色始终一致。
- */
-const AVATAR_COLORS = [
-  '#4A90D9',
-  '#50B86C',
-  '#E8913A',
-  '#D45B5B',
-  '#9B59B6',
-  '#1ABC9C',
-  '#E67E22',
-  '#3498DB',
-];
-
-/** 根据名称首字符确定头像背景色 */
-function getAvatarColor(name: string): string {
-  const code = name.charCodeAt(0) || 0;
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
-
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /** 下拉菜单宽度，用于定位计算 */
 const MODAL_WIDTH = 220;
@@ -77,9 +56,15 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
 
   const currentAgent = agents.find((a) => a.id === currentAgentId);
   const displayName = currentAgent?.name ?? 'Agent';
-  const initial = displayName.charAt(0).toUpperCase();
-  const hasAvatar = !!currentAgent?.avatar;
   const [avatarError, setAvatarError] = useState(false);
+
+  /**
+   * 是否具备加载头像的条件：服务器地址和 Agent ID 都不为空。
+   * Android 端对无效 URL（如 /api/agents//avatar）不会触发 onError，
+   * 因此需要在渲染前拦截，避免 warning 且不显示占位符。
+   */
+  const serverAddr = getServerAddress();
+  const canLoadAvatar = serverAddr.length > 0 && currentAgentId.length > 0;
 
   /** 切换 Agent 时重置头像加载失败状态 */
   useEffect(() => {
@@ -123,12 +108,10 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
       >
         {/* collapsable=false 确保 Android 上 ref.measure() 能正确获取坐标 */}
         <View ref={triggerRef} collapsable={false} style={styles.triggerInner}>
-          {/* Agent 头像：有头像用图片，没有则显示首字母圆形图标 */}
-          {hasAvatar && !avatarError ? (
+          {/* Agent 头像：具备加载条件时请求服务器 URL，否则显示灰色占位符 */}
+          {canLoadAvatar && !avatarError ? (
             <Image
-              source={{
-                uri: getAgentAvatarUrl(currentAgentId, getServerAddress()),
-              }}
+              source={{ uri: getAgentAvatarUrl(currentAgentId, serverAddr) }}
               style={styles.triggerAvatar}
               onError={() => setAvatarError(true)}
             />
@@ -136,10 +119,10 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
             <View
               style={[
                 styles.triggerAvatar,
-                { backgroundColor: getAvatarColor(displayName) },
+                { backgroundColor: '#E5E7EB' },
               ]}
             >
-              <Text style={styles.triggerAvatarText}>{initial}</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>👤</Text>
             </View>
           )}
           <Text style={styles.triggerName} numberOfLines={1}>
@@ -181,11 +164,6 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-    },
-    triggerAvatarText: {
-      color: '#ffffff',
-      fontSize: 12,
-      fontWeight: '600',
     },
     triggerName: {
       fontSize: 16,

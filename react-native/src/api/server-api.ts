@@ -403,8 +403,6 @@ export interface AgentInfo {
   name: string;
   description?: string;
   defaultModel?: { provider: string; model: string };
-  /** 头像标记，有值（如 "uploaded"）表示服务器上有头像图片 */
-  avatar?: string;
   systemPrompt?: string;
   maxSteps?: number;
   mcpNames?: string[];
