@@ -22,6 +22,12 @@ type ServerMessage =
       stepIndex: number;
       content?: string;
       thinking?: string;
+      /** 工具调用结果列表（Step 3 预留字段，用于在陪伴模式中展示 AI 的工具调用过程） */
+      toolCalls?: {
+        id: string;
+        name: string;
+        arguments: Record<string, unknown>;
+      }[];
     }
   | { type: 'complete'; sessionId: string }
   | { type: 'error'; sessionId?: string; message: string }
@@ -436,6 +442,47 @@ export function getAgentAvatarUrl(
   serverAddress: string
 ): string {
   return `${serverAddress}/api/agents/${agentId}/avatar`;
+}
+
+/**
+ * 获取指定 Agent 可用的姿态列表。
+ * 服务器在 GET /api/agents/:id/assets/pose 返回 { poses: string[] }。
+ */
+export async function fetchPoses(
+  agentId: string,
+  serverAddress: string
+): Promise<string[]> {
+  const url = `${serverAddress}/api/agents/${agentId}/assets/pose`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { poses: string[] };
+  return data.poses;
+}
+
+/**
+ * 拼接 Agent 指定姿态的图片 URL。
+ * 服务器在 GET /api/agents/:id/assets/pose/:name 返回图片流。
+ */
+export function getPoseImageUrl(
+  agentId: string,
+  poseName: string,
+  serverAddress: string
+): string {
+  // ?t= 时间戳参数破坏浏览器/React Native 图片缓存，确保 pose 切换后能看到最新图片
+  return `${serverAddress}/api/agents/${agentId}/assets/pose/${encodeURIComponent(
+    poseName
+  )}?t=${Date.now()}`;
+}
+
+/**
+ * 拼接 Agent 背景图片 URL。
+ * 服务器在 GET /api/agents/:id/assets/background 返回图片流。
+ */
+export function getBackgroundImageUrl(
+  agentId: string,
+  serverAddress: string
+): string {
+  // ?t= 时间戳参数破坏缓存，确保背景图更新后能立即刷新
+  return `${serverAddress}/api/agents/${agentId}/assets/background?t=${Date.now()}`;
 }
 
 /**

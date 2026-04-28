@@ -17,7 +17,7 @@ export type DrawerParamList = {
 /**
  * RouteParamList - 整个应用根导航器的页面参数表
  * 管理应用所有页面的跳转数据，范围比 DrawerParamList 更大：
- *   包含侧边栏（Drawer）、聊天页、设置页
+ *   包含侧边栏（Drawer）、聊天页、设置页、陪伴页
  * 每个页面声明了自己跳转时需要接收哪些数据，TypeScript 会在编译时检查传参是否正确
  */
 export type RouteParamList = {
@@ -28,4 +28,6 @@ export type RouteParamList = {
   };
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
+  /** 陪伴页面：agentId 必传（指定 Agent），sessionId 可选（共享 ChatScreen 的聊天上下文） */
+  Companion: { agentId: string; sessionId?: string };
 };
