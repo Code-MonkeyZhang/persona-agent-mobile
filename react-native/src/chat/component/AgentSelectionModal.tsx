@@ -20,6 +20,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
 import { getAgentAvatarUrl } from '../../api/server-api';
@@ -157,10 +158,8 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
             }
           />
         ) : (
-          <View
-            style={[styles.agentIcon, { backgroundColor: '#E5E7EB' }]}
-          >
-            <Text style={{ color: '#9CA3AF', fontSize: 14 }}>👤</Text>
+          <View style={[styles.agentIcon, { backgroundColor: '#E5E7EB' }]}>
+            <User size={14} color="#9CA3AF" />
           </View>
         )}
         <Text style={styles.agentName}>{item.name}</Text>

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RouteParamList } from '../types/RouteTypes.ts';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import {
   type AgentInfo,
@@ -125,10 +126,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
               onError={() => setAvatarError(true)}
             />
           ) : (
-            <View
-              style={[styles.avatar, { backgroundColor: '#E5E7EB' }]}
-            >
-              <Text style={{ color: '#9CA3AF', fontSize: 32 }}>👤</Text>
+            <View style={[styles.avatar, { backgroundColor: '#E5E7EB' }]}>
+              <User size={32} color="#9CA3AF" />
             </View>
           );
         })()}

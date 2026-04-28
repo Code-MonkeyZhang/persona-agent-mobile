@@ -24,6 +24,7 @@
     "@sayem314/react-native-keep-awake": "^1.4.0",
     "jsonrepair": "^3.13.1",
     "linkedom": "^0.18.12",
+    "lucide-react-native": "^1.11.0",
     "react": "18.2.0",
     "react-native": "0.74.1",
     "react-native-code-highlighter": "^1.2.2",

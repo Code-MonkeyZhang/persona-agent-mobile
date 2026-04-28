@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
 import { getAgentAvatarUrl } from '../../api/server-api';
@@ -117,12 +118,9 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
             />
           ) : (
             <View
-              style={[
-                styles.triggerAvatar,
-                { backgroundColor: '#E5E7EB' },
-              ]}
+              style={[styles.triggerAvatar, { backgroundColor: '#E5E7EB' }]}
             >
-              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>👤</Text>
+              <User size={12} color="#9CA3AF" />
             </View>
           )}
           <Text style={styles.triggerName} numberOfLines={1}>

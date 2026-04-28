@@ -34,6 +34,7 @@ import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { groupMessagesByDate } from './HistoryGroupUtil.ts';
 import { isMac } from '../App.tsx';
 import { DrawerActions } from '@react-navigation/native';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
 /**
@@ -247,7 +248,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               <View
                 style={[styles.agentAvatar, { backgroundColor: '#E5E7EB' }]}
               >
-                <Text style={{ color: '#9CA3AF', fontSize: 22 }}>👤</Text>
+                <User size={22} color="#9CA3AF" />
               </View>
             );
           })()}
