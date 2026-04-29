@@ -1,16 +1,27 @@
 /**
  * @file CompanionScreen.tsx
  * @description Agent 陪伴模式全屏页面。
- *   叠加布局：白底兜底 → 背景图 → 立绘图 → UI 控件。
- *   无资源 Agent 显示提示文案。
  */
-import React, { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, Send } from 'lucide-react-native';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
 import {
+  ServerClient,
   fetchPoses,
   getBackgroundImageUrl,
   getPoseImageUrl,
@@ -18,17 +29,255 @@ import {
 
 type Props = NativeStackScreenProps<RouteParamList, 'Companion'>;
 
+/**
+ * 底部输入栏子组件。
+ */
+function CompanionInputBar({
+  isLoading,
+  onSend,
+}: {
+  isLoading: boolean;
+  onSend: (text: string) => Promise<void>;
+}): React.JSX.Element {
+  const [inputText, setInputText] = useState('');
+
+  const handlePress = async () => {
+    const text = inputText.trim();
+    if (!text || isLoading) {
+      return;
+    }
+    setInputText('');
+    Keyboard.dismiss();
+    await onSend(text);
+  };
+
+  const canSend = inputText.trim().length > 0 && !isLoading;
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={styles.inputBarWrapper}>
+        <View style={styles.inputBar}>
+          <TextInput
+            style={styles.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="输入消息..."
+            placeholderTextColor="#aaa"
+            multiline
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              { backgroundColor: canSend ? '#228be6' : '#d8d8d8' },
+            ]}
+            onPress={handlePress}
+            disabled={!canSend}
+          >
+            <Send size={16} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+interface BackgroundImageProps {
+  agentId: string;
+  serverAddr: string;
+  hasAssets: boolean | null;
+  bgError: boolean;
+  onBgError: () => void;
+  mountTime: React.MutableRefObject<number>;
+}
+
+/**
+ * 背景图层。
+ */
+const CompanionBackgroundImage = React.memo(
+  function CompanionBackgroundImage({
+    agentId,
+    serverAddr,
+    hasAssets,
+    bgError,
+    onBgError,
+    mountTime,
+  }: BackgroundImageProps) {
+    if (bgError || hasAssets !== true) {
+      return null;
+    }
+    return (
+      <View style={styles.background} pointerEvents="none">
+        <Image
+          source={{ uri: getBackgroundImageUrl(agentId, serverAddr) }}
+          style={StyleSheet.absoluteFillObject}
+          onLoad={() => {
+            console.log(
+              `[Companion] background loaded in ${
+                Date.now() - mountTime.current
+              }ms`
+            );
+          }}
+          onError={() => {
+            console.log('[Companion] background load failed');
+            onBgError();
+          }}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  },
+  (prev, next) =>
+    prev.agentId === next.agentId &&
+    prev.serverAddr === next.serverAddr &&
+    prev.hasAssets === next.hasAssets &&
+    prev.bgError === next.bgError &&
+    prev.onBgError === next.onBgError
+);
+
+interface PoseImageProps {
+  agentId: string;
+  serverAddr: string;
+  hasAssets: boolean | null;
+  poseError: boolean;
+  currentPose: string;
+  onPoseError: () => void;
+  mountTime: React.MutableRefObject<number>;
+}
+
+/**
+ * 立绘图层。
+ */
+const CompanionPoseImage = React.memo(
+  function CompanionPoseImage({
+    agentId,
+    serverAddr,
+    hasAssets,
+    poseError,
+    currentPose,
+    onPoseError,
+    mountTime,
+  }: PoseImageProps) {
+    if (!hasAssets || poseError) {
+      return null;
+    }
+    return (
+      <View style={styles.pose} pointerEvents="none">
+        <Image
+          source={{
+            uri: getPoseImageUrl(agentId, currentPose, serverAddr),
+          }}
+          style={StyleSheet.absoluteFillObject}
+          onLoad={() => {
+            console.log(
+              `[Companion] pose ${currentPose} loaded in ${
+                Date.now() - mountTime.current
+              }ms`
+            );
+          }}
+          onError={() => {
+            console.log(`[Companion] pose ${currentPose} load failed`);
+            onPoseError();
+          }}
+          resizeMode="contain"
+        />
+      </View>
+    );
+  },
+  (prev, next) =>
+    prev.agentId === next.agentId &&
+    prev.serverAddr === next.serverAddr &&
+    prev.hasAssets === next.hasAssets &&
+    prev.poseError === next.poseError &&
+    prev.currentPose === next.currentPose &&
+    prev.onPoseError === next.onPoseError
+);
+
+interface UIProps {
+  hasAssets: boolean | null;
+  isLoading: boolean;
+  replyText: string;
+  onSend: (text: string) => Promise<void>;
+  onBack: () => void;
+}
+
+/**
+ * UI 控件层：返回按钮 + 无资源提示 + 回复气泡 + 输入栏。
+ * 用 React.memo 包裹，只有 hasAssets/isLoading/replyText/onSend/onBack 变化时才 re-render。
+ * currentPose/bgError/poseError 的变化不会传播到此处。
+ */
+const CompanionUI = React.memo(
+  function CompanionUI({
+    hasAssets,
+    isLoading,
+    replyText,
+    onSend,
+    onBack,
+  }: UIProps) {
+    return (
+      <View style={styles.uiLayer}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <ChevronLeft size={22} color="#333" />
+        </TouchableOpacity>
+
+        {hasAssets === false && (
+          <View style={styles.centerContent}>
+            <Text style={styles.noAssetTitle}>该 Agent 还未配置陪伴形象</Text>
+            <Text style={styles.noAssetHint}>
+              在 assets/pose/ 目录下添加表情图片即可启用
+            </Text>
+          </View>
+        )}
+
+        {hasAssets === true && (
+          <>
+            <View style={styles.spacer} />
+
+            {replyText.length > 0 && (
+              <View style={styles.bubbleOuter}>
+                <View style={styles.bubbleInner}>
+                  <ScrollView style={styles.bubbleScroll} nestedScrollEnabled>
+                    <Text style={styles.bubbleText}>{replyText}</Text>
+                  </ScrollView>
+                </View>
+              </View>
+            )}
+
+            {isLoading && replyText.length === 0 && (
+              <View style={styles.bubbleOuter}>
+                <View style={styles.bubbleInner}>
+                  <Text style={styles.bubbleThinking}>思考中...</Text>
+                </View>
+              </View>
+            )}
+
+            <CompanionInputBar isLoading={isLoading} onSend={onSend} />
+          </>
+        )}
+      </View>
+    );
+  },
+  /**
+   * 自定义比较函数：只有这些 props 变化时才 re-render。
+   */
+  (prev, next) =>
+    prev.hasAssets === next.hasAssets &&
+    prev.isLoading === next.isLoading &&
+    prev.replyText === next.replyText &&
+    prev.onSend === next.onSend &&
+    prev.onBack === next.onBack
+);
+
 function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
   const agentId = route.params.agentId;
   const serverAddr = getServerAddress();
-
-  /** 页面挂载时间戳，用于计算各资源加载耗时（性能日志） */
   const mountTime = useRef(Date.now());
 
   /**
    * Agent 是否拥有陪伴资源（三态）：
    *   null  → 加载中（尚未收到 fetchPoses 响应）
-   *   true  → 有 pose 图片，展示背景 + 立绘
+   *   true  → 有 pose 图片，展示背景 + 立绘 + 输入栏
    *   false → 无资源或请求失败，显示"未配置陪伴形象"提示
    */
   const [hasAssets, setHasAssets] = useState<boolean | null>(null);
@@ -40,8 +289,24 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
   const [poseError, setPoseError] = useState(false);
 
   /**
+   * 当前展示的姿态名称。默认 'default'
+   */
+  const [currentPose, setCurrentPose] = useState('default');
+  const [isLoading, setIsLoading] = useState(false);
+  const [replyText, setReplyText] = useState('');
+
+  /** ServerClient 实例引用，用于发送消息和断开连接 */
+  const serverClientRef = useRef<ServerClient | null>(null);
+
+  /**
+   * 当前会话 ID。
+   * 从路由参数初始化；若无则延迟到首次发送时自动创建。
+   */
+  const sessionIdRef = useRef(route.params.sessionId || '');
+
+  /**
    * 页面挂载时请求 Agent 的 pose 列表，判断是否有陪伴资源。
-   * 使用 cancelled 标志防止组件卸载后的异步回调执行 setState（避免内存泄漏警告）。
+   * 使用 cancelled 标志防止组件卸载后的异步回调执行 setState。
    */
   useEffect(() => {
     if (!agentId) {
@@ -75,68 +340,160 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
     };
   }, [agentId, serverAddr]);
 
-  // 当前展示的姿态名称，硬编码为 'default'（Step 4 将实现通过 WebSocket 动态切换）
-  const currentPose = 'default';
+  /**
+   * WebSocket 连接生命周期管理。
+   *
+   * 页面获得焦点时：创建 ServerClient → 注册回调 → 连接 → 可选 subscribe。
+   * 页面失去焦点时：断开连接 → 清理引用。
+   *
+   * 回调注册在 connect 之前完成，确保不丢失早期事件。
+   * onStepComplete 接收 AI 回复文本（更新回复气泡）和工具调用（提取 show_pose 切换表情）。
+   */
+  useFocusEffect(
+    useCallback(() => {
+      if (!serverAddr) {
+        return;
+      }
 
-  // 4 层叠加布局：灰色兜底 → 背景图 → 立绘图 → UI 控件
+      let cancelled = false;
+      const client = new ServerClient();
+
+      client.onStepComplete = (content, _thinking, toolCalls) => {
+        console.log(
+          `[Companion] step_complete: content=${(content || '').substring(
+            0,
+            80
+          )}`
+        );
+        if (!cancelled) {
+          if (content && content.trim().length > 0) {
+            setReplyText(content);
+          }
+          if (toolCalls && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              if (tc.name === 'show_pose' && tc.arguments) {
+                const pose = tc.arguments.pose as string;
+                if (pose) {
+                  console.log(`[Companion] pose change: ${pose}`);
+                  setCurrentPose(pose);
+                  setPoseError(false);
+                }
+              }
+            }
+            console.log(
+              `[Companion] toolCalls: ${toolCalls
+                .map((tc) => tc.name)
+                .join(', ')}`
+            );
+          }
+        }
+      };
+      client.onComplete = () => {
+        console.log('[Companion] complete');
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      };
+      client.onError = (message) => {
+        console.log(`[Companion] error: ${message}`);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      };
+
+      (async () => {
+        try {
+          await client.connect(serverAddr);
+          if (cancelled) {
+            return;
+          }
+          serverClientRef.current = client;
+          console.log('[Companion] WebSocket connected');
+
+          if (sessionIdRef.current) {
+            client.subscribe(sessionIdRef.current);
+            console.log(
+              `[Companion] subscribed to session=${sessionIdRef.current}`
+            );
+          }
+        } catch (e) {
+          console.log(`[Companion] connect failed: ${e}`);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        client.disconnect();
+        serverClientRef.current = null;
+        console.log('[Companion] WebSocket disconnected');
+      };
+    }, [serverAddr])
+  );
+
+  /**
+   * 发送消息流程（由 CompanionInputBar 通过 onSend 回调触发）：
+   * 1. 若无 sessionId → 自动创建 session 并 subscribe
+   * 2. 通过 HTTP POST 发送，AI 回复经 WebSocket 异步到达
+   */
+  const handleSend = useCallback(
+    async (text: string) => {
+      setIsLoading(true);
+      setReplyText('');
+
+      try {
+        const client = serverClientRef.current;
+        if (!client) {
+          setIsLoading(false);
+          return;
+        }
+
+        let sessionId = sessionIdRef.current;
+        if (!sessionId) {
+          sessionId = await client.createSession(agentId, serverAddr);
+          sessionIdRef.current = sessionId;
+          client.subscribe(sessionId);
+          console.log(`[Companion] created session=${sessionId}`);
+        }
+
+        await client.sendChatMessage(agentId, sessionId, text, serverAddr);
+      } catch (e) {
+        console.log(`[Companion] send failed: ${e}`);
+        setIsLoading(false);
+      }
+    },
+    [agentId, serverAddr]
+  );
+
+  const handleBack = useCallback(() => navigation.goBack(), [navigation]);
+  const handleBgError = useCallback(() => setBgError(true), []);
+  const handlePoseError = useCallback(() => setPoseError(true), []);
+
   return (
     <View style={styles.container}>
-      {/* 第 2 层：背景图片（absoluteFill 铺满全屏，cover 模式裁切） */}
-      {!bgError && hasAssets === true && (
-        <Image
-          source={{ uri: getBackgroundImageUrl(agentId, serverAddr) }}
-          style={styles.background}
-          onLoad={() => {
-            console.log(
-              `[Companion] background loaded in ${
-                Date.now() - mountTime.current
-              }ms`
-            );
-          }}
-          onError={() => {
-            console.log('[Companion] background load failed');
-            setBgError(true);
-          }}
-          resizeMode="cover"
-        />
-      )}
-
-      {/* 第 3 层：立绘图（底部对齐，高度 85%，contain 模式保持比例） */}
-      {hasAssets === true && !poseError && (
-        <Image
-          source={{ uri: getPoseImageUrl(agentId, currentPose, serverAddr) }}
-          style={styles.pose}
-          onLoad={() => {
-            console.log(
-              `[Companion] pose loaded in ${Date.now() - mountTime.current}ms`
-            );
-          }}
-          onError={() => {
-            console.log('[Companion] pose load failed');
-            setPoseError(true);
-          }}
-          resizeMode="contain"
-        />
-      )}
-
-      {/* 第 4 层：UI 控件（返回按钮、提示文案等），absoluteFill 浮于所有图片之上 */}
-      <View style={styles.uiLayer}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={22} color="#333" />
-        </TouchableOpacity>
-
-        {hasAssets === false && (
-          <View style={styles.centerContent}>
-            <Text style={styles.noAssetTitle}>该 Agent 还未配置陪伴形象</Text>
-            <Text style={styles.noAssetHint}>
-              在 assets/pose/ 目录下添加表情图片即可启用
-            </Text>
-          </View>
-        )}
-      </View>
+      <CompanionBackgroundImage
+        agentId={agentId}
+        serverAddr={serverAddr}
+        hasAssets={hasAssets}
+        bgError={bgError}
+        onBgError={handleBgError}
+        mountTime={mountTime}
+      />
+      <CompanionPoseImage
+        agentId={agentId}
+        serverAddr={serverAddr}
+        hasAssets={hasAssets}
+        poseError={poseError}
+        currentPose={currentPose}
+        onPoseError={handlePoseError}
+        mountTime={mountTime}
+      />
+      <CompanionUI
+        hasAssets={hasAssets}
+        isLoading={isLoading}
+        replyText={replyText}
+        onSend={handleSend}
+        onBack={handleBack}
+      />
     </View>
   );
 }
@@ -189,6 +546,90 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  spacer: {
+    flex: 1,
+  },
+  bubbleOuter: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  bubbleInner: {
+    borderRadius: 24,
+    backgroundColor:
+      Platform.OS === 'ios'
+        ? 'rgba(255, 255, 255, 0.15)'
+        : 'rgba(255, 255, 255, 0.6)',
+    borderWidth: 1,
+    borderColor:
+      Platform.OS === 'ios'
+        ? 'rgba(255, 255, 255, 0.5)'
+        : 'rgba(255, 255, 255, 0.7)',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
+  },
+  bubbleScroll: {
+    maxHeight: 160,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  bubbleText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 22,
+  },
+  bubbleThinking: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  inputBarWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  textInput: {
+    flex: 1,
+    color: '#333',
+    fontSize: 16,
+    maxHeight: 120,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  sendButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 });
 

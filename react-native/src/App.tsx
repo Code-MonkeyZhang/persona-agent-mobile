@@ -12,7 +12,6 @@ import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider, useAppContext } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
-// Agent 陪伴模式全屏页面：叠加背景图 + 立绘图 + 消息交互
 import CompanionScreen from './companion/CompanionScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -43,20 +42,6 @@ const renderCustomDrawerContent = (
 
 /**
  * 抽屉导航器 - 侧边滑出的导航菜单
- *
- * 它管理的是主内容区（右侧）显示哪个页面：
- * ┌──────────────┬──────────────────────┐
- * │ 侧边栏内容    │  主内容区域            │
- * │ (CustomDrawer │  (Drawer.Screen)     │
- * │  Content)    │                      │
- * │              │                      │
- * │ Chat/Image/  │  ← 当前显示的页面      │
- * │ 入口         │  (Bedrock/Settings/   │
- * │ Session列表   │   ImageGallery等)     │
- * │ ...          │                      │
- * │ Settings入口  │                      │
- * └──────────────┴──────────────────────┘
- *
  * - drawerContent: 使用自定义的CustomDrawerContent渲染侧边栏内容
  * - drawerType: Mac端支持permanent(常驻)/slide(滑出)模式切换，其他平台固定用slide
  */
@@ -95,8 +80,8 @@ const DrawerNavigator = () => {
  * Stack导航器 - 全屏页面栈管理
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
- * - AgentDetail: Agent 详情页（从右侧推入全屏）
- * - Companion: Agent 陪伴页面（全屏沉浸式，无系统导航栏）
+ * - AgentDetail: Agent 详情页
+ * - Companion: Agent 陪伴页面
  */
 const AppNavigator = () => {
   const { colors } = useTheme();

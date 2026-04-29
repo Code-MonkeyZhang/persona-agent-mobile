@@ -12,6 +12,13 @@ const TAG = '[ServerApi]';
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
 
+/** step_complete 消息中的工具调用项 */
+interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 type ServerMessage =
   | { type: 'connected'; clientId: string }
@@ -22,12 +29,8 @@ type ServerMessage =
       stepIndex: number;
       content?: string;
       thinking?: string;
-      /** 工具调用结果列表（Step 3 预留字段，用于在陪伴模式中展示 AI 的工具调用过程） */
-      toolCalls?: {
-        id: string;
-        name: string;
-        arguments: Record<string, unknown>;
-      }[];
+      /** 工具调用结果列表，用于在陪伴模式中响应 show_pose 等工具调用 */
+      toolCalls?: ToolCall[];
     }
   | { type: 'complete'; sessionId: string }
   | { type: 'error'; sessionId?: string; message: string }
@@ -168,9 +171,13 @@ export class ServerClient {
   /** connect() 的 reject 回调，重连耗尽时调用 */
   private rejectConnect: ((err: Error) => void) | null = null;
 
-  /** 收到 step_complete 事件时触发 */
+  /** 收到 step_complete 事件时触发，toolCalls 用于检测 show_pose 等工具调用 */
   onStepComplete:
-    | ((content: string | undefined, thinking: string | undefined) => void)
+    | ((
+        content: string | undefined,
+        thinking: string | undefined,
+        toolCalls?: ToolCall[]
+      ) => void)
     | null = null;
 
   /** 收到 complete 事件时触发（agent 回复结束） */
@@ -277,7 +284,7 @@ export class ServerClient {
         break;
       case 'step_complete':
         if (this.onStepComplete) {
-          this.onStepComplete(msg.content, msg.thinking);
+          this.onStepComplete(msg.content, msg.thinking, msg.toolCalls);
         }
         break;
       case 'complete':
