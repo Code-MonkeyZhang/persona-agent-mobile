@@ -619,27 +619,15 @@ const styles = StyleSheet.create({
   },
   bubbleInner: {
     borderRadius: 24,
-    backgroundColor:
-      Platform.OS === 'ios'
-        ? 'rgba(255, 255, 255, 0.15)'
-        : 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 1,
-    borderColor:
-      Platform.OS === 'ios'
-        ? 'rgba(255, 255, 255, 0.5)'
-        : 'rgba(255, 255, 255, 0.7)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 0,
-      },
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bubbleScroll: {
     maxHeight: 160,
@@ -665,7 +653,7 @@ const styles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
     borderWidth: 1,
@@ -685,6 +673,7 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingTop: 0,
     paddingBottom: 0,
+    textAlignVertical: 'center',
   },
   sendButton: {
     width: 32,
