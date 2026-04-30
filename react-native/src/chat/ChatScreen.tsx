@@ -348,15 +348,17 @@ function ChatScreen(): React.JSX.Element {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* 陪伴入口按钮：跳转到 Agent 陪伴全屏页，传递 agentId 和当前会话 ID */}
+          {/* 陪伴入口按钮：跳转到 Agent 形象页，传递 agentId 和当前会话 ID */}
           <TouchableOpacity
             onPress={() => {
               if (!currentAgentId) {
                 return;
               }
+              const currentAgent = agents.find((a) => a.id === currentAgentId);
               navigation.navigate('Companion', {
                 agentId: currentAgentId,
                 sessionId: sessionIdRef.current || undefined,
+                voiceId: currentAgent?.voiceId,
               });
             }}
             style={{ paddingVertical: 10, paddingHorizontal: 6 }}

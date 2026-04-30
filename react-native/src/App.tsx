@@ -19,6 +19,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
+import TrackPlayer from 'react-native-track-player';
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -152,6 +153,7 @@ const AppWithTheme = () => {
 const App = () => {
   React.useEffect(() => {
     configureErrorHandling();
+    TrackPlayer.setupPlayer().catch(() => {}); // init audio player
   }, []);
 
   return (

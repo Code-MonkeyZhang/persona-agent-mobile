@@ -158,17 +158,12 @@ function httpDelete(url: string): Promise<string> {
  * 断线自动重连，最多 5 次，线性退避。
  */
 export class ServerClient {
-  /** WebSocket 连接实例 */
   private ws: WebSocket | null = null;
-  /** 当前已尝试的重连次数 */
   private reconnectAttempts = 0;
-  /** 最大重连次数 */
   private maxReconnectAttempts = 5;
   /** 重连定时器 ID，disconnect 时需要清除 */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  /** connect() 的 resolve 回调，收到 connected 消息时调用 */
   private resolveConnect: (() => void) | null = null;
-  /** connect() 的 reject 回调，重连耗尽时调用 */
   private rejectConnect: ((err: Error) => void) | null = null;
 
   /** 收到 step_complete 事件时触发，toolCalls 用于检测 show_pose 等工具调用 */
@@ -180,13 +175,10 @@ export class ServerClient {
       ) => void)
     | null = null;
 
-  /** 收到 complete 事件时触发（agent 回复结束） */
   onComplete: (() => void) | null = null;
 
-  /** 收到 error 事件时触发 */
   onError: ((message: string) => void) | null = null;
 
-  /** 收到 title_updated 事件时触发 */
   onTitleUpdated: ((sessionId: string, title: string) => void) | null = null;
 
   /** 检查 WebSocket 是否处于 OPEN 状态 */
@@ -421,6 +413,7 @@ export interface AgentInfo {
   mcpNames?: string[];
   skillNames?: string[];
   defaultWorkspacePath?: string;
+  voiceId?: string;
 }
 
 /** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
@@ -645,4 +638,19 @@ export function convertToChatMessages(
     }
   }
   return result.reverse();
+}
+
+/**
+ * 调用服务端摘要接口，将长文本压缩为适合 TTS 朗读的短文本。
+ */
+export async function summarizeText(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string,
+  text: string
+): Promise<string> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/summarize`;
+  const responseText = await httpPost(url, { text });
+  const data = JSON.parse(responseText) as { summary: string };
+  return data.summary || text;
 }

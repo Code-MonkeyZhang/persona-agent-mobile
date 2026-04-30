@@ -17,9 +17,10 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronLeft, Send } from 'lucide-react-native';
+import { ChevronLeft, Mic, MicOff, Send } from 'lucide-react-native';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
+import { useVoiceStore } from '../stores/voiceStore';
 import {
   ServerClient,
   fetchPoses,
@@ -200,12 +201,13 @@ interface UIProps {
   replyText: string;
   onSend: (text: string) => Promise<void>;
   onBack: () => void;
+  voiceEnabled: boolean;
+  isSpeaking: boolean;
+  onToggleVoice: () => void;
 }
 
 /**
  * UI 控件层：返回按钮 + 无资源提示 + 回复气泡 + 输入栏。
- * 用 React.memo 包裹，只有 hasAssets/isLoading/replyText/onSend/onBack 变化时才 re-render。
- * currentPose/bgError/poseError 的变化不会传播到此处。
  */
 const CompanionUI = React.memo(
   function CompanionUI({
@@ -214,13 +216,12 @@ const CompanionUI = React.memo(
     replyText,
     onSend,
     onBack,
+    voiceEnabled,
+    isSpeaking,
+    onToggleVoice,
   }: UIProps) {
     return (
       <View style={styles.uiLayer}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <ChevronLeft size={22} color="#333" />
-        </TouchableOpacity>
-
         {hasAssets === false && (
           <View style={styles.centerContent}>
             <Text style={styles.noAssetTitle}>该 Agent 还未配置陪伴形象</Text>
@@ -232,7 +233,7 @@ const CompanionUI = React.memo(
 
         {hasAssets === true && (
           <>
-            <View style={styles.spacer} />
+            <View style={styles.spacer} pointerEvents="none" />
 
             {replyText.length > 0 && (
               <View style={styles.bubbleOuter}>
@@ -255,6 +256,17 @@ const CompanionUI = React.memo(
             <CompanionInputBar isLoading={isLoading} onSend={onSend} />
           </>
         )}
+
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <ChevronLeft size={22} color="#333" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onToggleVoice} style={styles.micButton}>
+          {voiceEnabled ? (
+            <Mic size={20} color={isSpeaking ? '#228be6' : '#333'} />
+          ) : (
+            <MicOff size={20} color="#999" />
+          )}
+        </TouchableOpacity>
       </View>
     );
   },
@@ -266,11 +278,15 @@ const CompanionUI = React.memo(
     prev.isLoading === next.isLoading &&
     prev.replyText === next.replyText &&
     prev.onSend === next.onSend &&
-    prev.onBack === next.onBack
+    prev.onBack === next.onBack &&
+    prev.voiceEnabled === next.voiceEnabled &&
+    prev.isSpeaking === next.isSpeaking &&
+    prev.onToggleVoice === next.onToggleVoice
 );
 
 function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
   const agentId = route.params.agentId;
+  const voiceId = route.params.voiceId;
   const serverAddr = getServerAddress();
   const mountTime = useRef(Date.now());
 
@@ -297,6 +313,30 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
 
   /** ServerClient 实例引用，用于发送消息和断开连接 */
   const serverClientRef = useRef<ServerClient | null>(null);
+
+  /** 回复文本的 ref 同步，供 onComplete 回调中读取最新值 */
+  const replyTextRef = useRef(replyText);
+  useEffect(() => {
+    replyTextRef.current = replyText;
+  }, [replyText]);
+
+  const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
+  const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const toggleVoice = useVoiceStore((s) => s.toggleVoice);
+  const speak = useVoiceStore((s) => s.speak);
+  const stopSpeaking = useVoiceStore((s) => s.stopSpeaking);
+
+  const voiceEnabledRef = useRef(voiceEnabled);
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled]);
+
+  const handleToggleVoice = useCallback(() => {
+    toggleVoice();
+    if (voiceEnabled) {
+      stopSpeaking();
+    }
+  }, [toggleVoice, voiceEnabled, stopSpeaking]);
 
   /**
    * 当前会话 ID。
@@ -392,6 +432,13 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         console.log('[Companion] complete');
         if (!cancelled) {
           setIsLoading(false);
+          if (voiceEnabledRef.current && voiceId) {
+            const text = replyTextRef.current;
+            const sessionId = sessionIdRef.current;
+            if (text && sessionId) {
+              speak(text, voiceId, agentId, sessionId);
+            }
+          }
         }
       };
       client.onError = (message) => {
@@ -425,6 +472,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         cancelled = true;
         client.disconnect();
         serverClientRef.current = null;
+        stopSpeaking();
         console.log('[Companion] WebSocket disconnected');
       };
     }, [serverAddr])
@@ -493,6 +541,9 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         replyText={replyText}
         onSend={handleSend}
         onBack={handleBack}
+        voiceEnabled={voiceEnabled}
+        isSpeaking={isSpeaking}
+        onToggleVoice={handleToggleVoice}
       />
     </View>
   );
@@ -518,13 +569,25 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   backButton: {
+    position: 'absolute',
+    top: 56,
+    left: 12,
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
-    marginTop: 56,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  micButton: {
+    position: 'absolute',
+    top: 56,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   centerContent: {
