@@ -75,7 +75,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
  * 必须在 setupPlayer() 之后调用，否则 Native Module 尚未就绪会崩溃。
  */
 let _listenerRegistered = false;
-function ensurePlaybackListener(): void {
+export function ensurePlaybackListener(): void {
   if (_listenerRegistered) {
     return;
   }
