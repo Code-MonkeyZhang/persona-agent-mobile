@@ -62,7 +62,9 @@ function CompanionInputBar({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={[styles.inputBarWrapper, { paddingBottom: bottomInset + 12 }]}>
+      <View
+        style={[styles.inputBarWrapper, { paddingBottom: bottomInset + 40 }]}
+      >
         <View style={styles.inputBar}>
           <TextInput
             style={styles.textInput}
