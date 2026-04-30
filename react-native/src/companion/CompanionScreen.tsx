@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, Mic, MicOff, Send } from 'lucide-react-native';
 import type { RouteParamList } from '../types/RouteTypes.ts';
@@ -36,9 +38,11 @@ type Props = NativeStackScreenProps<RouteParamList, 'Companion'>;
 function CompanionInputBar({
   isLoading,
   onSend,
+  bottomInset,
 }: {
   isLoading: boolean;
   onSend: (text: string) => Promise<void>;
+  bottomInset: number;
 }): React.JSX.Element {
   const [inputText, setInputText] = useState('');
 
@@ -58,7 +62,7 @@ function CompanionInputBar({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.inputBarWrapper}>
+      <View style={[styles.inputBarWrapper, { paddingBottom: bottomInset + 12 }]}>
         <View style={styles.inputBar}>
           <TextInput
             style={styles.textInput}
@@ -204,6 +208,7 @@ interface UIProps {
   voiceEnabled: boolean;
   isSpeaking: boolean;
   onToggleVoice: () => void;
+  insets: { top: number; bottom: number };
 }
 
 /**
@@ -219,6 +224,7 @@ const CompanionUI = React.memo(
     voiceEnabled,
     isSpeaking,
     onToggleVoice,
+    insets,
   }: UIProps) {
     return (
       <View style={styles.uiLayer}>
@@ -253,14 +259,24 @@ const CompanionUI = React.memo(
               </View>
             )}
 
-            <CompanionInputBar isLoading={isLoading} onSend={onSend} />
+            <CompanionInputBar
+              isLoading={isLoading}
+              onSend={onSend}
+              bottomInset={insets.bottom}
+            />
           </>
         )}
 
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={[styles.backButton, { top: insets.top + 12 }]}
+        >
           <ChevronLeft size={22} color="#333" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onToggleVoice} style={styles.micButton}>
+        <TouchableOpacity
+          onPress={onToggleVoice}
+          style={[styles.micButton, { top: insets.top + 12 }]}
+        >
           {voiceEnabled ? (
             <Mic size={20} color={isSpeaking ? '#228be6' : '#333'} />
           ) : (
@@ -289,6 +305,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
   const voiceId = route.params.voiceId;
   const serverAddr = getServerAddress();
   const mountTime = useRef(Date.now());
+  const insets = useSafeAreaInsets();
 
   /**
    * Agent 是否拥有陪伴资源（三态）：
@@ -518,6 +535,11 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
 
   return (
     <View style={styles.container}>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="dark-content"
+      />
       <CompanionBackgroundImage
         agentId={agentId}
         serverAddr={serverAddr}
@@ -544,6 +566,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         voiceEnabled={voiceEnabled}
         isSpeaking={isSpeaking}
         onToggleVoice={handleToggleVoice}
+        insets={{ top: insets.top, bottom: insets.bottom }}
       />
     </View>
   );
