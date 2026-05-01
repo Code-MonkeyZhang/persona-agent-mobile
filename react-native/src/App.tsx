@@ -12,12 +12,15 @@ import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider, useAppContext } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
+import CompanionScreen from './companion/CompanionScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid, isMacCatalyst } from './utils/PlatformUtils.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
+import TrackPlayer from 'react-native-track-player';
+import { ensurePlaybackListener } from './stores/voiceStore';
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -41,20 +44,6 @@ const renderCustomDrawerContent = (
 
 /**
  * 抽屉导航器 - 侧边滑出的导航菜单
- *
- * 它管理的是主内容区（右侧）显示哪个页面：
- * ┌──────────────┬──────────────────────┐
- * │ 侧边栏内容    │  主内容区域            │
- * │ (CustomDrawer │  (Drawer.Screen)     │
- * │  Content)    │                      │
- * │              │                      │
- * │ Chat/Image/  │  ← 当前显示的页面      │
- * │ 入口         │  (Bedrock/Settings/   │
- * │ Session列表   │   ImageGallery等)     │
- * │ ...          │                      │
- * │ Settings入口  │                      │
- * └──────────────┴──────────────────────┘
- *
  * - drawerContent: 使用自定义的CustomDrawerContent渲染侧边栏内容
  * - drawerType: Mac端支持permanent(常驻)/slide(滑出)模式切换，其他平台固定用slide
  */
@@ -93,7 +82,8 @@ const DrawerNavigator = () => {
  * Stack导航器 - 全屏页面栈管理
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
- * - AgentDetail: Agent 详情页（从右侧推入全屏）
+ * - AgentDetail: Agent 详情页
+ * - Companion: Agent 陪伴页面
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -115,6 +105,12 @@ const AppNavigator = () => {
           headerBackTitle: 'Back',
           animation: 'default',
         }}
+      />
+      {/* 陪伴页面：隐藏系统导航栏实现全屏沉浸式体验 */}
+      <Stack.Screen
+        name="Companion"
+        component={CompanionScreen}
+        options={{ headerShown: false, animation: 'default' }}
       />
     </Stack.Navigator>
   );
@@ -158,6 +154,9 @@ const AppWithTheme = () => {
 const App = () => {
   React.useEffect(() => {
     configureErrorHandling();
+    TrackPlayer.setupPlayer()
+      .then(() => ensurePlaybackListener())
+      .catch(() => {});
   }, []);
 
   return (

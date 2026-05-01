@@ -3,7 +3,7 @@
  * @description Agent 选择下拉菜单，从触发按钮下方展开，支持高度 + 透明度动画。
  * 选中项通过背景色高亮，点击外部区域关闭。
  */
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -20,6 +20,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
 import { getAgentAvatarUrl } from '../../api/server-api';
@@ -47,26 +48,6 @@ const MODAL_HEIGHT = 200;
 const ANIMATION_DURATION = 250;
 
 /**
- * 头像背景色预设列表，与 AgentSelector 保持一致。
- */
-const AVATAR_COLORS = [
-  '#4A90D9',
-  '#50B86C',
-  '#E8913A',
-  '#D45B5B',
-  '#9B59B6',
-  '#1ABC9C',
-  '#E67E22',
-  '#3498DB',
-];
-
-/** 根据名称首字符确定头像背景色 */
-function getAvatarColor(name: string): string {
-  const code = name.charCodeAt(0) || 0;
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
-
-/**
  * Agent 选择下拉菜单。
  *
  * 交互流程：
@@ -92,6 +73,12 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
   const heightValue = useSharedValue(0);
   /** 动画驱动：菜单内容透明度 */
   const opacityValue = useSharedValue(0);
+
+  /**
+   * 记录头像加载失败的 Agent ID 集合，
+   * 用 Set 而非 state-per-item 避免在 FlatList renderItem 中创建大量独立 state。
+   */
+  const [avatarErrorIds, setAvatarErrorIds] = useState<Set<string>>(new Set());
 
   /** 展开动画：高度和透明度从 0 过渡到目标值 */
   const startOpenAnimation = useCallback(() => {
@@ -149,10 +136,12 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
     opacity: opacityValue.value,
   }));
 
-  /** 渲染单个 Agent 列表项 */
+  /** 渲染单个 Agent 列表项：具备加载条件时请求服务器头像 URL，否则显示灰色占位符 */
   const renderAgentItem = ({ item }: { item: AgentInfo; index: number }) => {
     const isSelected = item.id === currentAgentId;
-    const agentInitial = item.name.charAt(0).toUpperCase();
+    const hasError = avatarErrorIds.has(item.id);
+    const serverAddr = getServerAddress();
+    const canLoad = serverAddr.length > 0 && item.id.length > 0;
 
     return (
       <TouchableOpacity
@@ -160,19 +149,17 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
         onPress={() => handleAgentSelect(item.id)}
         activeOpacity={0.6}
       >
-        {item.avatar ? (
+        {canLoad && !hasError ? (
           <Image
-            source={{ uri: getAgentAvatarUrl(item.id, getServerAddress()) }}
+            source={{ uri: getAgentAvatarUrl(item.id, serverAddr) }}
             style={styles.agentIcon}
+            onError={() =>
+              setAvatarErrorIds((prev) => new Set(prev).add(item.id))
+            }
           />
         ) : (
-          <View
-            style={[
-              styles.agentIcon,
-              { backgroundColor: getAvatarColor(item.name) },
-            ]}
-          >
-            <Text style={styles.agentIconText}>{agentInitial}</Text>
+          <View style={[styles.agentIcon, { backgroundColor: '#E5E7EB' }]}>
+            <User size={14} color="#9CA3AF" />
           </View>
         )}
         <Text style={styles.agentName}>{item.name}</Text>
@@ -264,11 +251,6 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       marginRight: 10,
       overflow: 'hidden',
-    },
-    agentIconText: {
-      color: '#ffffff',
-      fontSize: 11,
-      fontWeight: '600',
     },
     agentName: {
       fontSize: 15,

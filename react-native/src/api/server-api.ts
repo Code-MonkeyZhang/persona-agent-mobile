@@ -12,6 +12,13 @@ const TAG = '[ServerApi]';
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
 
+/** step_complete 消息中的工具调用项 */
+interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 type ServerMessage =
   | { type: 'connected'; clientId: string }
@@ -22,6 +29,8 @@ type ServerMessage =
       stepIndex: number;
       content?: string;
       thinking?: string;
+      /** 工具调用结果列表，用于在陪伴模式中响应 show_pose 等工具调用 */
+      toolCalls?: ToolCall[];
     }
   | { type: 'complete'; sessionId: string }
   | { type: 'error'; sessionId?: string; message: string }
@@ -149,31 +158,27 @@ function httpDelete(url: string): Promise<string> {
  * 断线自动重连，最多 5 次，线性退避。
  */
 export class ServerClient {
-  /** WebSocket 连接实例 */
   private ws: WebSocket | null = null;
-  /** 当前已尝试的重连次数 */
   private reconnectAttempts = 0;
-  /** 最大重连次数 */
   private maxReconnectAttempts = 5;
   /** 重连定时器 ID，disconnect 时需要清除 */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  /** connect() 的 resolve 回调，收到 connected 消息时调用 */
   private resolveConnect: (() => void) | null = null;
-  /** connect() 的 reject 回调，重连耗尽时调用 */
   private rejectConnect: ((err: Error) => void) | null = null;
 
-  /** 收到 step_complete 事件时触发 */
+  /** 收到 step_complete 事件时触发，toolCalls 用于检测 show_pose 等工具调用 */
   onStepComplete:
-    | ((content: string | undefined, thinking: string | undefined) => void)
+    | ((
+        content: string | undefined,
+        thinking: string | undefined,
+        toolCalls?: ToolCall[]
+      ) => void)
     | null = null;
 
-  /** 收到 complete 事件时触发（agent 回复结束） */
   onComplete: (() => void) | null = null;
 
-  /** 收到 error 事件时触发 */
   onError: ((message: string) => void) | null = null;
 
-  /** 收到 title_updated 事件时触发 */
   onTitleUpdated: ((sessionId: string, title: string) => void) | null = null;
 
   /** 检查 WebSocket 是否处于 OPEN 状态 */
@@ -271,7 +276,7 @@ export class ServerClient {
         break;
       case 'step_complete':
         if (this.onStepComplete) {
-          this.onStepComplete(msg.content, msg.thinking);
+          this.onStepComplete(msg.content, msg.thinking, msg.toolCalls);
         }
         break;
       case 'complete':
@@ -403,13 +408,12 @@ export interface AgentInfo {
   name: string;
   description?: string;
   defaultModel?: { provider: string; model: string };
-  /** 头像标记，有值（如 "uploaded"）表示服务器上有头像图片 */
-  avatar?: string;
   systemPrompt?: string;
   maxSteps?: number;
   mcpNames?: string[];
   skillNames?: string[];
   defaultWorkspacePath?: string;
+  voiceId?: string;
 }
 
 /** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
@@ -438,6 +442,47 @@ export function getAgentAvatarUrl(
   serverAddress: string
 ): string {
   return `${serverAddress}/api/agents/${agentId}/avatar`;
+}
+
+/**
+ * 获取指定 Agent 可用的姿态列表。
+ * 服务器在 GET /api/agents/:id/assets/pose 返回 { poses: string[] }。
+ */
+export async function fetchPoses(
+  agentId: string,
+  serverAddress: string
+): Promise<string[]> {
+  const url = `${serverAddress}/api/agents/${agentId}/assets/pose`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { poses: string[] };
+  return data.poses;
+}
+
+/**
+ * 拼接 Agent 指定姿态的图片 URL。
+ * 服务器在 GET /api/agents/:id/assets/pose/:name 返回图片流。
+ */
+export function getPoseImageUrl(
+  agentId: string,
+  poseName: string,
+  serverAddress: string
+): string {
+  // ?t= 时间戳参数破坏浏览器/React Native 图片缓存，确保 pose 切换后能看到最新图片
+  return `${serverAddress}/api/agents/${agentId}/assets/pose/${encodeURIComponent(
+    poseName
+  )}?t=${Date.now()}`;
+}
+
+/**
+ * 拼接 Agent 背景图片 URL。
+ * 服务器在 GET /api/agents/:id/assets/background 返回图片流。
+ */
+export function getBackgroundImageUrl(
+  agentId: string,
+  serverAddress: string
+): string {
+  // ?t= 时间戳参数破坏缓存，确保背景图更新后能立即刷新
+  return `${serverAddress}/api/agents/${agentId}/assets/background?t=${Date.now()}`;
 }
 
 /**
@@ -593,4 +638,19 @@ export function convertToChatMessages(
     }
   }
   return result.reverse();
+}
+
+/**
+ * 调用服务端摘要接口，将长文本压缩为适合 TTS 朗读的短文本。
+ */
+export async function summarizeText(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string,
+  text: string
+): Promise<string> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/summarize`;
+  const responseText = await httpPost(url, { text });
+  const data = JSON.parse(responseText) as { summary: string };
+  return data.summary || text;
 }

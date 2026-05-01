@@ -16,6 +16,8 @@ import {
   SafeAreaView,
   StyleSheet,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
   activateKeepAwake,
@@ -32,6 +34,7 @@ import {
   useNavigation,
   useRoute,
 } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import uuid from 'uuid';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -48,6 +51,7 @@ import {
 import type { AgentInfo } from '../api/server-api.ts';
 import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
+import { UserRound } from 'lucide-react-native';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
 import CustomSendComponent from './component/CustomSendComponent.tsx';
 import { trigger } from './util/HapticUtils.ts';
@@ -87,11 +91,17 @@ const textPlaceholder = '...';
 /** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 
+/** 聊天页面的导航类型，支持跳转到 Stack 下的所有页面（包括 Companion 等全屏页面） */
+type ChatScreenNavigationProp = NativeStackNavigationProp<
+  RouteParamList,
+  'Bedrock'
+>;
+
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
   const { colors, isDark } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
   const initialSessionId = route.params?.sessionId;
   const tapIndex = route.params?.tapIndex;
@@ -337,27 +347,58 @@ function ChatScreen(): React.JSX.Element {
       ),
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
-        <CustomHeaderRightButton
-          onPress={() => {
-            textInputViewRef?.current?.clear();
-            setSelectedFiles([]);
-            if (
-              messagesRef.current.length > 0 &&
-              chatStatusRef.current !== ChatStatus.Running
-            ) {
-              startNewChat.current();
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* 陪伴入口按钮：跳转到 Agent 形象页，传递 agentId 和当前会话 ID */}
+          <TouchableOpacity
+            onPress={() => {
+              if (!currentAgentId) {
+                return;
+              }
+              const currentAgent = agents.find((a) => a.id === currentAgentId);
+              navigation.navigate('Companion', {
+                agentId: currentAgentId,
+                sessionId: sessionIdRef.current || undefined,
+                voiceId: currentAgent?.voiceId,
+              });
+            }}
+            style={{ paddingVertical: 10, paddingHorizontal: 6 }}
+          >
+            <UserRound size={22} color={colors.text} />
+          </TouchableOpacity>
+          <CustomHeaderRightButton
+            onPress={() => {
+              textInputViewRef?.current?.clear();
+              setSelectedFiles([]);
+              if (
+                messagesRef.current.length > 0 &&
+                chatStatusRef.current !== ChatStatus.Running
+              ) {
+                startNewChat.current();
+              }
+            }}
+            imageSource={
+              isDark
+                ? require('../assets/edit_dark.png')
+                : require('../assets/edit.png')
             }
-          }}
-          imageSource={
-            isDark
-              ? require('../assets/edit_dark.png')
-              : require('../assets/edit.png')
-          }
-        />
+          />
+        </View>
       ),
     };
-    navigation.setOptions(headerOptions);
-  }, [navigation, isDark, agents, currentAgentId, handleSelectAgent]);
+    // 类型断言：HeaderOptions 类型与 navigation.setOptions 的参数类型不完全匹配，
+    // 需要手动断言以通过 TypeScript 检查（实际运行时无影响）
+    navigation.setOptions(
+      headerOptions as Parameters<typeof navigation.setOptions>[0]
+    );
+  }, [
+    navigation,
+    isDark,
+    agents,
+    currentAgentId,
+    handleSelectAgent,
+    // colors.text：陪伴按钮图标颜色依赖主题，主题变化时需重新设置导航栏
+    colors.text,
+  ]);
 
   // ==================== 会话切换 & 消息加载 ====================
   /**

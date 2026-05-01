@@ -17,6 +17,8 @@ import {
   getHapticEnabled,
   getServerAddress,
   saveServerAddress,
+  getTtsApiKey,
+  saveTtsApiKey,
 } from '../storage/StorageUtils.ts';
 import { CustomHeaderRightButton } from '../chat/component/CustomHeaderRightButton.tsx';
 import { RouteParamList } from '../types/RouteTypes.ts';
@@ -36,6 +38,9 @@ function SettingsScreen(): React.JSX.Element {
     'idle' | 'connecting' | 'connected' | 'failed'
   >(savedAddress ? 'connected' : 'idle');
   const [connectionError, setConnectionError] = useState('');
+
+  const [ttsApiKey, setTtsApiKey] = useState(getTtsApiKey);
+  const [ttsKeySaved, setTtsKeySaved] = useState(false);
 
   const toggleHapticFeedback = (value: boolean) => {
     setHapticEnabled(value);
@@ -165,6 +170,34 @@ function SettingsScreen(): React.JSX.Element {
             {connectionStatus === 'connected' && 'Connected'}
             {connectionStatus === 'failed' &&
               `Failed${connectionError ? ': ' + connectionError : ''}`}
+          </Text>
+        )}
+
+        {/* TTS 语音设置 */}
+        <Text style={styles.sectionTitle}>TTS Settings</Text>
+        <CustomTextInput
+          label="MiniMax API Key"
+          value={ttsApiKey}
+          onChangeText={(text) => {
+            setTtsApiKey(text);
+            setTtsKeySaved(false);
+          }}
+          placeholder="Enter your MiniMax API Key"
+          secureTextEntry
+        />
+        <TouchableOpacity
+          style={styles.connectButton}
+          activeOpacity={0.7}
+          onPress={() => {
+            saveTtsApiKey(ttsApiKey.trim());
+            setTtsKeySaved(true);
+          }}
+        >
+          <Text style={styles.connectButtonText}>Save API Key</Text>
+        </TouchableOpacity>
+        {ttsKeySaved && (
+          <Text style={[styles.statusText, { color: colors.success }]}>
+            API Key saved
           </Text>
         )}
 

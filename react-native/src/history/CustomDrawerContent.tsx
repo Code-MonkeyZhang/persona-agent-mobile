@@ -34,6 +34,7 @@ import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { groupMessagesByDate } from './HistoryGroupUtil.ts';
 import { isMac } from '../App.tsx';
 import { DrawerActions } from '@react-navigation/native';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
 /**
@@ -234,26 +235,23 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
             navigation.dispatch(DrawerActions.closeDrawer());
           }}
         >
-          {agentInfo.avatar && !agentAvatarError ? (
-            <Image
-              source={{
-                uri: getAgentAvatarUrl(agentInfo.id, getServerAddress() ?? ''),
-              }}
-              style={styles.agentAvatar}
-              onError={() => setAgentAvatarError(true)}
-            />
-          ) : (
-            <View
-              style={[
-                styles.agentAvatar,
-                { backgroundColor: getAvatarColor(agentInfo.name) },
-              ]}
-            >
-              <Text style={styles.agentAvatarText}>
-                {agentInfo.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          {(() => {
+            const serverAddr = getServerAddress();
+            const canLoad = serverAddr.length > 0 && agentInfo.id.length > 0;
+            return canLoad && !agentAvatarError ? (
+              <Image
+                source={{ uri: getAgentAvatarUrl(agentInfo.id, serverAddr) }}
+                style={styles.agentAvatar}
+                onError={() => setAgentAvatarError(true)}
+              />
+            ) : (
+              <View
+                style={[styles.agentAvatar, { backgroundColor: '#E5E7EB' }]}
+              >
+                <User size={22} color="#9CA3AF" />
+              </View>
+            );
+          })()}
           <View style={styles.agentInfo}>
             <Text style={styles.agentName} numberOfLines={1}>
               {agentInfo.name}
@@ -357,23 +355,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   );
 };
 
-/** 头像背景色预设，与 AgentSelector 保持一致 */
-const AVATAR_COLORS = [
-  '#4A90D9',
-  '#50B86C',
-  '#E8913A',
-  '#D45B5B',
-  '#9B59B6',
-  '#1ABC9C',
-  '#E67E22',
-  '#3498DB',
-];
-
-function getAvatarColor(name: string): string {
-  const code = name.charCodeAt(0) || 0;
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
-
 /** 侧边栏样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
@@ -406,11 +387,6 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-    },
-    agentAvatarText: {
-      color: '#ffffff',
-      fontSize: 20,
-      fontWeight: '600',
     },
     agentInfo: {
       flex: 1,

@@ -24,6 +24,8 @@ const hapticEnabledKey = keyPrefix + 'hapticEnabled';
 const reasoningExpandedKey = keyPrefix + 'reasoningExpandedKey';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
+const ttsApiKeyKey = keyPrefix + 'ttsApiKey';
+const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 
 let currentReasoningExpanded: boolean | undefined;
 
@@ -71,4 +73,24 @@ export function saveServerAgentId(agentId: string) {
 /** 获取保存的 agent ID，未设置时返回空字符串 */
 export function getServerAgentId(): string {
   return storage.getString(serverAgentIdKey) ?? '';
+}
+
+/** 保存 MiniMax TTS API Key（加密存储） */
+export function saveTtsApiKey(key: string) {
+  encryptStorage.set(ttsApiKeyKey, key);
+}
+
+/** 获取 MiniMax TTS API Key */
+export function getTtsApiKey(): string {
+  return encryptStorage.getString(ttsApiKeyKey) ?? '';
+}
+
+/** 保存 TTS 语音开关状态 */
+export function saveTtsEnabled(enabled: boolean) {
+  storage.set(ttsEnabledKey, enabled);
+}
+
+/** 获取 TTS 语音开关状态 */
+export function getTtsEnabled(): boolean {
+  return storage.getBoolean(ttsEnabledKey) ?? false;
 }

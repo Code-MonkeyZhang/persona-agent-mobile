@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RouteParamList } from '../types/RouteTypes.ts';
+import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import {
   type AgentInfo,
@@ -28,23 +29,6 @@ import {
 import { getServerAddress } from '../storage/StorageUtils.ts';
 
 type Props = NativeStackScreenProps<RouteParamList, 'AgentDetail'>;
-
-/** 头像背景色预设，与 AgentSelector 保持一致 */
-const AVATAR_COLORS = [
-  '#4A90D9',
-  '#50B86C',
-  '#E8913A',
-  '#D45B5B',
-  '#9B59B6',
-  '#1ABC9C',
-  '#E67E22',
-  '#3498DB',
-];
-
-function getAvatarColor(name: string): string {
-  const code = name.charCodeAt(0) || 0;
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
 
 /** 根据 MCP 状态返回对应圆点颜色 */
 function getMcpStatusColor(
@@ -119,8 +103,6 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   }
 
   const displayName = agent.name || 'Agent';
-  const initial = displayName.charAt(0).toUpperCase();
-  const hasAvatar = !!agent.avatar;
 
   const defaultModel = agent.defaultModel;
   const modelDisplay = defaultModel
@@ -132,26 +114,23 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       style={styles.scrollView}
       contentContainerStyle={styles.content}
     >
-      {/* 头像 + 名称 + 描述 */}
+      {/* 头像 + 名称 + 描述：具备加载条件时请求服务器 URL，否则显示灰色占位符 */}
       <View style={styles.avatarCard}>
-        {hasAvatar && !avatarError ? (
-          <Image
-            source={{
-              uri: getAgentAvatarUrl(agentId, getServerAddress() ?? ''),
-            }}
-            style={styles.avatar}
-            onError={() => setAvatarError(true)}
-          />
-        ) : (
-          <View
-            style={[
-              styles.avatar,
-              { backgroundColor: getAvatarColor(displayName) },
-            ]}
-          >
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-        )}
+        {(() => {
+          const serverAddr = getServerAddress();
+          const canLoad = serverAddr.length > 0 && agentId.length > 0;
+          return canLoad && !avatarError ? (
+            <Image
+              source={{ uri: getAgentAvatarUrl(agentId, serverAddr) }}
+              style={styles.avatar}
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: '#E5E7EB' }]}>
+              <User size={32} color="#9CA3AF" />
+            </View>
+          );
+        })()}
         <Text style={styles.name}>{displayName}</Text>
         {agent.description ? (
           <Text style={styles.description}>{agent.description}</Text>
@@ -290,11 +269,6 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-    },
-    avatarText: {
-      color: '#ffffff',
-      fontSize: 28,
-      fontWeight: '600',
     },
     name: {
       fontSize: 18,
