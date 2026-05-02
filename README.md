@@ -1,101 +1,48 @@
-# Persona Mobile
+<div align="center">
 
-Persona Agent 的移动端客户端，连接你本地运行的 [Persona Agent Server](https://github.com/Code-MonkeyZhang/persona-agent)，在手机上与 AI Agent 对话。
+<img src="assets/logo-rounded.png" width="150" height="150" alt="Persona Agent Mobile" />
 
-基于 [SwiftChat](https://github.com/aws-samples/swift-chat) 二次开发。
+# Persona Agent Mobile
 
-## 功能
+**Persona 的移动端客户端**
 
-### 对话
+连接你本地运行的 [Persona Agent Server](https://github.com/Code-MonkeyZhang/persona-agent)，在手机上随时随地与 AI Agent 对话。
 
-- WebSocket 流式输出，实时接收 Agent 回复
-- Markdown 渲染（代码高亮、表格、Mermaid 图表）
-- 代码块一键复制
-- 会话历史管理，侧边栏快速切换
+[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android-informational)
+[![Release](https://img.shields.io/github/v/release/Code-MonkeyZhang/persona-agent-mobile?include_prereleases)](https://github.com/Code-MonkeyZhang/persona-agent-mobile/releases)
 
-### Agent
+</div>
 
-- 浏览所有 Agent，查看详情（模型配置、系统提示词、MCP 服务、Skills）
-- 聊天界面顶部一键切换 Agent
-- Agent 头像显示
+## 功能演示
 
-### 伴侣模式
+<table>
+  <tr>
+    <td align="center"><b>移动端演示</b></td>
+    <td align="center"><b>普通对话</b></td>
+    <td align="center"><b>Agent 详情</b></td>
+  </tr>
+  <tr>
+    <td><img src="assets/mobile-agent.gif" width="250" /></td>
+    <td><img src="assets/normal-conversation.gif" width="250" /></td>
+    <td><img src="assets/agent-detail.gif" width="250" /></td>
+  </tr>
+</table>
 
-- 全屏展示角色立绘 + 背景图
-- Agent 根据对话自动切换表情（pose）
-- 支持语音合成朗读回复
+## 核心功能
 
-### 设置
+- **流式对话** — WebSocket 实时接收 Agent 回复，支持 Markdown 渲染、代码高亮、Mermaid 图表
+- **多 Agent 管理** — 浏览所有 Agent，查看详情（模型配置、系统提示词、MCP 服务、Skills），一键切换
+- **伴侣模式** — 全屏展示角色立绘与背景图，Agent 根据对话自动切换表情，配合语音合成朗读回复
+- **远程连接** — 通过 Cloudflare Tunnel 从外网连接你本地运行的 Persona Agent Server
+- **暗色 / 亮色主题** — 支持暗色和亮色两种主题切换
 
-- 配置 Persona Agent Server 地址
-- 触觉反馈开关
-- TTS API Key 配置
-- 暗色 / 亮色主题切换
+## 下载安装
 
-## 支持平台
-
-| 平台 | 方式 |
-|------|------|
-| Android | 下载 APK 安装 |
-| iOS | Xcode 源码编译 |
-
-## 开发
-
-```bash
-cd react-native
-npm install
-
-# 启动 Metro
-npm start
-```
-
-### 构建 Android
-
-```bash
-npm run android
-```
-
-或手动构建 Release APK：
-
-```bash
-cd android && ./gradlew assembleRelease
-```
-
-APK 输出路径：`android/app/build/outputs/apk/release/Persona.apk`
-
-### 构建 iOS
-
-首次需要安装原生依赖：
-
-```bash
-cd ios && pod install && cd ..
-npm run ios
-```
-
-## 项目结构
-
-```
-react-native/
-├── src/
-│   ├── api/                # Server API 客户端（HTTP + WebSocket）
-│   ├── agent-detail/       # Agent 详情全屏页
-│   ├── chat/               # 聊天页面及子组件
-│   │   └── component/
-│   │       ├── markdown/   # Markdown 渲染器（代码、Mermaid、数学公式）
-│   │       ├── AgentSelector.tsx      # Agent 选择器
-│   │       └── CustomMessageComponent.tsx  # 消息气泡
-│   ├── companion/          # 伴侣模式全屏页
-│   ├── history/            # 侧边栏 + 会话历史
-│   ├── settings/           # 设置页面
-│   ├── stores/             # Zustand 状态管理
-│   ├── theme/              # 主题系统（亮色/暗色）
-│   ├── storage/            # MMKV 本地存储
-│   ├── types/              # TypeScript 类型
-│   └── utils/              # 工具函数
-├── android/                # Android 原生代码
-├── ios/                    # iOS 原生代码（Persona.xcworkspace）
-└── package.json
-```
+| 平台    | 方式                                                                 |
+| ------- | -------------------------------------------------------------------- |
+| Android | 前往 [Releases](https://github.com/Code-MonkeyZhang/persona-agent-mobile/releases) 下载 APK 安装 |
+| iOS     | 通过 Xcode 源码编译安装                                              |
 
 ## 连接 Server
 
@@ -105,16 +52,14 @@ react-native/
 
 Server 开启 Cloudflare Tunnel 后也可通过公网地址连接。
 
-## 技术栈
+## Contact
 
-- **框架**: React Native 0.74 + TypeScript
-- **状态管理**: Zustand
-- **存储**: react-native-mmkv
-- **导航**: React Navigation 7（Drawer + Native Stack）
-- **图标**: Lucide React Native
-- **聊天 UI**: react-native-gifted-chat（定制版）
-- **音频**: react-native-track-player（TTS 播放）
+本项目由 [Zhang Yufeng](https://github.com/Code-MonkeyZhang) 个人开发维护。如有问题、想法或合作意向，欢迎联系 [yufengzhang483@gmail.com](mailto:yufengzhang483@gmail.com)。
 
-## License
+## 致谢
 
-[MIT-0](LICENSE)
+- [SwiftChat](https://github.com/aws-samples/swift-chat) — 本项目基于 SwiftChat 二次开发
+- [React Native](https://reactnative.dev/) — 跨平台移动端框架
+- [Zustand](https://zustand.docs.pmnd.rs/) — 状态管理
+- [react-native-gifted-chat](https://github.com/FaridSafi/react-native-gifted-chat) — 聊天 UI 组件
+- [react-native-track-player](https://react-native-track-player.js.org/) — TTS 音频播放
