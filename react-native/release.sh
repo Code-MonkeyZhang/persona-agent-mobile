@@ -15,13 +15,8 @@ sed -i "s/versionCode ${version_code_regex}/versionCode ${version_code}/g" andro
 sed -i "s/versionName \"${regex}\"/versionName \"${version}\"/g" android/app/build.gradle
 
 # modify iOS version
-sed -i "s/MARKETING_VERSION = ${regex};/MARKETING_VERSION = ${version};/g" ios/SwiftChat.xcodeproj/project.pbxproj
-sed -i "s/CURRENT_PROJECT_VERSION = ${version_code_regex};/CURRENT_PROJECT_VERSION = ${version_code};/g" ios/SwiftChat.xcodeproj/project.pbxproj
+sed -i "s/MARKETING_VERSION = ${regex};/MARKETING_VERSION = ${version};/g" ios/Persona.xcodeproj/project.pbxproj
+sed -i "s/CURRENT_PROJECT_VERSION = ${version_code_regex};/CURRENT_PROJECT_VERSION = ${version_code};/g" ios/Persona.xcodeproj/project.pbxproj
 
 # modify README download link
-sed -i "s/download\/${regex}\/SwiftChat.apk/download\/${version}\/SwiftChat.apk/g" ../README.md
-sed -i "s/download\/${regex}\/SwiftChat.dmg/download\/${version}\/SwiftChat.dmg/g" ../README.md
-sed -i "s/download\/${regex}\/SwiftChat.apk/download\/${version}\/SwiftChat.apk/g" ../README_CN.md
-sed -i "s/download\/${regex}\/SwiftChat.dmg/download\/${version}\/SwiftChat.dmg/g" ../README_CN.md
-
-
+sed -i "s/download\/${regex}\/Persona.apk/download\/${version}\/Persona.apk/g" ../README.md
