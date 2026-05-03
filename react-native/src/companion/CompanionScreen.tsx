@@ -494,7 +494,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         stopSpeaking();
         console.log('[Companion] WebSocket disconnected');
       };
-    }, [serverAddr])
+    }, [serverAddr, agentId, speak, stopSpeaking, voiceId])
   );
 
   /**
