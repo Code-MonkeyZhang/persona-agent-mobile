@@ -4,9 +4,9 @@
 
 # Persona Agent Mobile
 
-**Persona 的移动端客户端**
+**属于你自己的AI Agnet 移动端**
 
-连接你本地运行的 [Persona Agent Server](https://github.com/Code-MonkeyZhang/persona-agent)，在手机上随时随地与 AI Agent 对话。
+Persona 的移动端客户端。连接你本地运行的 [Persona 桌面端应用](https://github.com/Code-MonkeyZhang/persona-agent)，在手机上随时随地与 AI 智能体对话，体验角色立绘、语音朗读等功能。
 
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android-informational)
@@ -14,13 +14,15 @@
 
 </div>
 
+> 本项目基于 [SwiftChat](https://github.com/aws-samples/swift-chat) 二次开发
+
 ## 功能演示
 
 <table>
   <tr>
-    <td align="center"><b>移动端演示</b></td>
+    <td align="center"><b>AI 形象</b></td>
     <td align="center"><b>普通对话</b></td>
-    <td align="center"><b>Agent 详情</b></td>
+    <td align="center"><b>查看智能体详情</b></td>
   </tr>
   <tr>
     <td><img src="assets/mobile-agent.gif" width="250" /></td>
@@ -39,26 +41,32 @@
 
 ## 下载安装
 
-| 平台    | 方式                                                                 |
-| ------- | -------------------------------------------------------------------- |
+| 平台    | 方式                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------ |
 | Android | 前往 [Releases](https://github.com/Code-MonkeyZhang/persona-agent-mobile/releases) 下载 APK 安装 |
-| iOS     | 通过 Xcode 源码编译安装                                              |
+| iOS     | 通过 Xcode 源码编译安装                                                                          |
 
 ## 连接 Server
 
-1. 确保电脑上运行着 [Persona Agent Server](https://github.com/Code-MonkeyZhang/persona-agent)（桌面端启动即可自动运行）
-2. 在手机上打开 Persona → 设置 → 填入 Server 地址（如 `http://192.168.1.100:3847`）
-3. 连接成功后即可开始对话
+Persona Mobile 通过 Cloudflare Tunnel 连接你本地运行的 Persona 桌面端应用。
 
-Server 开启 Cloudflare Tunnel 后也可通过公网地址连接。
+1. 确保电脑上运行着 [Persona Agent Server](https://github.com/Code-MonkeyZhang/persona-agent)（桌面端启动即可自动运行）
+2. 在桌面端设置中创建 Cloudflare Tunnel，获取公网访问地址
+
+   <img src="assets/create_tunnel.gif" width="250" />
+
+3. 在手机上打开 Persona → 设置 → 粘贴 Tunnel 地址
+
+   <img src="assets/paste-to-phone.gif" width="250" />
+
+4. 连接成功后即可开始对话
 
 ## Contact
 
-本项目由 [Zhang Yufeng](https://github.com/Code-MonkeyZhang) 个人开发维护。如有问题、想法或合作意向，欢迎联系 [yufengzhang483@gmail.com](mailto:yufengzhang483@gmail.com)。
+本项目由 [Zhang Yufeng](https://github.com/Code-MonkeyZhang) 个人开发维护，欢迎在 issue 中提出建议，参与PR贡献。如有问题、想法或合作意向，欢迎联系 [yufengzhang483@gmail.com](mailto:yufengzhang483@gmail.com)。
 
 ## 致谢
 
-- [SwiftChat](https://github.com/aws-samples/swift-chat) — 本项目基于 SwiftChat 二次开发
 - [React Native](https://reactnative.dev/) — 跨平台移动端框架
 - [Zustand](https://zustand.docs.pmnd.rs/) — 状态管理
 - [react-native-gifted-chat](https://github.com/FaridSafi/react-native-gifted-chat) — 聊天 UI 组件
