@@ -35,6 +35,23 @@ type ServerMessage =
   | { type: 'complete'; sessionId: string }
   | { type: 'error'; sessionId?: string; message: string }
   | { type: 'title_updated'; sessionId: string; title: string }
+  | {
+      /** 服务端文本处理完成，移动端可直接用于 TTS 合成 */
+      type: 'speak_ready';
+      sessionId: string;
+      speakText: string;
+      voiceId: string;
+      apiKey: string;
+      model: string;
+      languageBoost?: string | null;
+    }
+  | {
+      /** 服务端文本处理失败（清洗/压缩/翻译异常） */
+      type: 'speak_error';
+      sessionId: string;
+      reason: string;
+      message: string;
+    }
   | { type: 'pong' };
 
 /**
@@ -181,6 +198,20 @@ export class ServerClient {
 
   onTitleUpdated: ((sessionId: string, title: string) => void) | null = null;
 
+  /** 收到 speak_ready 事件时触发，携带 TTS 合成所需的完整参数 */
+  onSpeakReady:
+    | ((data: {
+        speakText: string;
+        voiceId: string;
+        apiKey: string;
+        model: string;
+        languageBoost?: string | null;
+      }) => void)
+    | null = null;
+
+  /** 收到 speak_error 事件时触发 */
+  onSpeakError: ((reason: string, message: string) => void) | null = null;
+
   /** 检查 WebSocket 是否处于 OPEN 状态 */
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
@@ -296,6 +327,22 @@ export class ServerClient {
           this.onTitleUpdated(msg.sessionId, msg.title);
         }
         break;
+      case 'speak_ready':
+        console.log(
+          `${TAG} WS speak_ready, sessionId=${msg.sessionId} textLen=${msg.speakText.length}`
+        );
+        if (this.onSpeakReady) {
+          this.onSpeakReady(msg);
+        }
+        break;
+      case 'speak_error':
+        console.log(
+          `${TAG} WS speak_error, reason=${msg.reason} message=${msg.message}`
+        );
+        if (this.onSpeakError) {
+          this.onSpeakError(msg.reason, msg.message);
+        }
+        break;
     }
   }
 
@@ -384,21 +431,23 @@ export class ServerClient {
    * @param sessionId 服务器端会话 UUID
    * @param content 用户消息文本
    * @param serverAddress 服务器地址
+   * @param voiceEnabled 是否开启语音，服务端据此决定是否发送 speak_ready
    */
   async sendChatMessage(
     agentId: string,
     sessionId: string,
     content: string,
-    serverAddress: string
+    serverAddress: string,
+    voiceEnabled: boolean
   ): Promise<void> {
     console.log(
       `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
         0,
         80
-      )}"`
+      )}" voiceEnabled=${voiceEnabled}`
     );
     const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
-    await httpPost(url, { content });
+    await httpPost(url, { content, voiceEnabled });
     console.log(`${TAG} sendChatMessage sent ok`);
   }
 }
@@ -638,19 +687,4 @@ export function convertToChatMessages(
     }
   }
   return result.reverse();
-}
-
-/**
- * 调用服务端摘要接口，将长文本压缩为适合 TTS 朗读的短文本。
- */
-export async function summarizeText(
-  serverAddress: string,
-  agentId: string,
-  sessionId: string,
-  text: string
-): Promise<string> {
-  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/summarize`;
-  const responseText = await httpPost(url, { text });
-  const data = JSON.parse(responseText) as { summary: string };
-  return data.summary || text;
 }

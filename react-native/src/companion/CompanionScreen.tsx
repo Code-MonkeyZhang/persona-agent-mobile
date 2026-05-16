@@ -20,6 +20,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, Mic, MicOff, Send } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
@@ -304,7 +305,6 @@ const CompanionUI = React.memo(
 
 function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
   const agentId = route.params.agentId;
-  const voiceId = route.params.voiceId;
   const serverAddr = getServerAddress();
   const mountTime = useRef(Date.now());
   const insets = useSafeAreaInsets();
@@ -332,12 +332,6 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
 
   /** ServerClient 实例引用，用于发送消息和断开连接 */
   const serverClientRef = useRef<ServerClient | null>(null);
-
-  /** 回复文本的 ref 同步，供 onComplete 回调中读取最新值 */
-  const replyTextRef = useRef(replyText);
-  useEffect(() => {
-    replyTextRef.current = replyText;
-  }, [replyText]);
 
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
   const isSpeaking = useVoiceStore((s) => s.isSpeaking);
@@ -451,13 +445,25 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         console.log('[Companion] complete');
         if (!cancelled) {
           setIsLoading(false);
-          if (voiceEnabledRef.current && voiceId) {
-            const text = replyTextRef.current;
-            const sessionId = sessionIdRef.current;
-            if (text && sessionId) {
-              speak(text, voiceId, agentId, sessionId);
-            }
-          }
+        }
+      };
+      client.onSpeakReady = (data) => {
+        console.log(
+          `[Companion] speak_ready, textLen=${data.speakText.length}`
+        );
+        if (!cancelled) {
+          speak(data);
+        }
+      };
+      client.onSpeakError = (_reason, message) => {
+        console.log(`[Companion] speak_error: ${message}`);
+        if (!cancelled) {
+          Toast.show({
+            type: 'warning',
+            text1: message,
+            position: 'bottom',
+            visibilityTime: 3000,
+          });
         }
       };
       client.onError = (message) => {
@@ -494,7 +500,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         stopSpeaking();
         console.log('[Companion] WebSocket disconnected');
       };
-    }, [serverAddr, agentId, speak, stopSpeaking, voiceId])
+    }, [serverAddr, speak, stopSpeaking])
   );
 
   /**
@@ -522,7 +528,13 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
           console.log(`[Companion] created session=${sessionId}`);
         }
 
-        await client.sendChatMessage(agentId, sessionId, text, serverAddr);
+        await client.sendChatMessage(
+          agentId,
+          sessionId,
+          text,
+          serverAddr,
+          voiceEnabledRef.current
+        );
       } catch (e) {
         console.log(`[Companion] send failed: ${e}`);
         setIsLoading(false);

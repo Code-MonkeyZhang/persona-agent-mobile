@@ -8,33 +8,31 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 import RNFS from 'react-native-fs';
 import Toast from 'react-native-toast-message';
-import { cleanForTTS } from '../lib/tts-cleaner';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
 import {
   storage,
-  getTtsApiKey,
   getTtsEnabled,
   saveTtsEnabled,
-  getServerAddress,
 } from '../storage/StorageUtils';
-import { summarizeText } from '../api/server-api';
-
-const SUMMARY_THRESHOLD = 200; // 写死的Summary阈值, 后面可以考虑放在设置中
 
 const CACHE_DIR = `${RNFS.DocumentDirectoryPath}/tts_cache`;
+
+/** speak_ready 事件携带的 TTS 合成参数 */
+export interface SpeakData {
+  speakText: string;
+  voiceId: string;
+  apiKey: string;
+  model: string;
+  languageBoost?: string | null;
+}
 
 interface VoiceStore {
   voiceEnabled: boolean;
   isSpeaking: boolean;
 
   toggleVoice: () => void;
-  speak: (
-    text: string,
-    voiceId: string,
-    agentId: string,
-    sessionId: string
-  ) => Promise<void>;
+  speak: (data: SpeakData) => Promise<void>;
   stopSpeaking: () => void;
 }
 
@@ -83,7 +81,6 @@ export function ensurePlaybackListener(): void {
   _listenerRegistered = true;
   console.log('[TTS] playback listener registered');
 
-  // 添加音频播放状态监听
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
     if ('state' in event && event.state === State.Ended) {
       console.log('[TTS] playback ended');
@@ -109,58 +106,23 @@ export const useVoiceStore = create<VoiceStore>()(
       },
 
       /**
-       * 核心语音播报流程：
-       * - 检查 API Key
-       * - 清洗文本
-       * - 长文本摘要
-       * - TTS 合成
-       * - 写文件
-       * - 播放
+       * 核心语音播报流程（简化版）：
+       * 文本已由服务端清洗/压缩/翻译，直接合成 → 写文件 → 播放。
        */
-      speak: async (text, voiceId, agentId, sessionId) => {
+      speak: async (data) => {
         ensurePlaybackListener();
         console.log(
-          `[TTS] speak called, textLen=${text.length}, voiceId=${voiceId}`
+          `[TTS] speak called, textLen=${data.speakText.length}, voiceId=${data.voiceId}`
         );
 
-        const apiKey = getTtsApiKey();
-        if (!apiKey) {
-          console.log('[TTS] no API Key, skip');
-          Toast.show({
-            type: 'info',
-            text1: '请先在设置中配置 MiniMax API Key',
-            position: 'bottom',
-            visibilityTime: 2000,
-          });
-          return;
-        }
-
         try {
-          const cleaned = cleanForTTS(text);
-          if (!cleaned.trim()) {
-            console.log('[TTS] text empty after clean, skip');
-            return;
-          }
-
-          let spokenText = cleaned;
-          if (cleaned.length > SUMMARY_THRESHOLD) {
-            console.log(
-              `[TTS] text too long (${cleaned.length} chars), summarizing...`
-            );
-            try {
-              const serverAddr = getServerAddress();
-              spokenText = await summarizeText(
-                serverAddr,
-                agentId,
-                sessionId,
-                cleaned
-              );
-            } catch {
-              console.log('[TTS] summarize failed, fallback to raw text');
-            }
-          }
-
-          const audio = await synthesize(spokenText, voiceId, apiKey);
+          const audio = await synthesize(
+            data.speakText,
+            data.voiceId,
+            data.apiKey,
+            data.model,
+            data.languageBoost
+          );
           console.log(`[TTS] synthesized, audio size=${audio.byteLength}`);
 
           const filePath = await writeAudioFile(audio);
@@ -201,7 +163,6 @@ export const useVoiceStore = create<VoiceStore>()(
   )
 );
 
-// 初始化时从 StorageUtils 同步持久化的开关状态
 const persisted = getTtsEnabled();
 if (persisted) {
   useVoiceStore.setState({ voiceEnabled: true });

@@ -690,7 +690,8 @@ function ChatScreen(): React.JSX.Element {
             agentId,
             sessionId,
             message[0].text,
-            serverAddressRef.current!
+            serverAddressRef.current!,
+            false
           );
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
