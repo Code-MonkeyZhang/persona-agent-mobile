@@ -411,7 +411,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
       let cancelled = false;
       const client = new ServerClient();
 
-      client.onStepComplete = (content, _thinking, toolCalls) => {
+      client.onStepComplete = (content, _thinking, toolCalls, toolResults) => {
         console.log(
           `[Companion] step_complete: content=${(content || '').substring(
             0,
@@ -438,6 +438,16 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
                 .map((tc) => tc.name)
                 .join(', ')}`
             );
+          }
+          if (toolResults && toolResults.length > 0) {
+            const failed = toolResults.filter((tr) => !tr.success);
+            if (failed.length > 0) {
+              console.log(
+                `[Companion] tool failures: ${failed
+                  .map((tr) => `${tr.toolName}(${tr.result.substring(0, 60)})`)
+                  .join(', ')}`
+              );
+            }
           }
         }
       };

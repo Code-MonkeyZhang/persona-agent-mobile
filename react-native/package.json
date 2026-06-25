@@ -12,6 +12,7 @@
     "lint": "npx eslint 'src/**/*.{ts,tsx}'",
     "start": "react-native start",
     "test": "jest",
+    "typecheck": "tsc --noEmit",
     "postinstall": "patch-package"
   },
   "dependencies": {

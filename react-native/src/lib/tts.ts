@@ -26,7 +26,7 @@ export async function synthesize(
   voiceId: string,
   apiKey: string,
   model?: string,
-  languageBoost?: string | null
+  languageBoost?: string
 ): Promise<ArrayBuffer> {
   const body: Record<string, unknown> = {
     model: model || 'speech-2.8-hd',

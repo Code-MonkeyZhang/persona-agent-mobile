@@ -24,7 +24,7 @@ export interface SpeakData {
   voiceId: string;
   apiKey: string;
   model: string;
-  languageBoost?: string | null;
+  languageBoost?: string;
 }
 
 interface VoiceStore {

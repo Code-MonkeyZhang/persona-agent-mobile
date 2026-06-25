@@ -19,6 +19,27 @@ interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
+/** step_complete 消息中的工具执行结果项 */
+interface WsToolResult {
+  toolCallId: string;
+  toolName: string;
+  result: string;
+  success: boolean;
+}
+
+/** speak_error 事件的原因枚举（与服务端 chat-service 的四种失败对齐） */
+type SpeakErrorReason =
+  | 'no_api_key'
+  | 'no_voice_id'
+  | 'no_content'
+  | 'voice_not_found';
+
+/** 模型配置（对齐 @persona/shared 的 ModelConfig） */
+interface ModelConfig {
+  provider: string;
+  model: string;
+}
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 type ServerMessage =
   | { type: 'connected'; clientId: string }
@@ -31,9 +52,11 @@ type ServerMessage =
       thinking?: string;
       /** 工具调用结果列表，用于在陪伴模式中响应 show_pose 等工具调用 */
       toolCalls?: ToolCall[];
+      /** 工具执行结果列表，可用于展示工具是否成功 */
+      toolResults?: WsToolResult[];
     }
   | { type: 'complete'; sessionId: string }
-  | { type: 'error'; sessionId?: string; message: string }
+  | { type: 'error'; sessionId: string; message: string }
   | { type: 'title_updated'; sessionId: string; title: string }
   | {
       /** 服务端文本处理完成，移动端可直接用于 TTS 合成 */
@@ -43,13 +66,13 @@ type ServerMessage =
       voiceId: string;
       apiKey: string;
       model: string;
-      languageBoost?: string | null;
+      languageBoost?: string;
     }
   | {
       /** 服务端文本处理失败（清洗/压缩/翻译异常） */
       type: 'speak_error';
       sessionId: string;
-      reason: string;
+      reason: SpeakErrorReason;
       message: string;
     }
   | { type: 'pong' };
@@ -188,7 +211,8 @@ export class ServerClient {
     | ((
         content: string | undefined,
         thinking: string | undefined,
-        toolCalls?: ToolCall[]
+        toolCalls?: ToolCall[],
+        toolResults?: WsToolResult[]
       ) => void)
     | null = null;
 
@@ -205,12 +229,13 @@ export class ServerClient {
         voiceId: string;
         apiKey: string;
         model: string;
-        languageBoost?: string | null;
+        languageBoost?: string;
       }) => void)
     | null = null;
 
   /** 收到 speak_error 事件时触发 */
-  onSpeakError: ((reason: string, message: string) => void) | null = null;
+  onSpeakError: ((reason: SpeakErrorReason, message: string) => void) | null =
+    null;
 
   /** 检查 WebSocket 是否处于 OPEN 状态 */
   get isConnected(): boolean {
@@ -307,7 +332,12 @@ export class ServerClient {
         break;
       case 'step_complete':
         if (this.onStepComplete) {
-          this.onStepComplete(msg.content, msg.thinking, msg.toolCalls);
+          this.onStepComplete(
+            msg.content,
+            msg.thinking,
+            msg.toolCalls,
+            msg.toolResults
+          );
         }
         break;
       case 'complete':
@@ -456,21 +486,30 @@ export interface AgentInfo {
   id: string;
   name: string;
   description?: string;
-  defaultModel?: { provider: string; model: string };
-  systemPrompt?: string;
-  maxSteps?: number;
-  mcpNames?: string[];
-  skillNames?: string[];
+  defaultModel: ModelConfig;
+  systemPrompt: string;
+  maxSteps: number;
+  mcpNames: string[];
+  skillNames: string[];
   defaultWorkspacePath?: string;
   voiceId?: string;
+  /** 上下文压缩阈值（百分比 1–100） */
+  compressionThreshold: number;
+  /** 记忆整理（Dream）间隔（分钟） */
+  dreamIntervalMinutes: number;
+  /** 语音语言（映射到 MiniMax language_boost） */
+  voiceLanguage?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
 export interface McpServerInfo {
   name: string;
-  status: 'disconnected' | 'connecting' | 'connected';
-  tools: { id: string; name: string; description: string }[];
+  status: 'disconnected' | 'connecting' | 'connected' | 'needs_auth';
+  toolCount: number;
   error?: string;
+  oauthUrl?: string;
 }
 
 /** Skill 信息（对应 GET /api/skills 返回的单个 skill） */
@@ -594,14 +633,27 @@ interface SessionMeta {
   title: string;
   createdAt: number;
   updatedAt: number;
-  messageCount: number;
+  workspacePath?: string;
+  model: ModelConfig;
+  /** 原始消息已压缩到的下标（仅聊天 Session）；undefined/0 表示尚未压缩 */
+  summarizedUpTo?: number;
 }
 
 interface Session extends SessionMeta {
+  /**
+   * 消息列表。元素类型 ServerChatMessage 是 @persona/shared Message 联合的
+   * 扁平投影——合并了 system/user/assistant 三种 role，丢弃了 assistant 消息的
+   * tool_calls 和 user 消息的 ContentBlock[]。移动端历史消息只用 role/content/thinking。
+   */
   messages: ServerChatMessage[];
 }
 
 interface ServerChatMessage {
+  /**
+   * @persona/shared Message 联合的简化投影。只保留移动端需要的三个字段。
+   * 丢弃：assistant 的 tool_calls、user 的 ContentBlock[]（多模态预留）。
+   * 若未来需要在历史消息里展示工具调用，需改用 shared 的完整 Message 类型。
+   */
   role: 'user' | 'assistant' | 'system';
   content?: string;
   thinking?: string;

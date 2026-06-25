@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,6 +39,7 @@ function getMcpStatusColor(
 ): string {
   if (error) return colors?.error ?? '#ff4444';
   if (status === 'connected') return colors?.success ?? '#00C851';
+  if (status === 'needs_auth') return '#FF9800';
   return colors?.textTertiary ?? '#999999';
 }
 
@@ -72,10 +74,10 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         setAvatarError(false);
 
         // 按 Agent 绑定的名称过滤，只展示该 Agent 实际使用的 MCP 和 Skill
-        const nameSet = new Set(agentData.mcpNames ?? []);
+        const nameSet = new Set(agentData.mcpNames);
         setMcps(allMcps.filter((m) => nameSet.has(m.name)));
 
-        const skillSet = new Set(agentData.skillNames ?? []);
+        const skillSet = new Set(agentData.skillNames);
         setSkills(allSkills.filter((s) => skillSet.has(s.name)));
       } catch (e) {
         console.log(`[AgentDetail] load failed: ${e}`);
@@ -104,10 +106,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
 
   const displayName = agent.name || 'Agent';
 
-  const defaultModel = agent.defaultModel;
-  const modelDisplay = defaultModel
-    ? `${defaultModel.provider} / ${defaultModel.model}`
-    : '—';
+  const modelDisplay = `${agent.defaultModel.provider} / ${agent.defaultModel.model}`;
 
   return (
     <ScrollView
@@ -147,8 +146,27 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         <View style={styles.divider} />
         <View style={styles.row}>
           <Text style={styles.rowLabel}>最大步数</Text>
-          <Text style={styles.rowValue}>{agent.maxSteps ?? '—'}</Text>
+          <Text style={styles.rowValue}>{agent.maxSteps}</Text>
         </View>
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>压缩阈值</Text>
+          <Text style={styles.rowValue}>{agent.compressionThreshold}%</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>记忆间隔</Text>
+          <Text style={styles.rowValue}>{agent.dreamIntervalMinutes} 分钟</Text>
+        </View>
+        {agent.voiceLanguage ? (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>语音语言</Text>
+              <Text style={styles.rowValue}>{agent.voiceLanguage}</Text>
+            </View>
+          </>
+        ) : null}
         <View style={styles.divider} />
 
         {/* 系统提示词（可折叠） */}
@@ -178,6 +196,20 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             </View>
           </>
         ) : null}
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>创建时间</Text>
+          <Text style={styles.rowValue}>
+            {new Date(agent.createdAt).toLocaleDateString('zh-CN')}
+          </Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>更新时间</Text>
+          <Text style={styles.rowValue}>
+            {new Date(agent.updatedAt).toLocaleDateString('zh-CN')}
+          </Text>
+        </View>
       </View>
 
       {/* MCP 服务 */}
@@ -185,29 +217,48 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         <>
           <Text style={styles.sectionLabel}>MCP 服务</Text>
           <View style={styles.card}>
-            {mcps.map((mcp, i) => (
-              <React.Fragment key={mcp.name}>
-                <View style={styles.row}>
-                  <Text style={styles.rowLabelMcp}>{mcp.name}</Text>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor: getMcpStatusColor(
-                          mcp.status,
-                          mcp.error,
-                          colors
-                        ),
-                      },
-                    ]}
-                  />
-                  <Text style={styles.mcpToolCount}>
-                    {mcp.tools.length} 个工具
-                  </Text>
-                </View>
-                {i < mcps.length - 1 ? <View style={styles.divider} /> : null}
-              </React.Fragment>
-            ))}
+            {mcps.map((mcp, i) => {
+              const needsAuth = mcp.status === 'needs_auth';
+              const handleAuth = () => {
+                if (mcp.oauthUrl) {
+                  Linking.openURL(mcp.oauthUrl).catch((e: unknown) =>
+                    console.log(`[AgentDetail] open oauthUrl failed: ${e}`)
+                  );
+                }
+              };
+              return (
+                <React.Fragment key={mcp.name}>
+                  <TouchableOpacity
+                    style={styles.row}
+                    disabled={!(needsAuth && mcp.oauthUrl)}
+                    onPress={handleAuth}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.rowLabelMcp}>{mcp.name}</Text>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor: getMcpStatusColor(
+                            mcp.status,
+                            mcp.error,
+                            colors
+                          ),
+                        },
+                      ]}
+                    />
+                    <Text style={styles.mcpToolCount}>
+                      {needsAuth
+                        ? mcp.oauthUrl
+                          ? '需要授权 →'
+                          : '需要授权'
+                        : `${mcp.toolCount} 个工具`}
+                    </Text>
+                  </TouchableOpacity>
+                  {i < mcps.length - 1 ? <View style={styles.divider} /> : null}
+                </React.Fragment>
+              );
+            })}
           </View>
         </>
       )}
