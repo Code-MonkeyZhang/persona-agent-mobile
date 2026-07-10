@@ -556,10 +556,10 @@ export function getPoseImageUrl(
   poseName: string,
   serverAddress: string
 ): string {
-  // ?t= 时间戳参数破坏浏览器/React Native 图片缓存，确保 pose 切换后能看到最新图片
+  // URL 保持稳定以命中平台 HTTP 缓存，pose 切换靠路径里的 poseName 区分
   return `${serverAddress}/api/agents/${agentId}/assets/pose/${encodeURIComponent(
     poseName
-  )}?t=${Date.now()}`;
+  )}`;
 }
 
 /**
@@ -570,8 +570,8 @@ export function getBackgroundImageUrl(
   agentId: string,
   serverAddress: string
 ): string {
-  // ?t= 时间戳参数破坏缓存，确保背景图更新后能立即刷新
-  return `${serverAddress}/api/agents/${agentId}/assets/background?t=${Date.now()}`;
+  // URL 保持稳定以命中平台 HTTP 缓存
+  return `${serverAddress}/api/agents/${agentId}/assets/background`;
 }
 
 /**
