@@ -24,6 +24,7 @@ import { getVideoMetaData, Video } from 'react-native-compressor';
 import * as Progress from 'react-native-progress';
 import { showInfo } from '../util/ToastUtils.ts';
 import { ColorScheme, useTheme } from '../../theme/index.ts';
+import { logger } from '../../lib/logger';
 
 interface CustomFileProps {
   /** 当前选中的文件列表 */
@@ -53,7 +54,7 @@ const openInFileViewer = (url: string) => {
   FileViewer.open(url)
     .then(() => {})
     .catch((error) => {
-      console.log(error);
+      logger.warn('[FileList] open file failed:', error);
     });
 };
 
@@ -243,7 +244,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               };
               Share.open(options).then();
             } catch (error) {
-              console.log('Error opening file:', error);
+              logger.warn('[FileList] Error opening file:', error);
             }
           }}
           onPress={() => {

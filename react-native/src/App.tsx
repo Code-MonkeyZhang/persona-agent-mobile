@@ -21,6 +21,7 @@ import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import TrackPlayer from 'react-native-track-player';
 import { ensurePlaybackListener } from './stores/voiceStore';
+import { logger } from './lib/logger';
 
 // Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
 
@@ -153,10 +154,17 @@ const AppWithTheme = () => {
  */
 const App = () => {
   React.useEffect(() => {
+    logger.info('[App] root mounted, initializing');
     configureErrorHandling();
+    logger.debug('[App] error handling configured');
     TrackPlayer.setupPlayer()
-      .then(() => ensurePlaybackListener())
-      .catch(() => {});
+      .then(() => {
+        ensurePlaybackListener();
+        logger.info('[App] TrackPlayer setup ok');
+      })
+      .catch((e) => {
+        logger.error('[App] TrackPlayer setup failed:', e);
+      });
   }, []);
 
   return (

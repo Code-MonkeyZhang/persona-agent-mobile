@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { EventData } from '../types/Chat.ts';
+import { logger } from '../lib/logger';
 
 export type DrawerType = 'permanent' | 'slide';
 
@@ -29,6 +30,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   } | null>(null);
 
   const sendEvent = useCallback((eventName: string, params?: EventData) => {
+    logger.debug(`[AppContext] event: ${eventName}`);
     setEvent({ event: eventName, params: params });
   }, []);
   const [drawerType, setDrawerType] = useState<DrawerType>('permanent');
@@ -50,6 +52,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (context === undefined) {
+    logger.error('[AppContext] useAppContext called outside AppProvider');
     throw new Error('useAppContext must be used within an AppProvider');
   }
   return context;

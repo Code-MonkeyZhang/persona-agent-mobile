@@ -30,6 +30,7 @@ import {
   getBackgroundImageUrl,
   getPoseImageUrl,
 } from '../api/server-api.ts';
+import { logger } from '../lib/logger';
 
 type Props = NativeStackScreenProps<RouteParamList, 'Companion'>;
 
@@ -121,14 +122,14 @@ const CompanionBackgroundImage = React.memo(
           source={{ uri: getBackgroundImageUrl(agentId, serverAddr) }}
           style={StyleSheet.absoluteFillObject}
           onLoad={() => {
-            console.log(
+            logger.info(
               `[Companion] background loaded in ${
                 Date.now() - mountTime.current
               }ms`
             );
           }}
           onError={() => {
-            console.log('[Companion] background load failed');
+            logger.warn('[Companion] background load failed');
             onBgError();
           }}
           resizeMode="cover"
@@ -178,14 +179,14 @@ const CompanionPoseImage = React.memo(
           }}
           style={StyleSheet.absoluteFillObject}
           onLoad={() => {
-            console.log(
+            logger.info(
               `[Companion] pose ${currentPose} loaded in ${
                 Date.now() - mountTime.current
               }ms`
             );
           }}
           onError={() => {
-            console.log(`[Companion] pose ${currentPose} load failed`);
+            logger.warn(`[Companion] pose ${currentPose} load failed`);
             onPoseError();
           }}
           resizeMode="contain"
@@ -370,10 +371,10 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
     setBgError(false);
     setPoseError(false);
     mountTime.current = Date.now();
-    console.log(`[Companion] mount agentId=${agentId}`);
+    logger.info(`[Companion] mount agentId=${agentId}`);
     fetchPoses(agentId, serverAddr)
       .then((poses) => {
-        console.log(
+        logger.info(
           `[Companion] poses loaded: ${poses.length} in ${
             Date.now() - mountTime.current
           }ms`
@@ -383,7 +384,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         }
       })
       .catch(() => {
-        console.log('[Companion] fetchPoses failed');
+        logger.error('[Companion] fetchPoses failed');
         if (!cancelled) {
           setHasAssets(false);
         }
@@ -412,7 +413,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
       const client = new ServerClient();
 
       client.onStepComplete = (content, _thinking, toolCalls, toolResults) => {
-        console.log(
+        logger.debug(
           `[Companion] step_complete: content=${(content || '').substring(
             0,
             80
@@ -427,13 +428,13 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
               if (tc.name === 'show_pose' && tc.arguments) {
                 const pose = tc.arguments.pose as string;
                 if (pose) {
-                  console.log(`[Companion] pose change: ${pose}`);
+                  logger.debug(`[Companion] pose change: ${pose}`);
                   setCurrentPose(pose);
                   setPoseError(false);
                 }
               }
             }
-            console.log(
+            logger.debug(
               `[Companion] toolCalls: ${toolCalls
                 .map((tc) => tc.name)
                 .join(', ')}`
@@ -442,7 +443,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
           if (toolResults && toolResults.length > 0) {
             const failed = toolResults.filter((tr) => !tr.success);
             if (failed.length > 0) {
-              console.log(
+              logger.warn(
                 `[Companion] tool failures: ${failed
                   .map((tr) => `${tr.toolName}(${tr.result.substring(0, 60)})`)
                   .join(', ')}`
@@ -452,13 +453,13 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         }
       };
       client.onComplete = () => {
-        console.log('[Companion] complete');
+        logger.info('[Companion] complete');
         if (!cancelled) {
           setIsLoading(false);
         }
       };
       client.onSpeakReady = (data) => {
-        console.log(
+        logger.info(
           `[Companion] speak_ready, textLen=${data.speakText.length}`
         );
         if (!cancelled) {
@@ -466,7 +467,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         }
       };
       client.onSpeakError = (_reason, message) => {
-        console.log(`[Companion] speak_error: ${message}`);
+        logger.error(`[Companion] speak_error: ${message}`);
         if (!cancelled) {
           Toast.show({
             type: 'warning',
@@ -477,7 +478,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         }
       };
       client.onError = (message) => {
-        console.log(`[Companion] error: ${message}`);
+        logger.error(`[Companion] error: ${message}`);
         if (!cancelled) {
           setIsLoading(false);
         }
@@ -490,16 +491,16 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
             return;
           }
           serverClientRef.current = client;
-          console.log('[Companion] WebSocket connected');
+          logger.info('[Companion] WebSocket connected');
 
           if (sessionIdRef.current) {
             client.subscribe(sessionIdRef.current);
-            console.log(
+            logger.info(
               `[Companion] subscribed to session=${sessionIdRef.current}`
             );
           }
         } catch (e) {
-          console.log(`[Companion] connect failed: ${e}`);
+          logger.error(`[Companion] connect failed: ${e}`);
         }
       })();
 
@@ -508,7 +509,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
         client.disconnect();
         serverClientRef.current = null;
         stopSpeaking();
-        console.log('[Companion] WebSocket disconnected');
+        logger.info('[Companion] WebSocket disconnected');
       };
     }, [serverAddr, speak, stopSpeaking])
   );
@@ -535,7 +536,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
           sessionId = await client.createSession(agentId, serverAddr);
           sessionIdRef.current = sessionId;
           client.subscribe(sessionId);
-          console.log(`[Companion] created session=${sessionId}`);
+          logger.info(`[Companion] created session=${sessionId}`);
         }
 
         await client.sendChatMessage(
@@ -546,7 +547,7 @@ function CompanionScreen({ navigation, route }: Props): React.JSX.Element {
           voiceEnabledRef.current
         );
       } catch (e) {
-        console.log(`[Companion] send failed: ${e}`);
+        logger.error(`[Companion] send failed: ${e}`);
         setIsLoading(false);
       }
     },

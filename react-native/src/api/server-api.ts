@@ -5,6 +5,7 @@
  */
 import uuid from 'uuid';
 import type { ChatMessage } from '../types/Chat.ts';
+import { logger } from '../lib/logger';
 
 /** 日志标签前缀 */
 const TAG = '[ServerApi]';
@@ -83,14 +84,14 @@ type ServerMessage =
  * @returns 响应体文本
  */
 function httpGet(url: string): Promise<string> {
-  console.log(`${TAG} GET ${url}`);
+  logger.info(`${TAG} GET ${url}`);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.timeout = 10000;
     xhr.open('GET', url, true);
     xhr.setRequestHeader('Accept', 'application/json');
     xhr.onload = () => {
-      console.log(
+      logger.info(
         `${TAG} GET ${url} → ${xhr.status} ${xhr.responseText.substring(
           0,
           200
@@ -103,11 +104,11 @@ function httpGet(url: string): Promise<string> {
       }
     };
     xhr.onerror = () => {
-      console.log(`${TAG} GET ${url} → network error`);
+      logger.error(`${TAG} GET ${url} → network error`);
       reject(new Error('Network error'));
     };
     xhr.ontimeout = () => {
-      console.log(`${TAG} GET ${url} → timeout`);
+      logger.error(`${TAG} GET ${url} → timeout`);
       reject(new Error('Request timeout'));
     };
     xhr.send();
@@ -121,7 +122,7 @@ function httpGet(url: string): Promise<string> {
  * @returns 响应体文本
  */
 function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
-  console.log(
+  logger.info(
     `${TAG} POST ${url} body=${JSON.stringify(body).substring(0, 200)}`
   );
   return new Promise((resolve, reject) => {
@@ -130,7 +131,7 @@ function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
     xhr.open('POST', url, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = () => {
-      console.log(
+      logger.info(
         `${TAG} POST ${url} → ${xhr.status} ${xhr.responseText.substring(
           0,
           200
@@ -143,11 +144,11 @@ function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
       }
     };
     xhr.onerror = () => {
-      console.log(`${TAG} POST ${url} → network error`);
+      logger.error(`${TAG} POST ${url} → network error`);
       reject(new Error('Network error'));
     };
     xhr.ontimeout = () => {
-      console.log(`${TAG} POST ${url} → timeout`);
+      logger.error(`${TAG} POST ${url} → timeout`);
       reject(new Error('Request timeout'));
     };
     xhr.send(JSON.stringify(body));
@@ -160,14 +161,14 @@ function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
  * @returns 响应体文本
  */
 function httpDelete(url: string): Promise<string> {
-  console.log(`${TAG} DELETE ${url}`);
+  logger.info(`${TAG} DELETE ${url}`);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.timeout = 10000;
     xhr.open('DELETE', url, true);
     xhr.setRequestHeader('Accept', 'application/json');
     xhr.onload = () => {
-      console.log(
+      logger.info(
         `${TAG} DELETE ${url} → ${xhr.status} ${xhr.responseText.substring(
           0,
           200
@@ -180,11 +181,11 @@ function httpDelete(url: string): Promise<string> {
       }
     };
     xhr.onerror = () => {
-      console.log(`${TAG} DELETE ${url} → network error`);
+      logger.error(`${TAG} DELETE ${url} → network error`);
       reject(new Error('Network error'));
     };
     xhr.ontimeout = () => {
-      console.log(`${TAG} DELETE ${url} → timeout`);
+      logger.error(`${TAG} DELETE ${url} → timeout`);
       reject(new Error('Request timeout'));
     };
     xhr.send();
@@ -248,7 +249,7 @@ export class ServerClient {
    * @param serverAddress 服务器地址，如 `https://xxx.trycloudflare.com`
    */
   connect(serverAddress: string): Promise<void> {
-    console.log(`${TAG} connect called, address=${serverAddress}`);
+    logger.info(`${TAG} connect called, address=${serverAddress}`);
     return new Promise((resolve, reject) => {
       this.disconnect();
       this.reconnectAttempts = 0;
@@ -265,11 +266,11 @@ export class ServerClient {
    */
   private doConnect(serverAddress: string) {
     const wsUrl = serverAddress.replace(/^https?/, 'wss') + '/ws';
-    console.log(`${TAG} WebSocket connecting to ${wsUrl}`);
+    logger.info(`${TAG} WebSocket connecting to ${wsUrl}`);
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log(`${TAG} WebSocket onopen`);
+      logger.info(`${TAG} WebSocket onopen`);
       this.reconnectAttempts = 0;
     };
 
@@ -277,7 +278,7 @@ export class ServerClient {
       try {
         const raw = event.data as string;
         const msg: ServerMessage = JSON.parse(raw);
-        console.log(
+        logger.debug(
           `${TAG} WS ← ${msg.type}${
             msg.type === 'step_complete'
               ? ` step=${(msg as { stepIndex: number }).stepIndex} content=${(
@@ -296,14 +297,14 @@ export class ServerClient {
         );
         this.handleMessage(msg);
       } catch {
-        console.log(
+        logger.error(
           `${TAG} WS ← parse error: ${(event.data as string).substring(0, 100)}`
         );
       }
     };
 
     this.ws.onclose = () => {
-      console.log(
+      logger.warn(
         `${TAG} WebSocket onclose, will attempt reconnect=${
           this.reconnectAttempts < this.maxReconnectAttempts
         }`
@@ -312,7 +313,7 @@ export class ServerClient {
     };
 
     this.ws.onerror = () => {
-      console.log(`${TAG} WebSocket onerror`);
+      logger.error(`${TAG} WebSocket onerror`);
     };
   }
 
@@ -323,7 +324,7 @@ export class ServerClient {
   private handleMessage(msg: ServerMessage) {
     switch (msg.type) {
       case 'connected':
-        console.log(`${TAG} WS connected, clientId=${msg.clientId}`);
+        logger.info(`${TAG} WS connected, clientId=${msg.clientId}`);
         if (this.resolveConnect) {
           this.resolveConnect();
           this.resolveConnect = null;
@@ -341,13 +342,13 @@ export class ServerClient {
         }
         break;
       case 'complete':
-        console.log(`${TAG} WS complete, sessionId=${msg.sessionId}`);
+        logger.info(`${TAG} WS complete, sessionId=${msg.sessionId}`);
         if (this.onComplete) {
           this.onComplete();
         }
         break;
       case 'error':
-        console.log(`${TAG} WS error: ${msg.message}`);
+        logger.error(`${TAG} WS error: ${msg.message}`);
         if (this.onError) {
           this.onError(msg.message);
         }
@@ -358,7 +359,7 @@ export class ServerClient {
         }
         break;
       case 'speak_ready':
-        console.log(
+        logger.info(
           `${TAG} WS speak_ready, sessionId=${msg.sessionId} textLen=${msg.speakText.length}`
         );
         if (this.onSpeakReady) {
@@ -366,7 +367,7 @@ export class ServerClient {
         }
         break;
       case 'speak_error':
-        console.log(
+        logger.error(
           `${TAG} WS speak_error, reason=${msg.reason} message=${msg.message}`
         );
         if (this.onSpeakError) {
@@ -382,7 +383,7 @@ export class ServerClient {
    */
   private attemptReconnect(serverAddress: string) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log(
+      logger.error(
         `${TAG} reconnect exhausted (${this.maxReconnectAttempts} attempts)`
       );
       if (this.rejectConnect) {
@@ -395,7 +396,7 @@ export class ServerClient {
 
     this.reconnectAttempts++;
     const delay = 1000 * this.reconnectAttempts;
-    console.log(
+    logger.warn(
       `${TAG} reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`
     );
 
@@ -408,7 +409,7 @@ export class ServerClient {
    * 断开 WebSocket 连接，清除重连定时器，置空所有回调防止内存泄漏。
    */
   disconnect() {
-    console.log(`${TAG} disconnect`);
+    logger.info(`${TAG} disconnect`);
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -428,13 +429,13 @@ export class ServerClient {
    * @param sessionId 服务器端会话 UUID
    */
   subscribe(sessionId: string) {
-    console.log(`${TAG} WS → subscribe sessionId=${sessionId}`);
+    logger.info(`${TAG} WS → subscribe sessionId=${sessionId}`);
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({ type: 'subscribe', payload: { sessionId } })
       );
     } else {
-      console.log(
+      logger.warn(
         `${TAG} subscribe skipped, ws not open (state=${this.ws?.readyState})`
       );
     }
@@ -450,7 +451,7 @@ export class ServerClient {
     const url = `${serverAddress}/api/agents/${agentId}/sessions`;
     const responseText = await httpPost(url, {});
     const data = JSON.parse(responseText) as { session: { id: string } };
-    console.log(`${TAG} createSession → sessionId=${data.session.id}`);
+    logger.info(`${TAG} createSession → sessionId=${data.session.id}`);
     return data.session.id;
   }
 
@@ -470,7 +471,7 @@ export class ServerClient {
     serverAddress: string,
     voiceEnabled: boolean
   ): Promise<void> {
-    console.log(
+    logger.info(
       `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
         0,
         80
@@ -478,7 +479,7 @@ export class ServerClient {
     );
     const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
     await httpPost(url, { content, voiceEnabled });
-    console.log(`${TAG} sendChatMessage sent ok`);
+    logger.info(`${TAG} sendChatMessage sent ok`);
   }
 }
 
@@ -584,7 +585,7 @@ export async function fetchAgents(serverAddress: string): Promise<AgentInfo[]> {
   const data = JSON.parse(responseText) as {
     agents: AgentInfo[];
   };
-  console.log(
+  logger.info(
     `${TAG} fetchAgents → ${data.agents.length} agents: ${data.agents
       .map((a) => `${a.id}(${a.name})`)
       .join(', ')}`
@@ -669,7 +670,7 @@ export async function fetchSessions(
   const url = `${serverAddress}/api/agents/${agentId}/sessions`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { sessions: SessionMeta[] };
-  console.log(`${TAG} fetchSessions → ${data.sessions.length} sessions`);
+  logger.info(`${TAG} fetchSessions → ${data.sessions.length} sessions`);
   return data.sessions;
 }
 
@@ -684,7 +685,7 @@ export async function fetchSessionMessages(
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { session: Session };
-  console.log(
+  logger.info(
     `${TAG} fetchSessionMessages → ${data.session.messages.length} messages`
   );
   return data.session;
@@ -700,7 +701,7 @@ export async function deleteSession(
 ): Promise<void> {
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
   await httpDelete(url);
-  console.log(`${TAG} deleteSession → ${sessionId}`);
+  logger.info(`${TAG} deleteSession → ${sessionId}`);
 }
 
 /**

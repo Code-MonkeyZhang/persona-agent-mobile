@@ -24,6 +24,7 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import { isMac } from '../App.tsx';
 import CustomTextInput from './CustomTextInput.tsx';
 import { useTheme, ColorScheme } from '../theme/index.ts';
+import { logger } from '../lib/logger';
 
 function SettingsScreen(): React.JSX.Element {
   const { colors, isDark } = useTheme();
@@ -74,7 +75,7 @@ function SettingsScreen(): React.JSX.Element {
    */
   const handleConnect = async () => {
     const address = serverAddress.trim().replace(/\/+$/, '');
-    console.log(`[Settings] handleConnect: address="${address}"`);
+    logger.info(`[Settings] handleConnect: address="${address}"`);
     if (!address) {
       setConnectionStatus('failed');
       setConnectionError('Please enter a server address');
@@ -112,16 +113,16 @@ function SettingsScreen(): React.JSX.Element {
         xhr.send();
       });
       if (data.status === 'ok') {
-        console.log(`[Settings] connection ok, saving address="${address}"`);
+        logger.info(`[Settings] connection ok, saving address="${address}"`);
         setConnectionStatus('connected');
         saveServerAddress(address);
       } else {
-        console.log(`[Settings] unexpected response: ${JSON.stringify(data)}`);
+        logger.warn(`[Settings] unexpected response: ${JSON.stringify(data)}`);
         setConnectionStatus('failed');
         setConnectionError('Unexpected response');
       }
     } catch (e) {
-      console.log(
+      logger.error(
         `[Settings] connection failed: ${e instanceof Error ? e.message : e}`
       );
       setConnectionStatus('failed');

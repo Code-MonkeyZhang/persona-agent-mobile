@@ -20,6 +20,7 @@ import type { AgentInfo } from '../../api/server-api';
 import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
 import AgentSelectionModal from './AgentSelectionModal';
+import { logger } from '../../lib/logger';
 
 /** Agent 选择器 Props */
 interface AgentSelectorProps {
@@ -79,6 +80,7 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
    * - y: 按钮底部偏移 4px
    */
   const handleOpen = () => {
+    logger.debug('[AgentSelector] open menu');
     triggerRef.current?.measure((_x, _y, _width, _height, pageX, pageY) => {
       const centerX = pageX + _width / 2;
       const clampedX = Math.max(
@@ -114,7 +116,12 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
             <Image
               source={{ uri: getAgentAvatarUrl(currentAgentId, serverAddr) }}
               style={styles.triggerAvatar}
-              onError={() => setAvatarError(true)}
+              onError={() => {
+                logger.warn(
+                  `[AgentSelector] avatar load failed, agentId=${currentAgentId}`
+                );
+                setAvatarError(true);
+              }}
             />
           ) : (
             <View

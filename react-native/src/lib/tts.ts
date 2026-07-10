@@ -3,6 +3,8 @@
  * @description MiniMax TTS API 封装，通过原生 fetch 调用语音合成接口
  */
 
+import { logger } from './logger';
+
 const TTS_API_URL = 'https://api.minimaxi.com/v1/t2a_v2';
 
 function hexToArrayBuffer(hex: string): ArrayBuffer {
@@ -40,6 +42,10 @@ export async function synthesize(
     body.language_boost = languageBoost;
   }
 
+  logger.info(
+    `[TTS] Request: model=${body.model} voiceId=${voiceId} textLen=${text.length}`
+  );
+
   const resp = await fetch(TTS_API_URL, {
     method: 'POST',
     headers: {
@@ -49,14 +55,22 @@ export async function synthesize(
     body: JSON.stringify(body),
   });
 
+  logger.info(`[TTS] Response status: ${resp.status}`);
+
   if (!resp.ok) {
+    logger.error(`[TTS] API HTTP error, status: ${resp.status}`);
     throw new Error(`TTS API failed: ${resp.status}`);
   }
 
   const data = await resp.json();
   if (data.base_resp.status_code !== 0) {
+    logger.error(
+      `[TTS] API business error: ${data.base_resp.status_msg} (code: ${data.base_resp.status_code})`
+    );
     throw new Error(`TTS error: ${data.base_resp.status_msg}`);
   }
 
-  return hexToArrayBuffer(data.data.audio);
+  const hex = data.data.audio as string;
+  logger.debug(`[TTS] synthesized ok, hexLen=${hex.length}`);
+  return hexToArrayBuffer(hex);
 }

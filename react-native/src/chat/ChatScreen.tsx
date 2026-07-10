@@ -49,6 +49,7 @@ import {
   convertToChatMessages,
 } from '../api/server-api.ts';
 import type { AgentInfo } from '../api/server-api.ts';
+import { logger } from '../lib/logger';
 import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { UserRound } from 'lucide-react-native';
@@ -178,12 +179,12 @@ function ChatScreen(): React.JSX.Element {
   useFocusEffect(
     React.useCallback(() => {
       const address = getServerAddress();
-      console.log(
+      logger.info(
         `[ChatScreen] server client init (focus), serverAddress="${address}"`
       );
 
       if (serverClientRef.current) {
-        console.log('[ChatScreen] server client already connected, skip');
+        logger.warn('[ChatScreen] server client already connected, skip');
         return;
       }
 
@@ -209,7 +210,7 @@ function ChatScreen(): React.JSX.Element {
           }
           saveServerAgentId(agentId);
           setCurrentAgentId(agentId);
-          console.log(`[ChatScreen] using agentId=${agentId}`);
+          logger.info(`[ChatScreen] using agentId=${agentId}`);
 
           client.onStepComplete = (content, thinking) => {
             setMessages((prevMessages) => {
@@ -258,9 +259,9 @@ function ChatScreen(): React.JSX.Element {
             return;
           }
           serverClientRef.current = client;
-          console.log('[ChatScreen] server client ready');
+          logger.info('[ChatScreen] server client ready');
         } catch (e) {
-          console.log(
+          logger.error(
             `[ChatScreen] server client init failed: ${
               e instanceof Error ? e.message : e
             }`
@@ -303,7 +304,7 @@ function ChatScreen(): React.JSX.Element {
               serverClientRef.current?.subscribe(newSessionId);
             })
             .catch((e: Error) => {
-              console.log(`[ChatScreen] createSession failed: ${e.message}`);
+              logger.error(`[ChatScreen] createSession failed: ${e.message}`);
             });
         }
       }
@@ -440,7 +441,7 @@ function ChatScreen(): React.JSX.Element {
           setMessages(chatMessages);
           serverClientRef.current?.subscribe(initialSessionId);
         } catch (e) {
-          console.log(`[ChatScreen] loadSession failed: ${e}`);
+          logger.error(`[ChatScreen] loadSession failed: ${e}`);
         } finally {
           setIsLoadingMessages(false);
           if (isMac) {
@@ -667,7 +668,7 @@ function ChatScreen(): React.JSX.Element {
         try {
           let sessionId = sessionIdRef.current;
           if (!sessionId) {
-            console.log(
+            logger.debug(
               '[ChatScreen] onSend: no server session, auto-creating...'
             );
             sessionId = await serverClientRef.current!.createSession(
@@ -676,11 +677,11 @@ function ChatScreen(): React.JSX.Element {
             );
             sessionIdRef.current = sessionId;
             serverClientRef.current!.subscribe(sessionId);
-            console.log(
+            logger.debug(
               `[ChatScreen] onSend: auto-created session ${sessionId}`
             );
           }
-          console.log(
+          logger.debug(
             `[ChatScreen] onSend: text="${message[0].text.substring(
               0,
               80
@@ -695,7 +696,7 @@ function ChatScreen(): React.JSX.Element {
           );
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
-          console.log(`[ChatScreen] onSend error: ${errMsg}`);
+          logger.error(`[ChatScreen] onSend error: ${errMsg}`);
         }
       })();
     }

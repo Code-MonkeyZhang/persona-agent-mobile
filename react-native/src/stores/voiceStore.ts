@@ -10,6 +10,7 @@ import RNFS from 'react-native-fs';
 import Toast from 'react-native-toast-message';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
+import { logger } from '../lib/logger';
 import {
   storage,
   getTtsEnabled,
@@ -79,11 +80,11 @@ export function ensurePlaybackListener(): void {
   }
 
   _listenerRegistered = true;
-  console.log('[TTS] playback listener registered');
+  logger.info('[TTS] playback listener registered');
 
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
     if ('state' in event && event.state === State.Ended) {
-      console.log('[TTS] playback ended');
+      logger.debug('[TTS] playback ended');
       useVoiceStore.setState({ isSpeaking: false });
     }
   });
@@ -97,7 +98,7 @@ export const useVoiceStore = create<VoiceStore>()(
 
       toggleVoice: () => {
         const next = !get().voiceEnabled;
-        console.log(`[TTS] voice toggled: ${next ? 'enabled' : 'disabled'}`);
+        logger.info(`[TTS] voice toggled: ${next ? 'enabled' : 'disabled'}`);
         set({ voiceEnabled: next });
         saveTtsEnabled(next);
         if (!next) {
@@ -111,7 +112,7 @@ export const useVoiceStore = create<VoiceStore>()(
        */
       speak: async (data) => {
         ensurePlaybackListener();
-        console.log(
+        logger.info(
           `[TTS] speak called, textLen=${data.speakText.length}, voiceId=${data.voiceId}`
         );
 
@@ -123,17 +124,17 @@ export const useVoiceStore = create<VoiceStore>()(
             data.model,
             data.languageBoost
           );
-          console.log(`[TTS] synthesized, audio size=${audio.byteLength}`);
+          logger.debug(`[TTS] synthesized, audio size=${audio.byteLength}`);
 
           const filePath = await writeAudioFile(audio);
-          console.log(`[TTS] audio written to ${filePath}`);
+          logger.debug(`[TTS] audio written to ${filePath}`);
 
           set({ isSpeaking: true });
           await getAudioPlayer().play(filePath);
-          console.log('[TTS] playing...');
+          logger.debug('[TTS] playing...');
         } catch (err) {
           const message = err instanceof Error ? err.message : '语音播报失败';
-          console.log(`[TTS] speak failed: ${message}`);
+          logger.error(`[TTS] speak failed: ${message}`);
           Toast.show({
             type: 'error',
             text1: message,
@@ -144,7 +145,7 @@ export const useVoiceStore = create<VoiceStore>()(
       },
 
       stopSpeaking: () => {
-        console.log('[TTS] stopped');
+        logger.info('[TTS] stopped');
         getAudioPlayer().stop();
         set({ isSpeaking: false });
       },

@@ -6,6 +6,7 @@
  */
 
 import TrackPlayer from 'react-native-track-player';
+import { logger } from './logger';
 
 class AudioPlayer {
   private playing = false;
@@ -19,6 +20,7 @@ class AudioPlayer {
    * @param filePath - 本地音频文件路径（MP3 格式）
    */
   async play(filePath: string): Promise<void> {
+    logger.debug('[Audio] play:', filePath);
     await this.stop();
     await TrackPlayer.add({ url: filePath });
     await TrackPlayer.play();
@@ -27,6 +29,7 @@ class AudioPlayer {
 
   /** 停止当前播放并重置队列 */
   async stop(): Promise<void> {
+    logger.debug('[Audio] stop');
     await TrackPlayer.reset();
     this.playing = false;
   }

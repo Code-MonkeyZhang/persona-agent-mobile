@@ -18,6 +18,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
+import { logger } from '../lib/logger';
 import {
   type AgentInfo,
   type McpServerInfo,
@@ -80,7 +81,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         const skillSet = new Set(agentData.skillNames);
         setSkills(allSkills.filter((s) => skillSet.has(s.name)));
       } catch (e) {
-        console.log(`[AgentDetail] load failed: ${e}`);
+        logger.error(`[AgentDetail] load failed: ${e}`);
       } finally {
         setLoading(false);
       }
@@ -222,7 +223,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
               const handleAuth = () => {
                 if (mcp.oauthUrl) {
                   Linking.openURL(mcp.oauthUrl).catch((e: unknown) =>
-                    console.log(`[AgentDetail] open oauthUrl failed: ${e}`)
+                    logger.error(`[AgentDetail] open oauthUrl failed: ${e}`)
                   );
                 }
               };

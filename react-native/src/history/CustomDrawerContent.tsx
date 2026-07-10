@@ -19,6 +19,7 @@ import {
   useDrawerStatus,
 } from '@react-navigation/drawer';
 import { Chat } from '../types/Chat.ts';
+import { logger } from '../lib/logger';
 import {
   type AgentInfo,
   deleteSession,
@@ -167,7 +168,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       const flatListData = groupMessagesByDate(chatList);
       setGroupChatHistory(flatListData);
     } catch (e) {
-      console.log(`[Drawer] fetchSessions failed: ${e}`);
+      logger.error(`[Drawer] fetchSessions failed: ${e}`);
     }
   };
 
@@ -181,7 +182,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       setAgentInfo(detail);
       setAgentAvatarError(false);
     } catch (e) {
-      console.log(`[Drawer] fetchAgentDetail failed: ${e}`);
+      logger.error(`[Drawer] fetchAgentDetail failed: ${e}`);
     }
   };
 
@@ -209,7 +210,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     if (address && agentId) {
       deleteSession(address, agentId, targetId).catch(() => {
         // 失败回滚：重新拉取完整列表
-        console.log('[Drawer] deleteSession failed, reloading');
+        logger.warn('[Drawer] deleteSession failed, reloading');
         handleUpdateHistory();
       });
     }

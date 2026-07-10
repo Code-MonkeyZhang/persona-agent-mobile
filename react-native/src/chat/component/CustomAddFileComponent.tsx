@@ -28,6 +28,7 @@ import {
   Image as Img,
 } from 'react-native-compressor';
 import { isMac } from '../../App.tsx';
+import { logger } from '../../lib/logger';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
 import { useTheme } from '../../theme/index.ts';
@@ -161,7 +162,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
       // Check if clipboard directory exists
       const exists = await RNFS.exists(clipboardPath);
       if (!exists) {
-        console.log('Clipboard directory does not exist');
+        logger.warn('[FilePicker] Clipboard directory does not exist');
         return;
       }
 
@@ -169,7 +170,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
       const fileList = await RNFS.readDir(clipboardPath);
 
       if (fileList.length === 0) {
-        console.log('No files found in clipboard directory');
+        logger.debug('[FilePicker] No files found in clipboard directory');
         return;
       }
 
@@ -194,7 +195,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
         onFileSelected(files);
       }
     } catch (error) {
-      console.log('Error handling paste files:', error);
+      logger.error('[FilePicker] Error handling paste files:', error);
       showInfo('Error processing pasted files');
     }
   }, [processFiles, onFileSelected]);
@@ -230,7 +231,7 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
         onFileSelected(files);
       }
     } catch (err: unknown) {
-      console.info(err);
+      logger.error('[FilePicker] selection failed:', err);
     }
   };
 

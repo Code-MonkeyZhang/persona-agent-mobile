@@ -33,6 +33,7 @@ import {
 } from './CustomFileListComponent.tsx';
 import FileViewer from 'react-native-file-viewer';
 import { isMac } from '../../App.tsx';
+import { logger } from '../../lib/logger';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
@@ -141,14 +142,14 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       FileViewer.open(url)
         .then(() => {})
         .catch((error) => {
-          console.log(error);
+          logger.warn('[Message] image open failed:', error);
         });
     } else if (pressMode === PressMode.LongPress) {
       trigger(HapticFeedbackTypes.notificationSuccess);
       const shareOptions = { url: url, type: 'image/png', title: 'AI Image' };
       Share.open(shareOptions)
-        .then((res) => console.log(res))
-        .catch((err) => err && console.log(err));
+        .then((res) => logger.debug('[Message] share result:', res))
+        .catch((err) => err && logger.warn('[Message] share failed:', err));
     }
   }, []);
 

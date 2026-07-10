@@ -13,6 +13,7 @@ import { Platform } from 'react-native';
 import { FileInfo, FileType } from '../../types/Chat.ts';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from './ToastUtils.ts';
+import { logger } from '../../lib/logger';
 
 /**
  * 将源文件复制到应用沙箱的 files/ 目录下。
@@ -35,7 +36,7 @@ export const saveFile = async (sourceUrl: string, fileName: string) => {
       ? `file://${destinationPath}`
       : `files/${uniqueFileName}`;
   } catch (error) {
-    console.warn('Error saving file:', error);
+    logger.warn('Error saving file:', error);
   }
   return null;
 };
@@ -46,7 +47,7 @@ export const getFileBytes = async (fileUrl: string) => {
     const fullFileUrl = getFullFileUrl(fileUrl);
     return await RNFS.readFile(fullFileUrl, 'base64');
   } catch (error) {
-    console.warn('Error reading image file:', fileUrl, error);
+    logger.warn('Error reading image file:', fileUrl, error);
     throw error;
   }
 };
@@ -57,7 +58,7 @@ export const getFileTextContent = async (fileUrl: string): Promise<string> => {
     const fullFileUrl = getFullFileUrl(fileUrl);
     return await RNFS.readFile(fullFileUrl, 'utf8');
   } catch (error) {
-    console.warn('Error reading text file:', fileUrl, error);
+    logger.warn('Error reading text file:', fileUrl, error);
     throw error;
   }
 };

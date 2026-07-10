@@ -25,6 +25,7 @@ import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
 import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
+import { logger } from '../../lib/logger';
 
 /** 下拉菜单 Props */
 interface AgentSelectionModalProps {
@@ -125,6 +126,7 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
     startCloseAnimation(() => {
       onClose();
       if (agentId !== currentAgentId) {
+        logger.info(`[AgentModal] selected agentId=${agentId}`);
         onSelectAgent(agentId);
       }
     });
@@ -153,9 +155,12 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
           <Image
             source={{ uri: getAgentAvatarUrl(item.id, serverAddr) }}
             style={styles.agentIcon}
-            onError={() =>
-              setAvatarErrorIds((prev) => new Set(prev).add(item.id))
-            }
+            onError={() => {
+              logger.warn(
+                `[AgentModal] avatar load failed, agentId=${item.id}`
+              );
+              setAvatarErrorIds((prev) => new Set(prev).add(item.id));
+            }}
           />
         ) : (
           <View style={[styles.agentIcon, { backgroundColor: '#E5E7EB' }]}>

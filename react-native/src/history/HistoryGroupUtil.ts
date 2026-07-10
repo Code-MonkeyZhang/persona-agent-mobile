@@ -5,6 +5,7 @@
  * 在每组前插入一个 id 为负数的虚拟标题行，供 FlatList 渲染分隔标题。
  */
 import { Chat } from '../types/Chat.ts';
+import { logger } from '../lib/logger';
 
 /**
  * 将会话列表按时间分组，在每组第一条消息前插入虚拟标题行。
@@ -19,6 +20,7 @@ import { Chat } from '../types/Chat.ts';
  */
 export function groupMessagesByDate(messages: Chat[]) {
   const groupChat: Chat[] = [];
+  logger.debug(`[HistoryGroup] grouping ${messages.length} messages`);
   /** 已出现的分组标题集合，防止重复插入 */
   const groupTitleSet = new Set<string>();
 
@@ -88,6 +90,9 @@ export function groupMessagesByDate(messages: Chat[]) {
     }
     groupChat.push(message);
   });
+  logger.debug(
+    `[HistoryGroup] produced ${groupChat.length} items in ${groupTitleSet.size} groups`
+  );
   return groupChat;
 }
 
