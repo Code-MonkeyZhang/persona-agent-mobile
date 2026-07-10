@@ -518,7 +518,7 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== 消息完成 ====================
-  /** AI 回复完成后通知侧边栏刷新历史列表和 Mermaid 图表 */
+  /** AI 回复完成后通知侧边栏刷新历史列表 */
   useEffect(() => {
     if (chatStatus === ChatStatus.Complete) {
       if (messagesRef.current.length <= 1) {
@@ -532,10 +532,6 @@ function ChatScreen(): React.JSX.Element {
           });
         }, 100);
       }
-      // Notify Mermaid renderers to refresh after streaming completes
-      setTimeout(() => {
-        sendEventRef.current('refreshMermaid');
-      }, 150);
       setChatStatus(ChatStatus.Init);
     }
   }, [chatStatus]);

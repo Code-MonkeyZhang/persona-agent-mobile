@@ -168,9 +168,7 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
     (nodes: rendererNode[]): ReactNode => {
       // Calculate margin bottom value once
       const scale =
-        rest.language === 'mermaid'
-          ? 1.75
-          : rest.language === 'html' || rest.language === 'diff'
+        rest.language === 'html' || rest.language === 'diff'
           ? isMac
             ? 2
             : 1.85

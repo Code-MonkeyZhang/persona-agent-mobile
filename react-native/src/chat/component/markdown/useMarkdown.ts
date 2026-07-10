@@ -7,10 +7,7 @@ import type {
 import Renderer from 'react-native-marked/src/lib/Renderer.tsx';
 import getStyles from 'react-native-marked/src/theme/styles.ts';
 import type { ColorSchemeName } from 'react-native';
-import type {
-  CustomToken,
-  RendererInterface,
-} from 'react-native-marked/src/lib/types.ts';
+import type { RendererInterface } from 'react-native-marked/src/lib/types.ts';
 import { ChatStatus } from '../../../types/Chat.ts';
 import Parser from './Parser.tsx';
 
@@ -20,7 +17,7 @@ export interface useMarkdownHookOptions {
   theme?: UserTheme;
   styles?: MarkedStyles;
   baseUrl?: string;
-  tokenizer?: Tokenizer<CustomToken>;
+  tokenizer?: Tokenizer<never>;
   chatStatus?: ChatStatus;
 }
 

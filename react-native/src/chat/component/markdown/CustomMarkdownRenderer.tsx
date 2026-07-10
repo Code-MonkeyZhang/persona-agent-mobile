@@ -24,21 +24,11 @@ import { PressMode } from '../../../types/Chat.ts';
 import MarkedList from '@jsamr/react-native-li';
 import Decimal from '@jsamr/counter-style/lib/es/presets/decimal';
 import Disc from '@jsamr/counter-style/lib/es/presets/disc';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
-import MathView from 'react-native-math-view';
 import { isAndroid } from '../../../utils/PlatformUtils.ts';
 import { ColorScheme } from '../../../theme/index.ts';
-import MermaidCodeRenderer from './MermaidCodeRenderer.tsx';
 import CopyButton from './CopyButton.tsx';
 
 const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter.tsx'));
-let mathViewIndex = 0;
-
-function getMathKey() {
-  mathViewIndex++;
-  return 'math-' + mathViewIndex;
-}
 
 const MemoizedCodeHighlighter = React.memo(
   ({
@@ -65,11 +55,6 @@ const MemoizedCodeHighlighter = React.memo(
     textRef.current = text;
 
     const hljsStyle = isDark ? vs2015 : github;
-    if (language === 'mermaid') {
-      return (
-        <MermaidCodeRenderer text={text} colors={colors} isDark={isDark} />
-      );
-    }
 
     return (
       <View style={styles.container}>
@@ -105,9 +90,6 @@ const MemoizedCodeHighlighter = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    if (prevProps.language === 'mermaid' || nextProps.language === 'mermaid') {
-      return false;
-    }
     if (
       prevProps.text !== nextProps.text ||
       prevProps.language !== nextProps.language ||
@@ -264,13 +246,9 @@ export class CustomMarkdownRenderer
     isCompleted?: boolean
   ): ReactNode {
     if (text && text !== '') {
-      let componentKey = this.getKey();
-      if (language === 'mermaid') {
-        componentKey = 'mermaid-code-block';
-      }
       return (
         <MemoizedCodeHighlighter
-          key={componentKey}
+          key={this.getKey()}
           text={text}
           language={language}
           colors={this.colors}
@@ -372,52 +350,6 @@ export class CustomMarkdownRenderer
       </MarkedList>
     );
   }
-
-  custom(
-    identifier: string,
-    _raw: string,
-    _children?: ReactNode[],
-    args?: Record<string, unknown>
-  ): ReactNode {
-    if (identifier === 'latex') {
-      const text = args?.text as string;
-      const isDisplayMode = args?.displayMode as boolean;
-      const mathView = (
-        <MathView
-          key={getMathKey()}
-          math={text}
-          renderError={() => this.getTextView(_raw, this.styles.text)}
-          style={
-            isDisplayMode
-              ? this.styles.displayMathView
-              : this.styles.inlineMathView
-          }
-        />
-      );
-
-      return (
-        <View
-          key={getMathKey()}
-          style={
-            isDisplayMode ? this.styles.displayMath : this.styles.inlineMath
-          }
-        >
-          {isDisplayMode ? (
-            <ScrollView
-              key={getMathKey()}
-              horizontal={true}
-              showsHorizontalScrollIndicator={false}
-            >
-              {mathView}
-            </ScrollView>
-          ) : (
-            mathView
-          )}
-        </View>
-      );
-    }
-    return null;
-  }
 }
 
 const getTableWidthArr = (
@@ -495,24 +427,7 @@ const createCustomStyles = (colors: ColorScheme) =>
     cell: {
       minHeight: 32,
     },
-    displayMath: {
-      alignItems: 'center',
-      paddingVertical: 12,
-      width: '100%',
-    },
-    inlineMath: {
-      marginTop: Platform.OS === 'android' ? 0 : 2,
-      maxHeight: 24,
-    },
-    displayMathView: {
-      marginVertical: 0,
-      alignSelf: 'center',
-      color: colors.text,
-    },
     tableScroll: {
       marginVertical: 4,
-    },
-    inlineMathView: {
-      color: colors.text,
     },
   });
