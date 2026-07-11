@@ -21,7 +21,6 @@ import {
 import { CustomHeaderRightButton } from '../chat/component/CustomHeaderRightButton.tsx';
 import { RouteParamList } from '../types/RouteTypes.ts';
 
-import { isMac } from '../App.tsx';
 import CustomTextInput from './CustomTextInput.tsx';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { logger } from '../lib/logger';
@@ -169,15 +168,10 @@ function SettingsScreen(): React.JSX.Element {
           </Text>
         )}
 
-        {!isMac && (
-          <View style={styles.switchContainer}>
-            <Text style={styles.label}>Haptic Feedback</Text>
-            <Switch
-              value={hapticEnabled}
-              onValueChange={toggleHapticFeedback}
-            />
-          </View>
-        )}
+        <View style={styles.switchContainer}>
+          <Text style={styles.label}>Haptic Feedback</Text>
+          <Switch value={hapticEnabled} onValueChange={toggleHapticFeedback} />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

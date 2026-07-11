@@ -57,7 +57,6 @@ import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx
 import CustomSendComponent from './component/CustomSendComponent.tsx';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
-import { isMac } from '../App.tsx';
 import { CustomChatFooter } from './component/CustomChatFooter.tsx';
 import {
   checkFileNumberLimit,
@@ -125,13 +124,12 @@ function ChatScreen(): React.JSX.Element {
   const textInputViewRef = useRef<TextInput>(null);
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef(initialSessionId || '');
-  const { sendEvent, event, drawerType } = useAppContext();
+  const { sendEvent, event } = useAppContext();
   const sendEventRef = useRef(sendEvent);
   const inputTextRef = useRef('');
   const [hasInputText, setHasInputText] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
-  const drawerTypeRef = useRef(drawerType);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
@@ -159,10 +157,6 @@ function ChatScreen(): React.JSX.Element {
       deactivateKeepAwake();
     };
   }, [chatStatus]);
-
-  useEffect(() => {
-    drawerTypeRef.current = drawerType;
-  }, [drawerType]);
 
   useEffect(() => {
     selectedFilesRef.current = selectedFiles;
@@ -444,11 +438,7 @@ function ChatScreen(): React.JSX.Element {
           logger.error(`[ChatScreen] loadSession failed: ${e}`);
         } finally {
           setIsLoadingMessages(false);
-          if (isMac) {
-            scrollToBottom();
-          } else {
-            setTimeout(scrollToBottom, 200);
-          }
+          setTimeout(scrollToBottom, 200);
         }
       })();
     }
@@ -524,14 +514,12 @@ function ChatScreen(): React.JSX.Element {
       if (messagesRef.current.length <= 1) {
         return;
       }
-      if (drawerTypeRef.current === 'permanent') {
-        sendEventRef.current('updateHistory');
-        setTimeout(() => {
-          sendEventRef.current('updateHistorySelectedId', {
-            id: sessionIdRef.current,
-          });
-        }, 100);
-      }
+      sendEventRef.current('updateHistory');
+      setTimeout(() => {
+        sendEventRef.current('updateHistorySelectedId', {
+          id: sessionIdRef.current,
+        });
+      }, 100);
       setChatStatus(ChatStatus.Init);
     }
   }, [chatStatus]);
@@ -547,9 +535,6 @@ function ChatScreen(): React.JSX.Element {
   // ==================== 滚动控制 ====================
   const { width: screenWidth, height: screenHeight } = screenDimensions;
 
-  const chatScreenWidth =
-    isMac && drawerType === 'permanent' ? screenWidth - 300 : screenWidth;
-
   const scrollStyle = StyleSheet.create({
     scrollToBottomContainerStyle: {
       width: 30,
@@ -559,7 +544,7 @@ function ChatScreen(): React.JSX.Element {
         screenHeight < screenWidth &&
         screenHeight < 500
           ? screenWidth / 2 - 75 // iphone landscape
-          : chatScreenWidth / 2 - 15,
+          : screenWidth / 2 - 15,
       bottom: screenHeight > screenWidth ? '1.5%' : '2%',
     },
   });
@@ -852,11 +837,10 @@ function ChatScreen(): React.JSX.Element {
         textInputProps={{
           ...styles.textInputStyle,
           ...{
-            fontWeight: isMac ? '300' : 'normal',
+            fontWeight: 'normal',
             color: colors.text,
             smartInsertDelete: false,
             spellCheck: false,
-            blurOnSubmit: isMac,
             onSubmitEditing: () => {
               if (
                 inputTextRef.current.length > 0 &&
@@ -884,18 +868,8 @@ function ChatScreen(): React.JSX.Element {
             },
           },
         }}
-        maxComposerHeight={isMac ? 360 : 200}
+        maxComposerHeight={200}
         onInputTextChanged={(text) => {
-          if (
-            isMac &&
-            text.length > 0 &&
-            (text[text.length - 1] === '\n' ||
-              text.length - 1 === inputTextRef.current.length)
-          ) {
-            setTimeout(() => {
-              textInputViewRef.current?.focus();
-            }, 50);
-          }
           inputTextRef.current = text;
           if (!hasInputText && text.length > 0) {
             setHasInputText(true);
@@ -940,7 +914,7 @@ const createStyles = (colors: ColorScheme) =>
       borderTopWidth: 0,
       paddingHorizontal: 10,
       paddingTop: 0,
-      paddingBottom: isMac ? 10 : Platform.OS === 'android' ? 8 : 2,
+      paddingBottom: Platform.OS === 'android' ? 8 : 2,
     },
     /** 输入框主区域（圆角背景框） */
     inputToolbarPrimary: {

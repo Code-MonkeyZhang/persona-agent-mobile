@@ -32,13 +32,11 @@ import {
   DisplayMode,
 } from './CustomFileListComponent.tsx';
 import FileViewer from 'react-native-file-viewer';
-import { isMac } from '../../App.tsx';
 import { logger } from '../../lib/logger';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
-import { useAppContext } from '../../history/AppProvider.tsx';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 import {
   getReasoningExpanded,
@@ -79,9 +77,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
-  const { drawerType } = useAppContext();
-  const chatScreenWidth =
-    isMac && drawerType === 'permanent' ? screenWidth - 300 : screenWidth;
 
   const isLoading =
     chatStatus === ChatStatus.Running &&
@@ -355,7 +350,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       <View
         style={{
           ...styles.questionContainer,
-          maxWidth: (chatScreenWidth * 3) / 4,
+          maxWidth: (screenWidth * 3) / 4,
         }}
       >
         <Text style={styles.questionText} selectable>
@@ -367,7 +362,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     currentMessage,
     customMarkdownRenderer,
     customTokenizer,
-    chatScreenWidth,
     styles.questionContainer,
     styles.questionText,
   ]);

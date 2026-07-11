@@ -12,7 +12,6 @@ import {
   CustomFileListComponent,
   DisplayMode,
 } from './CustomFileListComponent.tsx';
-import { isMacCatalyst } from '../../utils/PlatformUtils.ts';
 
 /** 聊天底部区域 Props */
 interface CustomComposerProps {
@@ -34,7 +33,7 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
 }) => {
   /**
    * 当有输入文本或 AI 正在回复时，隐藏文件列表的可视区域，
-   * 但保留容器高度（Mac 端还需额外底部 padding），避免收起时布局跳动。
+   * 但保留容器高度，避免收起时布局跳动。
    * 实际的隐藏逻辑在 CustomFileListComponent 内部处理（opacity + absolute 定位）。
    */
   const isHideFileList = hasInputText || chatStatus === ChatStatus.Running;
@@ -49,9 +48,6 @@ export const CustomChatFooter: React.FC<CustomComposerProps> = ({
           }),
           ...(files.length === 0 && {
             height: 0,
-          }),
-          ...(isMacCatalyst && {
-            paddingBottom: 18,
           }),
         }}
       >

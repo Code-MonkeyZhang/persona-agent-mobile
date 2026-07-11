@@ -9,23 +9,20 @@ import CustomDrawerContent from './history/CustomDrawerContent.tsx';
 import { Dimensions, Keyboard, StatusBar } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
-import { AppProvider, useAppContext } from './history/AppProvider.tsx';
+import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import CompanionScreen from './companion/CompanionScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { isAndroid, isMacCatalyst } from './utils/PlatformUtils.ts';
+import { isAndroid } from './utils/PlatformUtils.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import TrackPlayer from 'react-native-track-player';
 import { ensurePlaybackListener } from './stores/voiceStore';
 import { logger } from './lib/logger';
 
-// Mac桌面端的UI计算, 如果要去除桌面端的能力可以删掉 TODO:
-
-export const isMac = isMacCatalyst;
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const minWidth = screenWidth > screenHeight ? screenHeight : screenWidth;
 const width = minWidth > 434 ? 300 : minWidth * 0.83;
@@ -46,10 +43,8 @@ const renderCustomDrawerContent = (
 /**
  * 抽屉导航器 - 侧边滑出的导航菜单
  * - drawerContent: 使用自定义的CustomDrawerContent渲染侧边栏内容
- * - drawerType: Mac端支持permanent(常驻)/slide(滑出)模式切换，其他平台固定用slide
  */
 const DrawerNavigator = () => {
-  const { drawerType } = useAppContext();
   const { colors, isDark } = useTheme();
   return (
     <Drawer.Navigator
@@ -61,16 +56,15 @@ const DrawerNavigator = () => {
         drawerStyle: {
           width: width,
           backgroundColor: colors.background,
-          borderRightWidth: isMac ? 1 : isAndroid ? 0.3 : 0,
+          borderRightWidth: isAndroid ? 0.3 : 0,
           borderRightColor: colors.border,
         },
         headerStyle: {
-          height: isMac ? 66 : undefined,
           backgroundColor: colors.background,
           borderBottomWidth: isDark ? 0.3 : undefined,
           borderBottomColor: isDark ? colors.chatScreenSplit : undefined,
         },
-        drawerType: isMac ? drawerType : 'slide',
+        drawerType: 'slide',
       }}
       drawerContent={renderCustomDrawerContent}
     >

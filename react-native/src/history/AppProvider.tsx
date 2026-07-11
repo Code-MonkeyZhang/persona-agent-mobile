@@ -8,13 +8,9 @@ import React, {
 import { EventData } from '../types/Chat.ts';
 import { logger } from '../lib/logger';
 
-export type DrawerType = 'permanent' | 'slide';
-
 interface AppContextType {
   sendEvent: (event: string, params?: EventData) => void;
   event: { event: string; params?: EventData } | null;
-  drawerType: DrawerType;
-  setDrawerType: (type: DrawerType) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -33,15 +29,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     logger.debug(`[AppContext] event: ${eventName}`);
     setEvent({ event: eventName, params: params });
   }, []);
-  const [drawerType, setDrawerType] = useState<DrawerType>('permanent');
 
   return (
     <AppContext.Provider
       value={{
         sendEvent,
         event,
-        drawerType,
-        setDrawerType,
       }}
     >
       {children}

@@ -23,7 +23,6 @@ import SyntaxHighlighter, {
   type SyntaxHighlighterProps,
 } from 'react-syntax-highlighter';
 import transform, { StyleTuple } from 'css-to-react-native';
-import { isMac } from '../../../App.tsx';
 import { trimNewlines } from 'trim-newlines';
 import ChunkedCodeView from './ChunkedCodeView.tsx';
 
@@ -168,13 +167,7 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
     (nodes: rendererNode[]): ReactNode => {
       // Calculate margin bottom value once
       const scale =
-        rest.language === 'html' || rest.language === 'diff'
-          ? isMac
-            ? 2
-            : 1.85
-          : isMac
-          ? 3
-          : 2.82;
+        rest.language === 'html' || rest.language === 'diff' ? 1.85 : 2.82;
       const marginBottomValue = -nodes.length * scale;
 
       // Optimization for streaming content - only process new nodes

@@ -18,7 +18,6 @@ import ImageView from 'react-native-image-viewing';
 import { ImageSource } from 'react-native-image-viewing/dist/@types/index';
 import Share from 'react-native-share';
 import FileViewer from 'react-native-file-viewer';
-import { isMac } from '../../App.tsx';
 import { getFullFileUrl, saveFile } from '../util/FileUtils.ts';
 import { getVideoMetaData, Video } from 'react-native-compressor';
 import * as Progress from 'react-native-progress';
@@ -252,7 +251,6 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               return;
             }
             if (
-              isMac ||
               file.type === FileType.document ||
               file.type === FileType.video
             ) {

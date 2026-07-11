@@ -1,13 +1,6 @@
 import { Actions } from 'react-native-gifted-chat';
-import {
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  NativeEventEmitter,
-  NativeModules,
-} from 'react-native';
-import React, { useRef, useEffect, useCallback } from 'react';
+import { Image, Platform, StyleSheet, Text } from 'react-native';
+import React, { useCallback } from 'react';
 import {
   ImagePickerResponse,
   launchCamera,
@@ -20,24 +13,17 @@ import {
   DocumentPickerResponse,
 } from 'react-native-document-picker';
 import { saveFile } from '../util/FileUtils.ts';
-import RNFS from 'react-native-fs';
 import {
   createVideoThumbnail,
   getImageMetaData,
   getVideoMetaData,
   Image as Img,
 } from 'react-native-compressor';
-import { isMac } from '../../App.tsx';
 import { logger } from '../../lib/logger';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
 import { useTheme } from '../../theme/index.ts';
 import { isAndroid } from '../../utils/PlatformUtils.ts';
-
-const { FilePasteModule } = NativeModules;
-const eventEmitter = FilePasteModule
-  ? new NativeEventEmitter(FilePasteModule)
-  : null;
 
 interface CustomRenderActionsProps {
   onFileSelected: (files: FileInfo[]) => void;
@@ -154,72 +140,6 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
     []
   );
 
-  // Handle paste files from clipboard
-  const handlePasteFiles = useCallback(async () => {
-    try {
-      const clipboardPath = `${RNFS.DocumentDirectoryPath}/clipboard`;
-
-      // Check if clipboard directory exists
-      const exists = await RNFS.exists(clipboardPath);
-      if (!exists) {
-        logger.warn('[FilePicker] Clipboard directory does not exist');
-        return;
-      }
-
-      // Read all files from clipboard directory
-      const fileList = await RNFS.readDir(clipboardPath);
-
-      if (fileList.length === 0) {
-        logger.debug('[FilePicker] No files found in clipboard directory');
-        return;
-      }
-
-      // Convert to DocumentPickerResponse format
-      const pickResults: DocumentPickerResponse[] = [];
-      for (const file of fileList) {
-        if (file.isFile()) {
-          pickResults.push({
-            uri: `file://${file.path}`,
-            name: file.name,
-            size: file.size,
-            type: null, // Will be determined by file extension
-            fileCopyUri: null,
-          });
-        }
-      }
-
-      // Process files using the shared logic
-      const files = await processFiles(pickResults);
-
-      if (files.length > 0) {
-        onFileSelected(files);
-      }
-    } catch (error) {
-      logger.error('[FilePicker] Error handling paste files:', error);
-      showInfo('Error processing pasted files');
-    }
-  }, [processFiles, onFileSelected]);
-
-  // Use ref to store the latest handlePasteFiles function
-  const handlePasteFilesRef = useRef(handlePasteFiles);
-
-  useEffect(() => {
-    handlePasteFilesRef.current = handlePasteFiles;
-  }, [handlePasteFiles]);
-
-  // Listen for paste files event from native layer (macOS Command+V)
-  useEffect(() => {
-    // Use NativeEventEmitter with FilePasteModule for more stable event handling
-    if (eventEmitter) {
-      const subscription = eventEmitter.addListener('onPasteFiles', () => {
-        handlePasteFilesRef.current().then();
-      });
-      return () => {
-        subscription.remove();
-      };
-    }
-  }, []);
-
   const handleChooseFiles = async () => {
     try {
       const pickResults = await pick({
@@ -235,22 +155,6 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
     }
   };
 
-  if (isMac) {
-    return (
-      <Actions
-        containerStyle={{
-          ...styles.containerStyle,
-          ...(mode === 'list' && {
-            width: '100%',
-            height: '100%',
-            marginRight: 10,
-          }),
-        }}
-        icon={mode === 'default' ? DefaultIcon : ThemedListIcon}
-        onPressActionButton={handleChooseFiles}
-      />
-    );
-  }
   return (
     <Actions
       containerStyle={{

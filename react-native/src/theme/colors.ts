@@ -21,7 +21,6 @@ export interface ColorScheme {
   overlay: string;
   codeBackground: string;
   selectedBackground: string;
-  selectedBackgroundMac: string;
   inputBackground: string;
   chatInputBackground: string;
   labelBackground: string;
@@ -29,7 +28,6 @@ export interface ColorScheme {
   reasoningBackground: string;
   inputBorder: string;
   drawerBackground: string;
-  drawerBackgroundMac: string;
   promptButtonBackground: string;
   promptButtonBorder: string;
   promptText: string;
@@ -79,7 +77,6 @@ export const lightColors: ColorScheme = {
   overlay: 'rgba(0,0,0,0.5)',
   codeBackground: '#F8F8F8',
   selectedBackground: '#F5F5F5',
-  selectedBackgroundMac: '#ECECEC',
   inputBackground: '#ffffff',
   chatInputBackground: '#f2f2f7',
   labelBackground: '#ffffff',
@@ -87,7 +84,6 @@ export const lightColors: ColorScheme = {
   reasoningBackground: '#f3f3f3',
   inputBorder: '#808080',
   drawerBackground: 'transparent',
-  drawerBackgroundMac: '#F9F9F9',
   promptButtonBackground: '#E8E8E8',
   promptButtonBorder: '#E8E8E8',
   promptText: '#333333',
@@ -137,7 +133,6 @@ export const darkColors: ColorScheme = {
   overlay: 'rgba(0,0,0,0.8)',
   codeBackground: '#1a1a1a',
   selectedBackground: '#2a2a2a',
-  selectedBackgroundMac: '#333333',
   inputBackground: '#000000',
   chatInputBackground: '#1c1c1e',
   labelBackground: '#000000',
@@ -145,7 +140,6 @@ export const darkColors: ColorScheme = {
   reasoningBackground: '#2a2a2a',
   inputBorder: '#555555',
   drawerBackground: '#000000',
-  drawerBackgroundMac: '#000000',
   promptButtonBackground: '#333333',
   promptButtonBorder: '#333333',
   promptText: '#cccccc',

@@ -33,7 +33,6 @@ import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { groupMessagesByDate } from './HistoryGroupUtil.ts';
-import { isMac } from '../App.tsx';
 import { DrawerActions } from '@react-navigation/native';
 import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
@@ -66,23 +65,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** 点击计数器，每次跳转会话时递增，用作路由参数触发 useEffect */
   const tapIndexRef = useRef<number>(1);
-  /** 是否首次渲染（Mac 端首次加载时直接拉取数据，不做 Drawer 动画） */
-  const isFirstRenderRef = useRef<boolean>(true);
-  /** Mac 端控制 Drawer 切换为 slide 模式的标记 */
-  const isSlideDrawerEnabledRef = useRef<boolean>(false);
   /** Drawer 顶部展示的当前 Agent 信息（点击可进入详情页） */
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const [agentAvatarError, setAgentAvatarError] = useState(false);
   const { event, sendEvent } = useAppContext();
-  const { drawerType, setDrawerType } = useAppContext();
-
-  const drawerTypeRef = useRef(drawerType);
-  const setDrawerTypeRef = useRef(setDrawerType);
-
-  /** 同步 drawerType 到 ref */
-  useEffect(() => {
-    drawerTypeRef.current = drawerType;
-  }, [drawerType]);
 
   /** 同步 groupChatHistory 到 ref */
   useEffect(() => {
@@ -113,28 +99,9 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   }, [event]);
 
   /**
-   * 监听 Drawer 开合状态：打开时拉取最新会话列表并触感反馈，Mac 端处理 permanent/slide 模式切换。
+   * 监听 Drawer 开合状态：打开时拉取最新会话列表并触感反馈。
    */
   useEffect(() => {
-    if (isMac && isFirstRenderRef.current) {
-      handleUpdateHistory();
-      isFirstRenderRef.current = false;
-      return;
-    }
-    if (isMac) {
-      if (isSlideDrawerEnabledRef.current) {
-        isSlideDrawerEnabledRef.current = false;
-        return;
-      }
-      if (drawerTypeRef.current === 'permanent') {
-        setTimeout(() => {
-          setDrawerTypeRef.current('slide');
-          navigation.dispatch(DrawerActions.toggleDrawer());
-        }, 10);
-      }
-      isSlideDrawerEnabledRef.current = true;
-    }
-
     if (drawerStatus === 'open') {
       trigger(HapticFeedbackTypes.soft);
       trigger(HapticFeedbackTypes.selection);
@@ -187,15 +154,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   };
 
   /**
-   * Mac 端点击会话时将 Drawer 切为 permanent 模式（侧边栏常驻显示）。
-   */
-  const setDrawerToPermanent = () => {
-    if (isMac && drawerType === 'slide') {
-      setDrawerType('permanent');
-    }
-  };
-
-  /**
    * 删除会话：先乐观更新 UI，再调服务器 API，失败时回滚。
    */
   const handleDelete = () => {
@@ -222,7 +180,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const styles = createStyles(colors);
 
   return (
-    <SafeAreaView style={[isMac ? styles.macContainer : styles.safeArea]}>
+    <SafeAreaView style={[styles.safeArea]}>
       {/* 当前 Agent 信息卡片，点击进入详情页 */}
       {agentInfo && (
         <TouchableOpacity
@@ -232,7 +190,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
             const currentAgentId = getServerAgentId();
             if (!currentAgentId) return;
             navigation.navigate('AgentDetail', { agentId: currentAgentId });
-            setDrawerToPermanent();
             navigation.dispatch(DrawerActions.closeDrawer());
           }}
         >
@@ -287,7 +244,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 activeOpacity={1}
                 onPress={() => {
                   setSelectedId(item.id);
-                  setDrawerToPermanent();
                   setTimeout(() => {
                     navigation.navigate('Bedrock', {
                       sessionId: item.id,
@@ -302,11 +258,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                   setShowDialog(true);
                   deleteIdRef.current = item.id;
                 }}
-                style={[
-                  styles.touch,
-                  isSelected &&
-                    (isMac ? styles.macTouchSelected : styles.touchSelected),
-                ]}
+                style={[styles.touch, isSelected && styles.touchSelected]}
               >
                 <Text numberOfLines={1} style={styles.title}>
                   {item.title}
@@ -320,7 +272,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       <TouchableOpacity
         style={styles.settingsTouch}
         onPress={() => {
-          setDrawerToPermanent();
           navigation.navigate('Settings');
         }}
       >
@@ -359,15 +310,9 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 /** 侧边栏样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
-    /** 手机端侧边栏容器 */
     safeArea: {
       flex: 1,
       backgroundColor: colors.drawerBackground,
-    },
-    /** Mac 端侧边栏容器 */
-    macContainer: {
-      flex: 1,
-      backgroundColor: colors.drawerBackgroundMac,
     },
     /** Drawer 顶部 Agent 信息卡片 */
     agentCard: {
@@ -443,13 +388,8 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 2,
       borderRadius: 8,
     },
-    /** 手机端选中会话的高亮背景 */
     touchSelected: {
       backgroundColor: colors.selectedBackground,
-    },
-    /** Mac 端选中会话的高亮背景 */
-    macTouchSelected: {
-      backgroundColor: colors.selectedBackgroundMac,
     },
     /** 日期分组标题容器（含分隔线 + 文字） */
     sectionContainer: {
