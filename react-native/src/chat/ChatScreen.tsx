@@ -3,21 +3,22 @@
  * @description 聊天页面主组件，管理消息收发、AI 流式回复、WebSocket 连接、Agent 切换、文件附件等功能。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Composer, GiftedChat, InputToolbar } from 'react-native-gifted-chat';
+import { GiftedChat } from 'react-native-gifted-chat';
 import {
   AppState,
   Dimensions,
   FlatList,
   Keyboard,
+  LayoutAnimation,
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
-  SafeAreaView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   activateKeepAwake,
   deactivateKeepAwake,
@@ -52,10 +53,9 @@ import { logger } from '../lib/logger';
 import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
-import CustomSendComponent from './component/CustomSendComponent.tsx';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
-import { CustomChatFooter } from './component/CustomChatFooter.tsx';
+import FloatingInputBar from './component/FloatingInputBar.tsx';
 import {
   checkFileNumberLimit,
   getFileTypeSummary,
@@ -99,6 +99,7 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
   const initialSessionId = route.params?.sessionId;
@@ -111,6 +112,7 @@ function ChatScreen(): React.JSX.Element {
     Dimensions.get('window')
   );
   const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [userScrolled, setUserScrolled] = useState(false);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [currentAgentId, setCurrentAgentId] = useState(
@@ -124,8 +126,6 @@ function ChatScreen(): React.JSX.Element {
   const sessionIdRef = useRef(initialSessionId || '');
   const { sendEvent, event } = useAppContext();
   const sendEventRef = useRef(sendEvent);
-  const inputTextRef = useRef('');
-  const [hasInputText, setHasInputText] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const selectedFilesRef = useRef(selectedFiles);
   const contentHeightRef = useRef(0);
@@ -433,22 +433,52 @@ function ChatScreen(): React.JSX.Element {
   }, [event]);
 
   // ==================== 键盘 & 屏幕 & 生命周期 ====================
-  /** 键盘弹出时自动滚到底部（仅在输入框聚焦时） */
+  /**
+   * 键盘避让与滚动控制。
+   * 监听键盘弹出/收起，通过 keyboardHeight 驱动 FIB 容器的 paddingBottom，
+   * 使输入框始终贴合键盘上沿。弹出时若输入框已聚焦则自动滚到底部。
+   */
   useEffect(() => {
-    const handleKeyboardShow = () => {
-      // Only scroll to bottom if the chat input is focused
+    const showEvent = Platform.select({
+      ios: 'keyboardWillShow',
+      android: 'keyboardDidShow',
+    }) as 'keyboardWillShow' | 'keyboardDidShow';
+    const hideEvent = Platform.select({
+      ios: 'keyboardWillHide',
+      android: 'keyboardDidHide',
+    }) as 'keyboardWillHide' | 'keyboardDidHide';
+
+    /** 配置与键盘动画同步的 LayoutAnimation */
+    const animate = (duration: number) => {
+      const d = (duration > 10 ? duration : 10) * 1.15;
+      LayoutAnimation.configureNext({
+        duration: d,
+        update: {
+          duration: d,
+          type: 'easeInEaseOut',
+        },
+      });
+    };
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      const { height } = e.endCoordinates;
+      animate(e.duration);
+      setKeyboardHeight(height);
       if (textInputViewRef.current?.isFocused()) {
         scrollToBottom();
       }
-    };
+      logger.info(`[Keyboard] show height=${height}`);
+    });
 
-    const keyboardDidShowListener = Platform.select({
-      ios: Keyboard.addListener('keyboardWillShow', handleKeyboardShow),
-      android: Keyboard.addListener('keyboardDidShow', handleKeyboardShow),
+    const hideListener = Keyboard.addListener(hideEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(0);
+      logger.info('[Keyboard] hide');
     });
 
     return () => {
-      keyboardDidShowListener && keyboardDidShowListener.remove();
+      showListener.remove();
+      hideListener.remove();
     };
   }, []);
 
@@ -588,7 +618,7 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== 发送消息 ====================
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
-  const onSend = useCallback(async (message: ChatMessage[] = []) => {
+  const onSend = useCallback(async (text: string) => {
     // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
     setUserScrolled(false);
     // 取出当前选中的附件文件
@@ -599,260 +629,211 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
 
-    if (message[0]?.text || files.length > 0) {
-      if (!message[0]?.text) {
-        message[0].text = getFileTypeSummary(files);
-      }
-
-      if (selectedFilesRef.current.length > 0) {
-        message[0].image = JSON.stringify(selectedFilesRef.current);
-        setSelectedFiles([]);
-      }
-      trigger(HapticFeedbackTypes.impactMedium);
-      scrollToBottom();
-
-      setChatStatus(ChatStatus.Running);
-      setMessages((previousMessages) => [
-        createBotMessage(),
-        ...GiftedChat.append(previousMessages, message),
-      ]);
-      const agentId = getServerAgentId();
-
-      (async () => {
-        try {
-          let sessionId = sessionIdRef.current;
-          if (!sessionId) {
-            logger.debug(
-              '[ChatScreen] onSend: no server session, auto-creating...'
-            );
-            sessionId = await serverClientRef.current!.createSession(
-              agentId,
-              serverAddressRef.current!
-            );
-            sessionIdRef.current = sessionId;
-            serverClientRef.current!.subscribe(sessionId);
-            logger.debug(
-              `[ChatScreen] onSend: auto-created session ${sessionId}`
-            );
-          }
-          logger.debug(
-            `[ChatScreen] onSend: text="${message[0].text.substring(
-              0,
-              80
-            )}" sessionId=${sessionId}`
-          );
-          await serverClientRef.current!.sendChatMessage(
-            agentId,
-            sessionId,
-            message[0].text,
-            serverAddressRef.current!,
-            false
-          );
-        } catch (e) {
-          const errMsg = e instanceof Error ? e.message : String(e);
-          logger.error(`[ChatScreen] onSend error: ${errMsg}`);
-        }
-      })();
+    // 确定消息文本：有输入文本则用输入文本，否则用文件摘要作为占位
+    const messageText =
+      text || (files.length > 0 ? getFileTypeSummary(files) : '');
+    if (!messageText && files.length === 0) {
+      return;
     }
+
+    // 构造用户消息
+    const message: ChatMessage = {
+      text: messageText,
+      user: { _id: 1 },
+      createdAt: new Date(),
+      _id: uuid.v4(),
+    };
+
+    if (files.length > 0) {
+      message.image = JSON.stringify(files);
+      setSelectedFiles([]);
+    }
+
+    trigger(HapticFeedbackTypes.impactMedium);
+    scrollToBottom();
+
+    setChatStatus(ChatStatus.Running);
+    setMessages((previousMessages) => [
+      createBotMessage(),
+      ...GiftedChat.append(previousMessages, [message]),
+    ]);
+    const agentId = getServerAgentId();
+
+    (async () => {
+      try {
+        let sessionId = sessionIdRef.current;
+        if (!sessionId) {
+          logger.debug(
+            '[ChatScreen] onSend: no server session, auto-creating...'
+          );
+          sessionId = await serverClientRef.current!.createSession(
+            agentId,
+            serverAddressRef.current!
+          );
+          sessionIdRef.current = sessionId;
+          serverClientRef.current!.subscribe(sessionId);
+          logger.debug(
+            `[ChatScreen] onSend: auto-created session ${sessionId}`
+          );
+        }
+        logger.debug(
+          `[ChatScreen] onSend: text="${messageText.substring(
+            0,
+            80
+          )}" sessionId=${sessionId}`
+        );
+        await serverClientRef.current!.sendChatMessage(
+          agentId,
+          sessionId,
+          messageText,
+          serverAddressRef.current!,
+          false
+        );
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        logger.error(`[ChatScreen] onSend error: ${errMsg}`);
+      }
+    })();
   }, []);
 
   // ==================== 文件 & 语音转录 ====================
   /**
-   * 新增附件文件，会检查数量限制后合并到已有文件列表。
-   * @param files 用户选中的新文件列表
+   * 新增文件回调：检查数量限制后合并到 selectedFiles。
+   * 由 FloatingInputBar 内的 CustomAddFileComponent 触发。
    */
-  const handleNewFileSelected = (files: FileInfo[]) => {
-    setSelectedFiles((prevFiles) => {
-      return checkFileNumberLimit(prevFiles, files);
+  const handleNewFileSelected = useCallback((newFiles: FileInfo[]) => {
+    setSelectedFiles((prev) => checkFileNumberLimit(prev, newFiles));
+  }, []);
+
+  /**
+   * 文件更新回调：删除或压缩后直接替换 selectedFiles。
+   * 由 FloatingInputBar 内的 CustomChatFooter 触发。
+   */
+  const handleFileUpdated = useCallback((files: FileInfo[]) => {
+    setSelectedFiles(files);
+  }, []);
+
+  /** 停止 AI 回复：将占位消息改为已取消，设置状态为完成 */
+  const handleStopPress = useCallback(() => {
+    trigger(HapticFeedbackTypes.notificationWarning);
+    setMessages((prevMessages) => {
+      if (prevMessages.length === 0) {
+        return prevMessages;
+      }
+      const newMessages = [...prevMessages];
+      if (
+        newMessages[0].text === textPlaceholder ||
+        newMessages[0].text === ''
+      ) {
+        newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
+      }
+      return newMessages;
     });
-  };
+    setChatStatus(ChatStatus.Complete);
+  }, []);
 
   // ==================== UI 渲染 ====================
   const styles = createStyles(colors);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <GiftedChat
-        // 消息列表的 ref，用于代码中控制滚动（如 scrollToBottom、编辑时滚动定位）
-        messageContainerRef={flatListRef}
-        // 输入框的 ref，用于发送后清空输入框、重新聚焦键盘
-        textInputRef={textInputViewRef}
-        // 点击非可交互区域时收起键盘
-        keyboardShouldPersistTaps="never"
-        // 底部偏移：处理键盘/底部安全区域的遮挡问题
-        // Android 系统自动处理所以为 0；iPhone 竖屏有 Home Indicator 多留 24；其余 12
-        bottomOffset={
-          Platform.OS === 'android'
-            ? 0
-            : screenHeight > screenWidth && screenWidth < 500
-            ? 24 // iphone in portrait
-            : 12
-        }
-        messages={messages}
-        onSend={onSend}
-        user={{
-          _id: 1,
-        }}
-        alignTop={false}
-        inverted={true}
-        /** 空聊天页面：无消息时显示的欢迎界面 */
-        renderChatEmpty={() => (
-          <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
-        )}
-        alwaysShowSend={
-          chatStatus !== ChatStatus.Init || selectedFiles.length > 0
-        }
-        /** 自定义输入框：显示普通文本输入框 */
-        renderComposer={(props) => (
-          <Composer {...props} textInputStyle={styles.composerTextInput} />
-        )}
-        /** 自定义发送按钮：根据状态切换发送/停止/附件按钮 */
-        renderSend={(props) => (
-          <CustomSendComponent
-            {...props}
-            chatStatus={chatStatus}
-            selectedFiles={selectedFiles}
-            onStopPress={() => {
-              trigger(HapticFeedbackTypes.notificationWarning);
-              setMessages((prevMessages) => {
-                if (prevMessages.length === 0) {
-                  return prevMessages;
-                }
-                const newMessages = [...prevMessages];
-                if (
-                  newMessages[0].text === textPlaceholder ||
-                  newMessages[0].text === ''
-                ) {
-                  newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
-                }
-                return newMessages;
-              });
-              setChatStatus(ChatStatus.Complete);
-            }}
-            onFileSelected={(files) => {
-              handleNewFileSelected(files);
-            }}
-          />
-        )}
-        /** 自定义底部工具栏：附件文件列表 */
-        renderChatFooter={() => (
-          <CustomChatFooter
-            files={selectedFiles}
-            onFileUpdated={(files, isUpdate) => {
-              if (isUpdate) {
-                setSelectedFiles(files);
-              } else {
-                handleNewFileSelected(files);
-              }
-            }}
-            hasInputText={hasInputText}
-            chatStatus={chatStatus}
-          />
-        )}
-        /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
-        renderMessage={(props) => {
-          // Find the index of the current message in the messages array
-          const messageIndex = messages.findIndex(
-            (msg) => msg._id === props.currentMessage?._id
-          );
+    <View style={styles.container}>
+      <View style={styles.giftedChatContainer}>
+        <GiftedChat
+          // 消息列表的 ref，用于代码中控制滚动（如 scrollToBottom、编辑时滚动定位）
+          messageContainerRef={flatListRef}
+          // 点击非可交互区域时收起键盘
+          keyboardShouldPersistTaps="never"
+          messages={messages}
+          user={{
+            _id: 1,
+          }}
+          alignTop={false}
+          inverted={true}
+          // 禁用 GiftedChat 内部键盘处理，键盘避让由手动 paddingBottom 控制
+          isKeyboardInternallyHandled={false}
+          // 输入栏高度设为 0，让消息列表撑满整个区域
+          minInputToolbarHeight={0}
+          minComposerHeight={0}
+          /** 空聊天页面：无消息时显示的欢迎界面 */
+          renderChatEmpty={() => (
+            <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
+          )}
+          /** 底部留白：flex 布局下与 FloatingInputBar 之间的视觉间距 */
+          renderChatFooter={() => <View style={styles.chatFooterSpacer} />}
+          /** 禁用 GiftedChat 内置输入栏 */
+          renderInputToolbar={() => null}
+          /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
+          renderMessage={(props) => {
+            // Find the index of the current message in the messages array
+            const messageIndex = messages.findIndex(
+              (msg) => msg._id === props.currentMessage?._id
+            );
 
-          const isLastAIMessage =
-            props.currentMessage?._id === messages[0]?._id &&
-            props.currentMessage?.user._id !== 1;
+            const isLastAIMessage =
+              props.currentMessage?._id === messages[0]?._id &&
+              props.currentMessage?.user._id !== 1;
 
-          return (
-            <CustomMessageComponent
-              {...props}
-              chatStatus={chatStatus}
-              isLastAIMessage={isLastAIMessage}
-              onReasoningToggle={handleReasoningToggle}
-              messageIndex={messageIndex}
-              flatListRef={flatListRef}
-            />
-          );
-        }}
-        /** 消息列表配置：滚动监听、自动滚动控制、流式输出时保持消息位置不跳动 */
-        listViewProps={{
-          contentContainerStyle: styles.contentContainer,
-          contentInset: { top: 2 },
-          onLayout: (layoutEvent: LayoutChangeEvent) => {
-            containerHeightRef.current = layoutEvent.nativeEvent.layout.height;
-          },
-          onScrollEvent: handleScroll,
-          onContentSizeChange: (_width: number, height: number) => {
-            contentHeightRef.current = height;
-          },
-          onScrollBeginDrag: handleUserScroll,
-          onMomentumScrollEnd: handleMomentumScrollEnd,
-          ...(userScrolled &&
-          chatStatus === ChatStatus.Running &&
-          contentHeightRef.current > containerHeightRef.current
-            ? {
-                maintainVisibleContentPosition: {
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: 0,
-                },
-              }
-            : {}),
-        }}
-        scrollToBottom={true}
-        scrollToBottomComponent={CustomScrollToBottomComponent}
-        scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
-        /** 自定义输入框外层容器：控制背景色、边距等样式 */
-        renderInputToolbar={(props) => (
-          <InputToolbar
-            {...props}
-            containerStyle={styles.inputToolbarContainer}
-            primaryStyle={styles.inputToolbarPrimary}
-          />
-        )}
-        /** 输入框原生属性：键盘回车发送、字体样式、输入变化监听 */
-        textInputProps={{
-          ...styles.textInputStyle,
-          ...{
-            fontWeight: 'normal',
-            color: colors.text,
-            smartInsertDelete: false,
-            spellCheck: false,
-            onSubmitEditing: () => {
-              if (
-                inputTextRef.current.length > 0 &&
-                chatStatusRef.current !== ChatStatus.Running
-              ) {
-                const msg: ChatMessage = {
-                  text: inputTextRef.current,
-                  user: { _id: 1 },
-                  createdAt: new Date(),
-                  _id: uuid.v4(),
-                };
-                onSend([msg]);
-                inputTextRef.current = '';
-                setHasInputText(false);
-                textInputViewRef.current?.clear();
-                setTimeout(() => {
-                  textInputViewRef.current?.clear();
-                  textInputViewRef.current?.focus();
-                }, 50);
-              } else {
-                setTimeout(() => {
-                  textInputViewRef.current?.focus();
-                }, 50);
-              }
+            return (
+              <CustomMessageComponent
+                {...props}
+                chatStatus={chatStatus}
+                isLastAIMessage={isLastAIMessage}
+                onReasoningToggle={handleReasoningToggle}
+                messageIndex={messageIndex}
+                flatListRef={flatListRef}
+              />
+            );
+          }}
+          /** 消息列表配置：滚动监听、自动滚动控制、流式输出时保持消息位置不跳动 */
+          listViewProps={{
+            contentContainerStyle: styles.contentContainer,
+            contentInset: { top: 2 },
+            onLayout: (layoutEvent: LayoutChangeEvent) => {
+              containerHeightRef.current =
+                layoutEvent.nativeEvent.layout.height;
             },
-          },
+            onScrollEvent: handleScroll,
+            onContentSizeChange: (_width: number, height: number) => {
+              contentHeightRef.current = height;
+            },
+            onScrollBeginDrag: handleUserScroll,
+            onMomentumScrollEnd: handleMomentumScrollEnd,
+            ...(userScrolled &&
+            chatStatus === ChatStatus.Running &&
+            contentHeightRef.current > containerHeightRef.current
+              ? {
+                  maintainVisibleContentPosition: {
+                    minIndexForVisible: 0,
+                    autoscrollToTopThreshold: 0,
+                  },
+                }
+              : {}),
+          }}
+          scrollToBottom={true}
+          scrollToBottomComponent={CustomScrollToBottomComponent}
+          scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
+        />
+      </View>
+      {/* FIB 容器：paddingBottom 随键盘高度变化，iOS 手动避让，Android 由 adjustResize 处理 */}
+      <View
+        style={{
+          paddingBottom:
+            Platform.OS === 'ios'
+              ? Math.max(keyboardHeight, insets.bottom)
+              : insets.bottom,
         }}
-        maxComposerHeight={200}
-        onInputTextChanged={(text) => {
-          inputTextRef.current = text;
-          if (!hasInputText && text.length > 0) {
-            setHasInputText(true);
-          }
-          if (hasInputText && text.length === 0) {
-            setHasInputText(false);
-          }
-        }}
-      />
-    </SafeAreaView>
+      >
+        <FloatingInputBar
+          textInputRef={textInputViewRef}
+          onSend={onSend}
+          selectedFiles={selectedFiles}
+          chatStatus={chatStatus}
+          onStopPress={handleStopPress}
+          onFileSelected={handleNewFileSelected}
+          onFileUpdated={handleFileUpdated}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -864,36 +845,20 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    /** GiftedChat 外层容器 */
+    giftedChatContainer: {
+      flex: 1,
+    },
+    /** renderChatFooter 底部间距 */
+    chatFooterSpacer: {
+      height: 8,
+    },
     /** 消息列表的内容容器，flexGrow + justifyContent 保证消息少时内容在底部 */
     contentContainer: {
       paddingTop: 15,
       paddingBottom: 15,
       flexGrow: 1,
       justifyContent: 'flex-end',
-    },
-    /** 原生 TextInput 的基础样式 */
-    textInputStyle: {
-      marginLeft: 10,
-      lineHeight: 22,
-    },
-    /** GiftedChat Composer 内部文本输入框样式 */
-    composerTextInput: {
-      backgroundColor: 'transparent',
-      color: colors.text,
-    },
-    /** 输入框区域的外层容器，控制背景色和上下内边距 */
-    inputToolbarContainer: {
-      backgroundColor: colors.background,
-      borderTopWidth: 0,
-      paddingHorizontal: 10,
-      paddingTop: 0,
-      paddingBottom: Platform.OS === 'android' ? 8 : 2,
-    },
-    /** 输入框主区域（圆角背景框） */
-    inputToolbarPrimary: {
-      backgroundColor: colors.chatInputBackground,
-      borderRadius: 12,
-      paddingHorizontal: 0,
     },
   });
 

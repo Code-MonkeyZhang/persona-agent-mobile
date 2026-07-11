@@ -1,6 +1,12 @@
-import { Actions } from 'react-native-gifted-chat';
-import { Image, Platform, StyleSheet, Text } from 'react-native';
-import React, { useCallback } from 'react';
+import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
+import React, { useCallback, useMemo } from 'react';
 import {
   ImagePickerResponse,
   launchCamera,
@@ -22,45 +28,19 @@ import {
 import { logger } from '../../lib/logger';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
-import { useTheme } from '../../theme/index.ts';
-import { isAndroid } from '../../utils/PlatformUtils.ts';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
 
-interface CustomRenderActionsProps {
+interface CustomAddFileComponentProps {
   onFileSelected: (files: FileInfo[]) => void;
-  mode?: 'default' | 'list';
 }
 
-const DefaultIcon = () => {
-  const { isDark } = useTheme();
-  return (
-    <Image
-      style={styles.imageButton}
-      resizeMode="contain"
-      source={
-        isDark
-          ? require('../../assets/add_dark.png')
-          : require('../../assets/add.png')
-      }
-    />
-  );
-};
-
-const ListIcon = ({ textColor }: { textColor: string }) => (
-  <Text style={[styles.addIcon, { color: textColor }]}>+</Text>
-);
-
-export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
+export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
   onFileSelected,
-  mode = 'default',
 }) => {
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const ThemedListIcon = React.useCallback(
-    () => <ListIcon textColor={colors.textSecondary} />,
-    [colors.textSecondary]
-  );
-
-  // Process files from DocumentPickerResponse array
+  /** 处理 DocumentPicker 返回的文件：校验格式、压缩、保存 */
   const processFiles = useCallback(
     async (pickResults: DocumentPickerResponse[]): Promise<FileInfo[]> => {
       const files: FileInfo[] = [];
@@ -140,6 +120,41 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
     []
   );
 
+  /** 拍照选文件 */
+  const handleCamera = () => {
+    launchCamera({
+      saveToPhotos: false,
+      mediaType: isVideoSupported() ? 'mixed' : 'photo',
+      videoQuality: 'high',
+      durationLimit: 30,
+      includeBase64: false,
+      includeExtra: true,
+      presentationStyle: 'fullScreen',
+    }).then(async (res) => {
+      const files = await getFiles(res);
+      if (files.length > 0) {
+        onFileSelected(files);
+      }
+    });
+  };
+
+  /** 从相册选文件 */
+  const handlePhotos = () => {
+    launchImageLibrary({
+      selectionLimit: 0,
+      mediaType: isVideoSupported() ? 'mixed' : 'photo',
+      includeBase64: false,
+      includeExtra: true,
+      assetRepresentationMode: 'current',
+    }).then(async (res) => {
+      const files = await getFiles(res);
+      if (files.length > 0) {
+        onFileSelected(files);
+      }
+    });
+  };
+
+  /** 从文件系统选文件 */
   const handleChooseFiles = async () => {
     try {
       const pickResults = await pick({
@@ -155,53 +170,50 @@ export const CustomAddFileComponent: React.FC<CustomRenderActionsProps> = ({
     }
   };
 
+  /**
+   * 弹出文件选择菜单：拍照 / 相册 / 文件。
+   * iOS 用 ActionSheetIOS 底部弹出，Android 用 Alert 对话框。
+   */
+  const handlePress = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [
+            'Take Camera',
+            'Choose From Photos',
+            'Choose From Files',
+            'Cancel',
+          ],
+          cancelButtonIndex: 3,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) {
+            handleCamera();
+          } else if (buttonIndex === 1) {
+            handlePhotos();
+          } else if (buttonIndex === 2) {
+            handleChooseFiles();
+          }
+        }
+      );
+    } else {
+      Alert.alert('', '', [
+        { text: 'Take Camera', onPress: handleCamera },
+        { text: 'Choose From Photos', onPress: handlePhotos },
+        { text: 'Choose From Files', onPress: handleChooseFiles },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
   return (
-    <Actions
-      containerStyle={{
-        ...styles.containerStyle,
-        ...(mode === 'list' && {
-          width: '100%',
-          height: '100%',
-          marginRight: 10,
-        }),
-      }}
-      icon={mode === 'default' ? DefaultIcon : ThemedListIcon}
-      options={{
-        'Take Camera': () => {
-          launchCamera({
-            saveToPhotos: false,
-            mediaType: isVideoSupported() ? 'mixed' : 'photo',
-            videoQuality: 'high',
-            durationLimit: 30,
-            includeBase64: false,
-            includeExtra: true,
-            presentationStyle: 'fullScreen',
-          }).then(async (res) => {
-            const files = await getFiles(res);
-            if (files.length > 0) {
-              onFileSelected(files);
-            }
-          });
-        },
-        'Choose From Photos': () => {
-          launchImageLibrary({
-            selectionLimit: 0,
-            mediaType: isVideoSupported() ? 'mixed' : 'photo',
-            includeBase64: false,
-            includeExtra: true,
-            assetRepresentationMode: 'current',
-          }).then(async (res) => {
-            const files = await getFiles(res);
-            if (files.length > 0) {
-              onFileSelected(files);
-            }
-          });
-        },
-        'Choose From Files': handleChooseFiles,
-        Cancel: () => {},
-      }}
-      optionTintColor={isAndroid ? colors.background : colors.text}
-    />
+    <TouchableOpacity
+      style={styles.addButton}
+      onPress={handlePress}
+      activeOpacity={0.7}
+    >
+      <Text style={styles.addIcon}>+</Text>
+    </TouchableOpacity>
   );
 };
 
@@ -335,31 +347,19 @@ const getFiles = async (res: ImagePickerResponse) => {
   return files;
 };
 
-const styles = StyleSheet.create({
-  containerStyle: {
-    height: 44,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 0,
-    marginRight: 0,
-    marginLeft: 10,
-  },
-  listContainerStyle: {
-    height: 44,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 0,
-    marginRight: 6,
-    marginLeft: 10,
-  },
-  imageButton: {
-    width: 26,
-    height: 26,
-  },
-  addIcon: {
-    fontSize: 24,
-    color: '#666',
-  },
-});
+const createStyles = (colors: ColorScheme) =>
+  StyleSheet.create({
+    addButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addIcon: {
+      fontSize: 20,
+      color: colors.textSecondary,
+    },
+  });

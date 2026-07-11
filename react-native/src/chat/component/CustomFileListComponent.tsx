@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { FileInfo, FileType } from '../../types/Chat.ts';
-import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import ImageView from 'react-native-image-viewing';
 import { ImageSource } from 'react-native-image-viewing/dist/@types/index';
 import Share from 'react-native-share';
@@ -351,11 +350,6 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
     >
       {files.map((file, fileIndex) => renderFileItem(file, fileIndex))}
 
-      {mode === DisplayMode.Edit && (
-        <TouchableOpacity key="add-button" style={styles.addButton}>
-          <CustomAddFileComponent onFileSelected={onFileUpdated!} mode="list" />
-        </TouchableOpacity>
-      )}
       {/* 全屏图片预览组件 */}
       <ImageView
         images={imageUrls}
@@ -466,15 +460,6 @@ const getStyles = (colors: ColorScheme) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 2,
-    },
-    /** 添加文件按钮（编辑模式下显示在文件列表末尾） */
-    addButton: {
-      width: 72,
-      height: 72,
-      backgroundColor: colors.addButtonBackground,
-      borderRadius: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     /** 压缩进度条的绝对定位容器 */
     progressContainer: {
