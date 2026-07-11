@@ -1,7 +1,6 @@
 /**
  * @format
  */
-import './global.css';
 import 'react-native-polyfill-globals/auto';
 import { AppRegistry } from 'react-native';
 import App from './src/App';
