@@ -16,7 +16,6 @@ import {
   SafeAreaView,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import {
@@ -52,7 +51,6 @@ import type { AgentInfo } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
 import { useAppContext } from '../history/AppProvider.tsx';
-import { UserRound } from 'lucide-react-native';
 import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx';
 import CustomSendComponent from './component/CustomSendComponent.tsx';
 import { trigger } from './util/HapticUtils.ts';
@@ -91,7 +89,7 @@ const textPlaceholder = '...';
 /** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
 
-/** 聊天页面的导航类型，支持跳转到 Stack 下的所有页面（包括 Companion 等全屏页面） */
+/** 聊天页面的导航类型，支持跳转到 Stack 下的所有页面 */
 type ChatScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
   'Bedrock'
@@ -343,23 +341,6 @@ function ChatScreen(): React.JSX.Element {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* 陪伴入口按钮：跳转到 Agent 形象页，传递 agentId 和当前会话 ID */}
-          <TouchableOpacity
-            onPress={() => {
-              if (!currentAgentId) {
-                return;
-              }
-              const currentAgent = agents.find((a) => a.id === currentAgentId);
-              navigation.navigate('Companion', {
-                agentId: currentAgentId,
-                sessionId: sessionIdRef.current || undefined,
-                voiceId: currentAgent?.voiceId,
-              });
-            }}
-            style={{ paddingVertical: 10, paddingHorizontal: 6 }}
-          >
-            <UserRound size={22} color={colors.text} />
-          </TouchableOpacity>
           <CustomHeaderRightButton
             onPress={() => {
               textInputViewRef?.current?.clear();
@@ -385,15 +366,7 @@ function ChatScreen(): React.JSX.Element {
     navigation.setOptions(
       headerOptions as Parameters<typeof navigation.setOptions>[0]
     );
-  }, [
-    navigation,
-    isDark,
-    agents,
-    currentAgentId,
-    handleSelectAgent,
-    // colors.text：陪伴按钮图标颜色依赖主题，主题变化时需重新设置导航栏
-    colors.text,
-  ]);
+  }, [navigation, isDark, agents, currentAgentId, handleSelectAgent]);
 
   // ==================== 会话切换 & 消息加载 ====================
   /**

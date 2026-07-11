@@ -25,5 +25,4 @@ export type RouteParamList = {
   };
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
-  Companion: { agentId: string; sessionId?: string; voiceId?: string };
 };

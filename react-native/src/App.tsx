@@ -12,7 +12,6 @@ import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
-import CompanionScreen from './companion/CompanionScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -78,7 +77,6 @@ const DrawerNavigator = () => {
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
  * - AgentDetail: Agent 详情页
- * - Companion: Agent 陪伴页面
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -100,12 +98,6 @@ const AppNavigator = () => {
           headerBackTitle: 'Back',
           animation: 'default',
         }}
-      />
-      {/* 陪伴页面：隐藏系统导航栏实现全屏沉浸式体验 */}
-      <Stack.Screen
-        name="Companion"
-        component={CompanionScreen}
-        options={{ headerShown: false, animation: 'default' }}
       />
     </Stack.Navigator>
   );

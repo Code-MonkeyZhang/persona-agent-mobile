@@ -18,10 +18,8 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, Mic, MicOff, Send } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
-import type { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 import {
@@ -32,7 +30,10 @@ import {
 } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 
-type Props = NativeStackScreenProps<RouteParamList, 'Companion'>;
+type Props = {
+  navigation: { goBack: () => void };
+  route: { params: { agentId: string; sessionId?: string } };
+};
 
 /**
  * 底部输入栏子组件。
