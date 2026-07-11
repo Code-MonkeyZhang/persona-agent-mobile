@@ -12,17 +12,22 @@ import {
  */
 interface HeaderRightButtonProps {
   onPress: (event: GestureResponderEvent) => void;
-  imageSource: ImageSourcePropType;
+  /** 图片资源（与 children 二选一） */
+  imageSource?: ImageSourcePropType;
+  /** 自定义图标节点（与 imageSource 二选一） */
+  children?: React.ReactNode;
 }
 
 /**
- * Custom header right button component
- * Simplified version without voice chat button
+ * 通用 Header 右侧按钮：支持图片资源或自定义图标节点。
  */
 export const CustomHeaderRightButton: React.FC<HeaderRightButtonProps> =
-  React.memo(({ onPress, imageSource }) => (
+  React.memo(({ onPress, imageSource, children }) => (
     <TouchableOpacity onPress={onPress} style={styles.touchStyle}>
-      <Image source={imageSource} style={styles.editImage} />
+      {children ??
+        (imageSource && (
+          <Image source={imageSource} style={styles.editImage} />
+        ))}
     </TouchableOpacity>
   ));
 

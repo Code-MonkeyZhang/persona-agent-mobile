@@ -45,6 +45,7 @@ import {
 import {
   ServerClient,
   fetchAgents,
+  fetchPoses,
   fetchSessionMessages,
   convertToChatMessages,
 } from '../api/server-api.ts';
@@ -56,6 +57,7 @@ import { CustomHeaderRightButton } from './component/CustomHeaderRightButton.tsx
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
+import CompanionContent from './component/CompanionContent.tsx';
 import {
   checkFileNumberLimit,
   getFileTypeSummary,
@@ -63,6 +65,14 @@ import {
 } from './util/FileUtils.ts';
 import { showInfo } from './util/ToastUtils.ts';
 import { HeaderOptions } from '@react-navigation/elements';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { UserRound } from 'lucide-react-native';
+import { useVoiceStore } from '../stores/voiceStore';
 
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
@@ -85,6 +95,11 @@ const createBotMessage = () => {
 
 /** AI 回复加载中的占位文本 */
 const textPlaceholder = '...';
+
+/** Header 右侧按钮行容器样式 */
+const headerRightContainerStyle = StyleSheet.create({
+  root: { flexDirection: 'row', alignItems: 'center' },
+});
 
 /** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
@@ -136,6 +151,23 @@ function ChatScreen(): React.JSX.Element {
   const serverClientRef = useRef<ServerClient | null>(null);
   /** 服务器地址缓存，从 MMKV 加载 */
   const serverAddressRef = useRef(getServerAddress());
+
+  // ==================== 陪伴模式状态 ====================
+  /** 陪伴面板是否展开（滑动容器右侧 pane） */
+  const [companionOpen, setCompanionOpen] = useState(false);
+  /** Agent 是否拥有陪伴资源：null=加载中, true=有, false=无 */
+  const [hasAssets, setHasAssets] = useState<boolean | null>(null);
+  /** 当前展示的姿态名称，由 show_pose 指令切换 */
+  const [currentPose, setCurrentPose] = useState('default');
+  /** 背景图加载失败标记 */
+  const [bgError, setBgError] = useState(false);
+  /** 立绘图加载失败标记 */
+  const [poseError, setPoseError] = useState(false);
+
+  // ==================== voiceStore ====================
+  const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
+  const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const toggleVoice = useVoiceStore((s) => s.toggleVoice);
 
   // ==================== Ref 同步 & 副作用 ====================
   /** 每次状态变化后同步到 ref，供异步回调中读取最新值 */
@@ -327,6 +359,51 @@ function ChatScreen(): React.JSX.Element {
     [currentAgentId]
   );
 
+  // ==================== 陪伴资源加载 ====================
+  /**
+   * Agent 切换时请求 pose 列表，判断是否有陪伴资源。
+   * 结果写入 hasAssets 三态，同时重置错误标记和姿态。
+   */
+  useEffect(() => {
+    if (!currentAgentId || !serverAddressRef.current) {
+      return;
+    }
+    let cancelled = false;
+    setHasAssets(null);
+    setBgError(false);
+    setPoseError(false);
+    setCurrentPose('default');
+    logger.info(`[ChatScreen] fetchPoses agentId=${currentAgentId}`);
+    fetchPoses(currentAgentId, serverAddressRef.current)
+      .then((poses) => {
+        logger.info(`[ChatScreen] poses loaded: ${poses.length}`);
+        if (!cancelled) {
+          setHasAssets(poses.length > 0);
+        }
+      })
+      .catch(() => {
+        logger.error('[ChatScreen] fetchPoses failed');
+        if (!cancelled) {
+          setHasAssets(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAgentId]);
+
+  /** 切换陪伴面板：先收键盘再 toggle，避免动画与键盘同时变化 */
+  const handleToggleCompanion = useCallback(() => {
+    Keyboard.dismiss();
+    setCompanionOpen((prev) => !prev);
+    logger.info(`[ChatScreen] companion ${companionOpen ? 'close' : 'open'}`);
+  }, [companionOpen]);
+
+  /** 语音开关：toggleVoice 内部处理开关切换和播报停止 */
+  const handleToggleVoice = useCallback(() => {
+    toggleVoice();
+  }, [toggleVoice]);
+
   /** 根据主题和 Agent 列表更新导航栏标题和右侧按钮 */
   React.useLayoutEffect(() => {
     const headerOptions: HeaderOptions = {
@@ -340,7 +417,13 @@ function ChatScreen(): React.JSX.Element {
       ),
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={headerRightContainerStyle.root}>
+          <CustomHeaderRightButton onPress={handleToggleCompanion}>
+            <UserRound
+              size={22}
+              color={companionOpen ? colors.primary : colors.text}
+            />
+          </CustomHeaderRightButton>
           <CustomHeaderRightButton
             onPress={() => {
               textInputViewRef?.current?.clear();
@@ -366,7 +449,17 @@ function ChatScreen(): React.JSX.Element {
     navigation.setOptions(
       headerOptions as Parameters<typeof navigation.setOptions>[0]
     );
-  }, [navigation, isDark, agents, currentAgentId, handleSelectAgent]);
+  }, [
+    navigation,
+    isDark,
+    agents,
+    currentAgentId,
+    handleSelectAgent,
+    companionOpen,
+    colors.primary,
+    colors.text,
+    handleToggleCompanion,
+  ]);
 
   // ==================== 会话切换 & 消息加载 ====================
   /**
@@ -552,6 +645,19 @@ function ChatScreen(): React.JSX.Element {
     },
   });
 
+  /** 滑动容器布局样式：宽度依赖屏幕尺寸，每次 render 重新计算 */
+  const slideStyle = StyleSheet.create({
+    row: {
+      width: screenWidth * 2,
+      height: '100%',
+      flexDirection: 'row',
+    },
+    pane: {
+      width: screenWidth,
+      height: '100%',
+    },
+  });
+
   /** 将消息列表滚动到顶部（GiftedChat 是倒序的，offset=0 即最新消息） */
   const scrollToBottom = () => {
     if (flatListRef.current) {
@@ -733,86 +839,124 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== UI 渲染 ====================
+  /**
+   * 滑动容器动画：companionOpen 切换时通过 translateX 横向滑动，
+   * 0 = 显示聊天列表，-screenWidth = 显示陪伴面板。
+   */
+  const slideTranslateX = useSharedValue(0);
+  useEffect(() => {
+    slideTranslateX.value = withTiming(
+      companionOpen ? -screenDimensions.width : 0,
+      { duration: 300, easing: Easing.inOut(Easing.ease) }
+    );
+  }, [companionOpen, screenDimensions.width, slideTranslateX]);
+
+  const slideAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slideTranslateX.value }],
+  }));
+
   const styles = createStyles(colors);
 
   return (
     <View style={styles.container}>
-      <View style={styles.giftedChatContainer}>
-        <GiftedChat
-          // 消息列表的 ref，用于代码中控制滚动（如 scrollToBottom、编辑时滚动定位）
-          messageContainerRef={flatListRef}
-          // 点击非可交互区域时收起键盘
-          keyboardShouldPersistTaps="never"
-          messages={messages}
-          user={{
-            _id: 1,
-          }}
-          alignTop={false}
-          inverted={true}
-          // 禁用 GiftedChat 内部键盘处理，键盘避让由手动 paddingBottom 控制
-          isKeyboardInternallyHandled={false}
-          // 输入栏高度设为 0，让消息列表撑满整个区域
-          minInputToolbarHeight={0}
-          minComposerHeight={0}
-          /** 空聊天页面：无消息时显示的欢迎界面 */
-          renderChatEmpty={() => (
-            <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
-          )}
-          /** 底部留白：flex 布局下与 FloatingInputBar 之间的视觉间距 */
-          renderChatFooter={() => <View style={styles.chatFooterSpacer} />}
-          /** 禁用 GiftedChat 内置输入栏 */
-          renderInputToolbar={() => null}
-          /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
-          renderMessage={(props) => {
-            // Find the index of the current message in the messages array
-            const messageIndex = messages.findIndex(
-              (msg) => msg._id === props.currentMessage?._id
-            );
+      {/* 内容区：overflow hidden 裁剪滑出的 pane */}
+      <View style={styles.contentArea}>
+        <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
+          {/* Pane 1: 聊天列表 */}
+          <View style={slideStyle.pane}>
+            <GiftedChat
+              // 消息列表的 ref，用于代码中控制滚动（如 scrollToBottom、编辑时滚动定位）
+              messageContainerRef={flatListRef}
+              // 点击非可交互区域时收起键盘
+              keyboardShouldPersistTaps="never"
+              messages={messages}
+              user={{
+                _id: 1,
+              }}
+              alignTop={false}
+              inverted={true}
+              // 禁用 GiftedChat 内部键盘处理，键盘避让由手动 paddingBottom 控制
+              isKeyboardInternallyHandled={false}
+              // 输入栏高度设为 0，让消息列表撑满整个区域
+              minInputToolbarHeight={0}
+              minComposerHeight={0}
+              /** 空聊天页面：无消息时显示的欢迎界面 */
+              renderChatEmpty={() => (
+                <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
+              )}
+              /** 底部留白：flex 布局下与 FloatingInputBar 之间的视觉间距 */
+              renderChatFooter={() => <View style={styles.chatFooterSpacer} />}
+              /** 禁用 GiftedChat 内置输入栏 */
+              renderInputToolbar={() => null}
+              /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
+              renderMessage={(props) => {
+                // Find the index of the current message in the messages array
+                const messageIndex = messages.findIndex(
+                  (msg) => msg._id === props.currentMessage?._id
+                );
 
-            const isLastAIMessage =
-              props.currentMessage?._id === messages[0]?._id &&
-              props.currentMessage?.user._id !== 1;
+                const isLastAIMessage =
+                  props.currentMessage?._id === messages[0]?._id &&
+                  props.currentMessage?.user._id !== 1;
 
-            return (
-              <CustomMessageComponent
-                {...props}
-                chatStatus={chatStatus}
-                isLastAIMessage={isLastAIMessage}
-                onReasoningToggle={handleReasoningToggle}
-                messageIndex={messageIndex}
-                flatListRef={flatListRef}
-              />
-            );
-          }}
-          /** 消息列表配置：滚动监听、自动滚动控制、流式输出时保持消息位置不跳动 */
-          listViewProps={{
-            contentContainerStyle: styles.contentContainer,
-            contentInset: { top: 2 },
-            onLayout: (layoutEvent: LayoutChangeEvent) => {
-              containerHeightRef.current =
-                layoutEvent.nativeEvent.layout.height;
-            },
-            onScrollEvent: handleScroll,
-            onContentSizeChange: (_width: number, height: number) => {
-              contentHeightRef.current = height;
-            },
-            onScrollBeginDrag: handleUserScroll,
-            onMomentumScrollEnd: handleMomentumScrollEnd,
-            ...(userScrolled &&
-            chatStatus === ChatStatus.Running &&
-            contentHeightRef.current > containerHeightRef.current
-              ? {
-                  maintainVisibleContentPosition: {
-                    minIndexForVisible: 0,
-                    autoscrollToTopThreshold: 0,
-                  },
-                }
-              : {}),
-          }}
-          scrollToBottom={true}
-          scrollToBottomComponent={CustomScrollToBottomComponent}
-          scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
-        />
+                return (
+                  <CustomMessageComponent
+                    {...props}
+                    chatStatus={chatStatus}
+                    isLastAIMessage={isLastAIMessage}
+                    onReasoningToggle={handleReasoningToggle}
+                    messageIndex={messageIndex}
+                    flatListRef={flatListRef}
+                  />
+                );
+              }}
+              /** 消息列表配置：滚动监听、自动滚动控制、流式输出时保持消息位置不跳动 */
+              listViewProps={{
+                contentContainerStyle: styles.contentContainer,
+                contentInset: { top: 2 },
+                onLayout: (layoutEvent: LayoutChangeEvent) => {
+                  containerHeightRef.current =
+                    layoutEvent.nativeEvent.layout.height;
+                },
+                onScrollEvent: handleScroll,
+                onContentSizeChange: (_width: number, height: number) => {
+                  contentHeightRef.current = height;
+                },
+                onScrollBeginDrag: handleUserScroll,
+                onMomentumScrollEnd: handleMomentumScrollEnd,
+                ...(userScrolled &&
+                chatStatus === ChatStatus.Running &&
+                contentHeightRef.current > containerHeightRef.current
+                  ? {
+                      maintainVisibleContentPosition: {
+                        minIndexForVisible: 0,
+                        autoscrollToTopThreshold: 0,
+                      },
+                    }
+                  : {}),
+              }}
+              scrollToBottom={true}
+              scrollToBottomComponent={CustomScrollToBottomComponent}
+              scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
+            />
+          </View>
+          {/* Pane 2: 陪伴内容 */}
+          <View style={slideStyle.pane}>
+            <CompanionContent
+              agentId={currentAgentId}
+              serverAddr={serverAddressRef.current}
+              hasAssets={hasAssets}
+              currentPose={currentPose}
+              bgError={bgError}
+              poseError={poseError}
+              onBgError={() => setBgError(true)}
+              onPoseError={() => setPoseError(true)}
+              voiceEnabled={voiceEnabled}
+              isSpeaking={isSpeaking}
+              onToggleVoice={handleToggleVoice}
+            />
+          </View>
+        </Animated.View>
       </View>
       {/* FIB 容器：paddingBottom 随键盘高度变化，iOS 手动避让，Android 由 adjustResize 处理 */}
       <View
@@ -845,9 +989,10 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-    /** GiftedChat 外层容器 */
-    giftedChatContainer: {
+    /** 内容区：包裹滑动容器，overflow hidden 裁剪非当前 pane */
+    contentArea: {
       flex: 1,
+      overflow: 'hidden',
     },
     /** renderChatFooter 底部间距 */
     chatFooterSpacer: {
