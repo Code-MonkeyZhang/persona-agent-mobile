@@ -21,12 +21,9 @@ export const encryptStorage = initializeStorage();
 
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
-const reasoningExpandedKey = keyPrefix + 'reasoningExpandedKey';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
-
-let currentReasoningExpanded: boolean | undefined;
 
 export function saveHapticEnabled(enabled: boolean) {
   storage.set(hapticEnabledKey, enabled);
@@ -38,20 +35,6 @@ export function getHapticEnabled() {
 
 export function getTextModel(): Model {
   return { modelId: '', modelName: '' };
-}
-
-export function saveReasoningExpanded(expanded: boolean) {
-  currentReasoningExpanded = expanded;
-  storage.set(reasoningExpandedKey, expanded);
-}
-
-export function getReasoningExpanded() {
-  if (currentReasoningExpanded !== undefined) {
-    return currentReasoningExpanded;
-  } else {
-    currentReasoningExpanded = storage.getBoolean(reasoningExpandedKey) ?? true;
-    return currentReasoningExpanded;
-  }
 }
 
 /** 保存 Agent Server 地址 */

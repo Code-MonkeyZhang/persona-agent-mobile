@@ -31,7 +31,6 @@ module.exports = {
         chatInputBackground: '#f2f2f7',
         labelBackground: '#ffffff',
         messageBackground: '#f2f2f2',
-        reasoningBackground: '#f3f3f3',
         inputBorder: '#808080',
         drawerBackground: 'transparent',
         promptButtonBackground: '#E8E8E8',

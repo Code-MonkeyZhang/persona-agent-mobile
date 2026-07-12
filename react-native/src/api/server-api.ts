@@ -5,6 +5,8 @@
  */
 import uuid from 'uuid';
 import type { ChatMessage } from '../types/Chat.ts';
+import type { Thought } from '../types/Thought';
+import { stripLastTextThought } from '../chat/util/thought-utils';
 import { logger } from '../lib/logger';
 
 /** 日志标签前缀 */
@@ -14,14 +16,14 @@ const TAG = '[ServerApi]';
 const BOT_ID = 2;
 
 /** step_complete 消息中的工具调用项 */
-interface ToolCall {
+export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
 }
 
 /** step_complete 消息中的工具执行结果项 */
-interface WsToolResult {
+export interface WsToolResult {
   toolCallId: string;
   toolName: string;
   result: string;
@@ -641,23 +643,30 @@ interface SessionMeta {
 }
 
 interface Session extends SessionMeta {
-  /**
-   * 消息列表。元素类型 ServerChatMessage 是 @persona/shared Message 联合的
-   * 扁平投影——合并了 system/user/assistant 三种 role，丢弃了 assistant 消息的
-   * tool_calls 和 user 消息的 ContentBlock[]。移动端历史消息只用 role/content/thinking。
-   */
+  /** 消息列表，元素为 ServerChatMessage 扁平投影 */
   messages: ServerChatMessage[];
 }
 
+/** 历史消息中持久化的工具调用，结构对齐 @persona/shared 的 ToolCall */
+interface ServerToolCall {
+  id: string;
+  type: string;
+  function: {
+    name: string;
+    arguments: Record<string, unknown>;
+  };
+  toolResult?: {
+    content: string;
+    isError: boolean;
+  };
+}
+
 interface ServerChatMessage {
-  /**
-   * @persona/shared Message 联合的简化投影。只保留移动端需要的三个字段。
-   * 丢弃：assistant 的 tool_calls、user 的 ContentBlock[]（多模态预留）。
-   * 若未来需要在历史消息里展示工具调用，需改用 shared 的完整 Message 类型。
-   */
+  /** @persona/shared Message 联合的简化投影，保留 role/content/thinking/tool_calls */
   role: 'user' | 'assistant' | 'system';
   content?: string;
   thinking?: string;
+  tool_calls?: ServerToolCall[];
 }
 
 /**
@@ -707,20 +716,79 @@ export async function deleteSession(
 /**
  * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 ChatMessage[]。
  *
- * 处理逻辑：过滤 system 消息 → 为每条消息生成 uuid → 反转为倒序（GiftedChat 要求）。
- * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条消息间隔 1 秒近似处理。
+ * 合并连续的 assistant 消息为一个 ChatMessage，从 thinking/tool_calls/content 重建
+ * 结构化 Thought[] 时间线，再经 stripLastTextThought 去重。最终反转为倒序。
+ * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条间隔 1 秒近似处理。
  */
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
   sessionCreatedAt: number
 ): ChatMessage[] {
   const result: ChatMessage[] = [];
-  for (const msg of serverMessages) {
+  let pendingThoughts: Thought[] = [];
+  let pendingContent = '';
+  let pendingStartIndex = -1;
+
+  /** 将缓冲的 assistant 消息合并为一条 ChatMessage 产出 */
+  const flushPending = () => {
+    if (pendingStartIndex === -1) {
+      return;
+    }
+    const finalThoughts = stripLastTextThought(pendingThoughts);
+    result.push({
+      _id: uuid.v4(),
+      text: pendingContent,
+      steps: finalThoughts.length > 0 ? finalThoughts : undefined,
+      createdAt: new Date(sessionCreatedAt + result.length * 1000),
+      user: { _id: BOT_ID, name: 'AI' },
+    });
+    pendingThoughts = [];
+    pendingContent = '';
+    pendingStartIndex = -1;
+  };
+
+  for (let i = 0; i < serverMessages.length; i++) {
+    const msg = serverMessages[i];
+
     if (msg.role === 'system') {
       continue;
     }
 
-    if (msg.role === 'user') {
+    if (msg.role === 'assistant') {
+      if (pendingStartIndex === -1) {
+        pendingStartIndex = i;
+      }
+
+      if (msg.thinking) {
+        pendingThoughts.push({
+          id: `thought-${i}-thinking`,
+          type: 'thinking',
+          content: msg.thinking,
+        });
+      }
+
+      msg.tool_calls?.forEach((tc, tcIndex) => {
+        pendingThoughts.push({
+          id: `thought-${i}-tool-${tcIndex}`,
+          type: 'tool_use',
+          toolName: tc.function.name,
+          toolInput: tc.function.arguments,
+          toolResult: tc.toolResult
+            ? { output: tc.toolResult.content, isError: tc.toolResult.isError }
+            : undefined,
+        });
+      });
+
+      if (msg.content) {
+        pendingContent = msg.content;
+        pendingThoughts.push({
+          id: `thought-${i}-text`,
+          type: 'text',
+          content: msg.content,
+        });
+      }
+    } else {
+      flushPending();
       const text = typeof msg.content === 'string' ? msg.content : '';
       result.push({
         _id: uuid.v4(),
@@ -728,16 +796,12 @@ export function convertToChatMessages(
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: 1 },
       });
-    } else if (msg.role === 'assistant') {
-      const text = msg.content || '';
-      result.push({
-        _id: uuid.v4(),
-        text,
-        reasoning: msg.thinking,
-        createdAt: new Date(sessionCreatedAt + result.length * 1000),
-        user: { _id: BOT_ID, name: 'AI' },
-      });
     }
   }
+  flushPending();
+
+  logger.info(
+    `${TAG} convertToChatMessages → ${result.length} messages from ${serverMessages.length} raw`
+  );
   return result.reverse();
 }

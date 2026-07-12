@@ -25,7 +25,6 @@ export interface ColorScheme {
   chatInputBackground: string;
   labelBackground: string;
   messageBackground: string;
-  reasoningBackground: string;
   inputBorder: string;
   drawerBackground: string;
   promptButtonBackground: string;
@@ -81,7 +80,6 @@ export const lightColors: ColorScheme = {
   chatInputBackground: '#f2f2f7',
   labelBackground: '#ffffff',
   messageBackground: '#f2f2f2',
-  reasoningBackground: '#f3f3f3',
   inputBorder: '#808080',
   drawerBackground: 'transparent',
   promptButtonBackground: '#E8E8E8',
@@ -137,7 +135,6 @@ export const darkColors: ColorScheme = {
   chatInputBackground: '#1c1c1e',
   labelBackground: '#000000',
   messageBackground: '#2a2a2a',
-  reasoningBackground: '#2a2a2a',
   inputBorder: '#555555',
   drawerBackground: '#000000',
   promptButtonBackground: '#333333',

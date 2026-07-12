@@ -1,5 +1,6 @@
 import { IMessage } from 'react-native-gifted-chat';
 import { User } from 'react-native-gifted-chat/lib/Models';
+import type { Thought } from './Thought';
 
 export interface Citation {
   number: number; // 引用编号 [1], [2], [3]...
@@ -75,7 +76,7 @@ export type Usage = {
 
 export interface ChatMessage extends IMessage {
   usage?: Usage;
-  reasoning?: string;
+  steps?: Thought[];
   user: ChatUser;
   metrics?: Metrics;
   citations?: Citation[];

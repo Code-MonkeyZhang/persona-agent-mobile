@@ -66,6 +66,7 @@ import {
   isAllFileReady,
 } from './util/FileUtils.ts';
 import { showInfo } from './util/ToastUtils.ts';
+import { cycleToThoughts, stripLastTextThought } from './util/thought-utils';
 import Toast from 'react-native-toast-message';
 import { HeaderOptions } from '@react-navigation/elements';
 import Animated, {
@@ -83,7 +84,7 @@ const BOT_ID = 2;
 
 /**
  * 创建一条 AI 占位消息，在流式回复开始前插入消息列表。
- * @returns 占位的 ChatMessage，文本内容为 "..."
+ * @returns 占位的 ChatMessage，文本内容为 "..."，steps 为空数组
  */
 const createBotMessage = () => {
   return {
@@ -94,6 +95,7 @@ const createBotMessage = () => {
       _id: BOT_ID,
       name: 'AI',
     },
+    steps: [] as ChatMessage['steps'],
   };
 };
 
@@ -303,11 +305,17 @@ function ChatScreen(): React.JSX.Element {
               if (prevMessages.length === 0) {
                 return prevMessages;
               }
+              const newThoughts = cycleToThoughts(
+                content,
+                thinking,
+                toolCalls,
+                toolResults
+              );
               const newMessages = [...prevMessages];
               newMessages[0] = {
                 ...prevMessages[0],
                 text: content || prevMessages[0].text,
-                reasoning: thinking || prevMessages[0].reasoning,
+                steps: [...(prevMessages[0].steps || []), ...newThoughts],
               };
               return newMessages;
             });
@@ -343,6 +351,21 @@ function ChatScreen(): React.JSX.Element {
 
           client.onComplete = () => {
             trigger(HapticFeedbackTypes.notificationSuccess);
+            setMessages((prevMessages) => {
+              if (prevMessages.length === 0) {
+                return prevMessages;
+              }
+              const steps = prevMessages[0].steps;
+              if (!steps || steps.length === 0) {
+                return prevMessages;
+              }
+              const newMessages = [...prevMessages];
+              newMessages[0] = {
+                ...prevMessages[0],
+                steps: stripLastTextThought(steps),
+              };
+              return newMessages;
+            });
             setChatStatus(ChatStatus.Complete);
           };
 
@@ -747,18 +770,13 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== 滚动控制 ====================
-  const { width: screenWidth, height: screenHeight } = screenDimensions;
+  const { width: screenWidth } = screenDimensions;
 
   const scrollStyle = StyleSheet.create({
     scrollToBottomContainerStyle: {
       width: 30,
       height: 30,
-      left:
-        Platform.OS === 'ios' &&
-        screenHeight < screenWidth &&
-        screenHeight < 500
-          ? screenWidth / 2 - 75 // iphone landscape
-          : screenWidth / 2 - 15,
+      right: 16,
       bottom: fibWrapperHeight + 10,
     },
   });
