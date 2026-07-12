@@ -93,7 +93,7 @@ const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface,
     },
     container: {
       flex: 1,
@@ -115,6 +115,8 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 16,
       padding: 16,
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     cardTitle: {
       fontSize: 15,
