@@ -1,7 +1,8 @@
 /**
  * @file CustomDrawerContent.tsx
- * @description 侧边栏（Drawer）内容组件，显示按日期分组的会话历史列表，
- *              支持点击切换会话、长按删除会话、底部跳转设置页。
+ * @description 侧边栏（Drawer）内容组件，五段式垂直布局：
+ *   Agent 卡片 → 常驻聊天入口 → 导航按钮(工具/技能) → 会话列表 → 底部(Server/Settings)。
+ *   会话列表支持按日期分组、点击切换、长按删除。常驻聊天会话(chat-*)不显示在列表中。
  */
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -22,19 +23,27 @@ import { Chat } from '../types/Chat.ts';
 import { logger } from '../lib/logger';
 import {
   type AgentInfo,
+  chatSessionIdFor,
   deleteSession,
   fetchAgentDetail,
   fetchSessions,
   getAgentAvatarUrl,
+  isChatSession,
 } from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import Dialog from 'react-native-dialog';
 import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
-import { groupMessagesByDate } from './HistoryGroupUtil.ts';
 import { DrawerActions } from '@react-navigation/native';
-import { User } from 'lucide-react-native';
+import {
+  MessageCircle,
+  MessagesSquare,
+  MonitorSmartphone,
+  Sparkles,
+  User,
+  Wrench,
+} from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
 /**
@@ -46,16 +55,11 @@ import { useTheme, ColorScheme } from '../theme/index.ts';
  * - descriptors: 每个页面的配置信息（页面标题、样式选项等）
  */
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
-  // 从 props 中解构出 navigation，用于页面跳转（如 navigation.navigate('Settings')）
   navigation,
 }) => {
   const { colors, isDark } = useTheme();
   /** 按日期分组后的会话列表（含虚拟标题行），直接传给 FlatList 渲染 */
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
-  /** groupChatHistory 的 ref 副本，供异步回调中读取 */
-  const groupChatHistoryRef = useRef(groupChatHistory);
-  /** 未分组的原始会话列表缓存 */
-  const chatHistoryRef = useRef<Chat[]>([]);
   /** 是否显示删除确认弹窗 */
   const [showDialog, setShowDialog] = useState<boolean>(false);
   /** 待删除的会话 ID，长按时暂存 */
@@ -69,11 +73,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const [agentAvatarError, setAgentAvatarError] = useState(false);
   const { event, sendEvent } = useAppContext();
-
-  /** 同步 groupChatHistory 到 ref */
-  useEffect(() => {
-    groupChatHistoryRef.current = groupChatHistory;
-  }, [groupChatHistory]);
 
   /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、标题变更、Agent 切换 */
   useEffect(() => {
@@ -115,7 +114,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
   /**
    * 从服务器拉取会话列表并更新 UI。
-   * 会话已按 updatedAt 降序排列，直接映射为 Chat[] 即可。
+   * 常驻聊天会话(chat-*)不显示在列表中，通过顶部聊天卡片入口访问。
    */
   const handleUpdateHistory = async () => {
     const address = getServerAddress();
@@ -125,15 +124,14 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     }
     try {
       const sessions = await fetchSessions(address, agentId);
-      const chatList: Chat[] = sessions.map((s) => ({
+      const regularSessions = sessions.filter((s) => !isChatSession(s.id));
+      const chatList: Chat[] = regularSessions.map((s) => ({
         id: s.id,
         title: s.title,
         updatedAt: s.updatedAt,
         createdAt: s.createdAt,
       }));
-      chatHistoryRef.current = chatList;
-      const flatListData = groupMessagesByDate(chatList);
-      setGroupChatHistory(flatListData);
+      setGroupChatHistory(chatList);
     } catch (e) {
       logger.error(`[Drawer] fetchSessions failed: ${e}`);
     }
@@ -143,7 +141,9 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const loadAgentInfo = async () => {
     const address = getServerAddress();
     const agentId = getServerAgentId();
-    if (!address || !agentId) return;
+    if (!address || !agentId) {
+      return;
+    }
     try {
       const detail = await fetchAgentDetail(address, agentId);
       setAgentInfo(detail);
@@ -159,7 +159,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const handleDelete = () => {
     const targetId = deleteIdRef.current;
 
-    // 乐观更新 UI
     setGroupChatHistory((prev) => prev.filter((chat) => chat.id !== targetId));
     sendEvent('deleteChat', { id: targetId });
 
@@ -167,7 +166,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     const agentId = getServerAgentId();
     if (address && agentId) {
       deleteSession(address, agentId, targetId).catch(() => {
-        // 失败回滚：重新拉取完整列表
         logger.warn('[Drawer] deleteSession failed, reloading');
         handleUpdateHistory();
       });
@@ -177,20 +175,44 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     deleteIdRef.current = '';
   };
 
+  /** 导航到常驻聊天会话并关闭侧边栏 */
+  const navigateToChatSession = () => {
+    const agentId = getServerAgentId();
+    if (!agentId) {
+      return;
+    }
+    const chatSessionId = chatSessionIdFor(agentId);
+    logger.info(`[Drawer] open chat session: ${chatSessionId}`);
+    navigation.navigate('Bedrock', {
+      sessionId: chatSessionId,
+      tapIndex: tapIndexRef.current,
+    });
+    tapIndexRef.current += 1;
+    navigation.dispatch(DrawerActions.closeDrawer());
+  };
+
+  /** 导航到 Stack 页面，侧边栏保持开启状态 */
+  const navigateToStackScreen = (
+    route: 'Tools' | 'Skills' | 'Server' | 'Settings'
+  ) => {
+    navigation.navigate(route);
+  };
+
   const styles = createStyles(colors);
 
   return (
-    <SafeAreaView style={[styles.safeArea]}>
-      {/* 当前 Agent 信息卡片，点击进入详情页 */}
+    <SafeAreaView style={styles.safeArea}>
+      {/* === 1. Agent 信息卡片，点击进入详情页 === */}
       {agentInfo && (
         <TouchableOpacity
           style={styles.agentCard}
           activeOpacity={0.7}
           onPress={() => {
             const currentAgentId = getServerAgentId();
-            if (!currentAgentId) return;
+            if (!currentAgentId) {
+              return;
+            }
             navigation.navigate('AgentDetail', { agentId: currentAgentId });
-            navigation.dispatch(DrawerActions.closeDrawer());
           }}
         >
           {(() => {
@@ -203,9 +225,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
                 onError={() => setAgentAvatarError(true)}
               />
             ) : (
-              <View
-                style={[styles.agentAvatar, { backgroundColor: '#E5E7EB' }]}
-              >
+              <View style={styles.agentAvatarFallback}>
                 <User size={22} color="#9CA3AF" />
               </View>
             );
@@ -223,68 +243,111 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           <Text style={styles.agentArrow}>›</Text>
         </TouchableOpacity>
       )}
+
+      <View style={styles.divider} />
+
+      {/* === 2. 常驻聊天入口 === */}
+      <TouchableOpacity
+        style={styles.chatCard}
+        activeOpacity={0.7}
+        onPress={navigateToChatSession}
+      >
+        <View style={styles.chatIconWrapper}>
+          <MessageCircle size={20} color={colors.text} />
+        </View>
+        <Text style={styles.chatCardText}>Chat</Text>
+      </TouchableOpacity>
+
+      <View style={styles.divider} />
+
+      {/* === 3. 导航按钮区：工具 / 技能 === */}
+      <View style={styles.navSection}>
+        <TouchableOpacity
+          style={styles.navButton}
+          activeOpacity={0.7}
+          onPress={() => navigateToStackScreen('Tools')}
+        >
+          <Wrench size={20} color={colors.textSecondary} />
+          <Text style={styles.navButtonText}>Tools</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navButton}
+          activeOpacity={0.7}
+          onPress={() => navigateToStackScreen('Skills')}
+        >
+          <Sparkles size={20} color={colors.textSecondary} />
+          <Text style={styles.navButtonText}>Skills</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* === 4. 会话列表（可滚动） === */}
+      <View style={styles.sessionsHeader}>
+        <MessagesSquare size={20} color={colors.textSecondary} />
+        <Text style={styles.sessionsHeaderText}>Sessions</Text>
+      </View>
       <FlatList
         data={groupChatHistory}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
-          // id 以 '-' 开头的是虚拟标题行（如 "Today"、"Yesterday"）
-          if (item.id.startsWith('-')) {
-            return (
-              <View style={styles.sectionContainer}>
-                <View style={styles.sectionDivider} />
-                <Text style={styles.sectionText}>{item.title}</Text>
-              </View>
-            );
-          } else {
-            // 正常会话行：点击跳转聊天页，长按弹出删除确认
-            const isSelected = selectedId === item.id;
-            return (
-              <TouchableOpacity
-                activeOpacity={1}
-                onPress={() => {
-                  setSelectedId(item.id);
-                  setTimeout(() => {
-                    navigation.navigate('Bedrock', {
-                      sessionId: item.id,
-                      tapIndex: tapIndexRef.current,
-                    });
-                    tapIndexRef.current += 1;
-                  }, 0);
-                }}
-                onLongPress={(gestureEvent) => {
-                  trigger(HapticFeedbackTypes.notificationWarning);
-                  gestureEvent.preventDefault();
-                  setShowDialog(true);
-                  deleteIdRef.current = item.id;
-                }}
-                style={[styles.touch, isSelected && styles.touchSelected]}
-              >
-                <Text numberOfLines={1} style={styles.title}>
-                  {item.title}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
+          const isSelected = selectedId === item.id;
+          return (
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {
+                setSelectedId(item.id);
+                setTimeout(() => {
+                  navigation.navigate('Bedrock', {
+                    sessionId: item.id,
+                    tapIndex: tapIndexRef.current,
+                  });
+                  tapIndexRef.current += 1;
+                }, 0);
+              }}
+              onLongPress={(gestureEvent) => {
+                trigger(HapticFeedbackTypes.notificationWarning);
+                gestureEvent.preventDefault();
+                setShowDialog(true);
+                deleteIdRef.current = item.id;
+              }}
+              style={[styles.touch, isSelected && styles.touchSelected]}
+            >
+              <Text numberOfLines={1} style={styles.title}>
+                {item.title}
+              </Text>
+            </TouchableOpacity>
+          );
         }}
       />
-      {/* 底部设置按钮 */}
-      <TouchableOpacity
-        style={styles.settingsTouch}
-        onPress={() => {
-          navigation.navigate('Settings');
-        }}
-      >
-        <Image
-          source={
-            isDark
-              ? require('../assets/settings_dark.png')
-              : require('../assets/settings.png')
-          }
-          style={styles.settingsLeftImg}
-        />
-        <Text style={styles.settingsText}>Settings</Text>
-      </TouchableOpacity>
+
+      {/* === 5. 底部入口：Server / Settings === */}
+      <View style={styles.divider} />
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.footerButton}
+          activeOpacity={0.7}
+          onPress={() => navigateToStackScreen('Server')}
+        >
+          <MonitorSmartphone size={20} color={colors.textSecondary} />
+          <Text style={styles.footerText}>Server</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.footerButton}
+          activeOpacity={0.7}
+          onPress={() => navigateToStackScreen('Settings')}
+        >
+          <Image
+            source={
+              isDark
+                ? require('../assets/settings_dark.png')
+                : require('../assets/settings.png')
+            }
+            style={styles.settingsImg}
+          />
+          <Text style={styles.footerText}>Settings</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* 删除会话确认弹窗 */}
       <Dialog.Container visible={showDialog}>
         <Dialog.Title>Delete Message</Dialog.Title>
@@ -314,7 +377,12 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       backgroundColor: colors.drawerBackground,
     },
-    /** Drawer 顶部 Agent 信息卡片 */
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: 12,
+    },
+    /** Agent 信息卡片 */
     agentCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -333,6 +401,14 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
+    },
+    agentAvatarFallback: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#E5E7EB',
     },
     agentInfo: {
       flex: 1,
@@ -353,36 +429,63 @@ const createStyles = (colors: ColorScheme) =>
       color: colors.textTertiary,
       marginLeft: 4,
     },
-    /** 底部设置按钮容器 */
-    settingsTouch: {
-      flexDirection: 'row',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-      marginVertical: 12,
-      paddingHorizontal: 18,
-    },
-    settingsContainer: {
+    /** 常驻聊天入口卡片 */
+    chatCard: {
       flexDirection: 'row',
       alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginHorizontal: 12,
+      marginVertical: 8,
     },
-    settingsText: {
-      fontSize: 16,
-      marginHorizontal: 8,
+    chatIconWrapper: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    chatCardText: {
+      fontSize: 15,
       fontWeight: '500',
       color: colors.text,
+      marginLeft: 12,
     },
-    settingsLeftImg: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
+    /** 导航按钮区 */
+    navSection: {
+      paddingHorizontal: 16,
+      paddingVertical: 4,
     },
-    /** 会话列表 FlatList */
+    navButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+    },
+    navButtonText: {
+      fontSize: 15,
+      color: colors.text,
+      marginLeft: 12,
+    },
+    /** Sessions 分区标题 */
+    sessionsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 4,
+    },
+    sessionsHeaderText: {
+      fontSize: 15,
+      color: colors.text,
+      marginLeft: 12,
+    },
+    /** 会话列表 */
     flatList: {
-      marginVertical: 4,
+      flex: 1,
     },
-    /** 单个会话行的触摸区域 */
     touch: {
-      paddingHorizontal: 8,
+      paddingHorizontal: 16,
       paddingVertical: 12,
       marginHorizontal: 12,
       marginVertical: 2,
@@ -391,27 +494,29 @@ const createStyles = (colors: ColorScheme) =>
     touchSelected: {
       backgroundColor: colors.selectedBackground,
     },
-    /** 日期分组标题容器（含分隔线 + 文字） */
-    sectionContainer: {
-      paddingHorizontal: 8,
-      marginHorizontal: 12,
-      marginVertical: 12,
-    },
-    /** 日期分组标题上方的分隔线 */
-    sectionDivider: {
-      height: 1,
-      backgroundColor: colors.border,
-    },
-    /** 日期分组标题文字（如 "Today"、"Yesterday"） */
-    sectionText: {
-      marginTop: 17,
-      fontSize: 14,
-      color: colors.textSecondary,
-    },
-    /** 会话标题文字 */
     title: {
-      fontSize: 16,
+      fontSize: 15,
       color: colors.text,
+    },
+    /** 底部 Server / Settings */
+    footer: {
+      paddingVertical: 4,
+    },
+    footerButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    footerText: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      marginLeft: 12,
+    },
+    settingsImg: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
     },
   });
 

@@ -536,6 +536,19 @@ export function getAgentAvatarUrl(
 }
 
 /**
+ * 计算指定 Agent 的常驻聊天会话 ID。
+ * 每个 Agent 恰好有一个常驻会话，ID 形如 `chat-{agentId}`，全局唯一。
+ */
+export function chatSessionIdFor(agentId: string): string {
+  return `chat-${agentId}`;
+}
+
+/** 判断给定 sessionId 是否为常驻聊天会话 */
+export function isChatSession(sessionId: string): boolean {
+  return sessionId.startsWith('chat');
+}
+
+/**
  * 获取指定 Agent 可用的姿态列表。
  * 服务器在 GET /api/agents/:id/assets/pose 返回 { poses: string[] }。
  */
