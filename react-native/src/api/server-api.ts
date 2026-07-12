@@ -119,6 +119,9 @@ function httpGet(url: string): Promise<string> {
 
 /**
  * HTTP POST JSON，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
+ *
+ * 超时设为 120 秒：后端 chat 接口会阻塞到 AI 回复完成才返回，
+ * 桌面端不设超时，移动端保留一个较长的兜底值防止永久挂起。
  * @param url 完整请求地址
  * @param body 会被序列化为 JSON 的请求体
  * @returns 响应体文本
@@ -129,7 +132,7 @@ function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
   );
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.timeout = 10000;
+    xhr.timeout = 120000;
     xhr.open('POST', url, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = () => {
@@ -208,6 +211,8 @@ export class ServerClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private resolveConnect: (() => void) | null = null;
   private rejectConnect: ((err: Error) => void) | null = null;
+  /** 当前订阅的会话 ID，WS 断线重连后自动重新订阅 */
+  private subscribedSessionId: string | null = null;
 
   /** 收到 step_complete 事件时触发，toolCalls 用于检测 show_pose 等工具调用 */
   onStepComplete:
@@ -274,6 +279,17 @@ export class ServerClient {
     this.ws.onopen = () => {
       logger.info(`${TAG} WebSocket onopen`);
       this.reconnectAttempts = 0;
+      if (this.subscribedSessionId) {
+        logger.info(
+          `${TAG} WS re-subscribe on (re)connect sessionId=${this.subscribedSessionId}`
+        );
+        this.ws!.send(
+          JSON.stringify({
+            type: 'subscribe',
+            payload: { sessionId: this.subscribedSessionId },
+          })
+        );
+      }
     };
 
     this.ws.onmessage = (event: WebSocketMessageEvent) => {
@@ -424,13 +440,18 @@ export class ServerClient {
     }
     this.resolveConnect = null;
     this.rejectConnect = null;
+    this.subscribedSessionId = null;
   }
 
   /**
    * 订阅某个会话的 WebSocket 事件。
+   *
+   * 如果当前 WebSocket 未就绪，会先缓存 sessionId，
+   * 等连接建立或重连后在 onopen 中自动补发。
    * @param sessionId 服务器端会话 UUID
    */
   subscribe(sessionId: string) {
+    this.subscribedSessionId = sessionId;
     logger.info(`${TAG} WS → subscribe sessionId=${sessionId}`);
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(
@@ -438,7 +459,7 @@ export class ServerClient {
       );
     } else {
       logger.warn(
-        `${TAG} subscribe skipped, ws not open (state=${this.ws?.readyState})`
+        `${TAG} subscribe deferred, ws not open (state=${this.ws?.readyState})`
       );
     }
   }

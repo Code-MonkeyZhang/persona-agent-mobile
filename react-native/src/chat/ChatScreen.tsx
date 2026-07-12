@@ -917,7 +917,6 @@ function ChatScreen(): React.JSX.Element {
             serverAddressRef.current!
           );
           sessionIdRef.current = sessionId;
-          serverClientRef.current!.subscribe(sessionId);
           logger.debug(
             `[ChatScreen] onSend: auto-created session ${sessionId}`
           );
@@ -928,6 +927,7 @@ function ChatScreen(): React.JSX.Element {
             80
           )}" sessionId=${sessionId}`
         );
+        serverClientRef.current?.subscribe(sessionId);
         await serverClientRef.current!.sendChatMessage(
           agentId,
           sessionId,
