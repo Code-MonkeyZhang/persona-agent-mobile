@@ -14,7 +14,9 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
+  ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -64,12 +66,14 @@ import {
   isAllFileReady,
 } from './util/FileUtils.ts';
 import { showInfo } from './util/ToastUtils.ts';
+import Toast from 'react-native-toast-message';
 import { HeaderOptions } from '@react-navigation/elements';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   Easing,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { UserRound } from 'lucide-react-native';
 import { useVoiceStore } from '../stores/voiceStore';
@@ -99,6 +103,44 @@ const textPlaceholder = '...';
 /** Header 右侧按钮行容器样式 */
 const headerRightContainerStyle = StyleSheet.create({
   root: { flexDirection: 'row', alignItems: 'center' },
+});
+
+/** 陪伴回复气泡样式 */
+const bubbleStyles = StyleSheet.create({
+  outer: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  inner: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scroll: {
+    maxHeight: 160,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  text: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 22,
+  },
+  thinking: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
 });
 
 /** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
@@ -171,13 +213,25 @@ function ChatScreen(): React.JSX.Element {
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
   const isSpeaking = useVoiceStore((s) => s.isSpeaking);
   const toggleVoice = useVoiceStore((s) => s.toggleVoice);
+  const speak = useVoiceStore((s) => s.speak);
+  const stopSpeaking = useVoiceStore((s) => s.stopSpeaking);
+
+  /** 陪伴模式、语音状态和 TTS 方法的 ref，供 useFocusEffect 等稳定回调中读取最新值 */
+  const companionOpenRef = useRef(companionOpen);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const speakRef = useRef(speak);
+  const stopSpeakingRef = useRef(stopSpeaking);
 
   // ==================== Ref 同步 & 副作用 ====================
   /** 每次状态变化后同步到 ref，供异步回调中读取最新值 */
   useEffect(() => {
     messagesRef.current = messages;
     chatStatusRef.current = chatStatus;
-  }, [chatStatus, messages]);
+    companionOpenRef.current = companionOpen;
+    voiceEnabledRef.current = voiceEnabled;
+    speakRef.current = speak;
+    stopSpeakingRef.current = stopSpeaking;
+  }, [chatStatus, messages, companionOpen, voiceEnabled, speak, stopSpeaking]);
 
   /** AI 流式输出期间保持屏幕常亮，避免锁屏中断 */
   useEffect(() => {
@@ -239,7 +293,12 @@ function ChatScreen(): React.JSX.Element {
           setCurrentAgentId(agentId);
           logger.info(`[ChatScreen] using agentId=${agentId}`);
 
-          client.onStepComplete = (content, thinking) => {
+          client.onStepComplete = (
+            content,
+            thinking,
+            toolCalls,
+            toolResults
+          ) => {
             setMessages((prevMessages) => {
               if (prevMessages.length === 0) {
                 return prevMessages;
@@ -252,6 +311,34 @@ function ChatScreen(): React.JSX.Element {
               };
               return newMessages;
             });
+
+            // 检测 show_pose 指令，切换陪伴立绘
+            if (toolCalls && toolCalls.length > 0) {
+              for (const tc of toolCalls) {
+                if (tc.name === 'show_pose' && tc.arguments) {
+                  const pose = tc.arguments.pose as string;
+                  if (pose) {
+                    logger.debug(`[ChatScreen] pose change: ${pose}`);
+                    setCurrentPose(pose);
+                    setPoseError(false);
+                  }
+                }
+              }
+            }
+
+            // 工具执行失败时记录日志
+            if (toolResults && toolResults.length > 0) {
+              const failed = toolResults.filter((tr) => !tr.success);
+              if (failed.length > 0) {
+                logger.warn(
+                  `[ChatScreen] tool failures: ${failed
+                    .map(
+                      (tr) => `${tr.toolName}(${tr.result.substring(0, 60)})`
+                    )
+                    .join(', ')}`
+                );
+              }
+            }
           };
 
           client.onComplete = () => {
@@ -281,6 +368,25 @@ function ChatScreen(): React.JSX.Element {
             sendEventRef.current('titleUpdated', { id: sessionId, title });
           };
 
+          /** TTS 合成参数就绪，调 voiceStore 播报 */
+          client.onSpeakReady = (data) => {
+            logger.info(
+              `[ChatScreen] speak_ready, textLen=${data.speakText.length}`
+            );
+            speakRef.current(data);
+          };
+
+          /** TTS 合成失败，显示错误提示 */
+          client.onSpeakError = (_reason, message) => {
+            logger.error(`[ChatScreen] speak_error: ${message}`);
+            Toast.show({
+              type: 'warning',
+              text1: message,
+              position: 'bottom',
+              visibilityTime: 3000,
+            });
+          };
+
           await client.connect(address);
           if (cancelled) {
             return;
@@ -300,6 +406,7 @@ function ChatScreen(): React.JSX.Element {
         cancelled = true;
         client.disconnect();
         serverClientRef.current = null;
+        stopSpeakingRef.current();
       };
     }, [])
   );
@@ -356,6 +463,7 @@ function ChatScreen(): React.JSX.Element {
 
       setMessages([]);
       sessionIdRef.current = '';
+      stopSpeakingRef.current();
 
       sendEventRef.current('agentChanged', { id: newAgentId });
     },
@@ -400,6 +508,13 @@ function ChatScreen(): React.JSX.Element {
     Keyboard.dismiss();
     setCompanionOpen((prev) => !prev);
     logger.info(`[ChatScreen] companion ${companionOpen ? 'close' : 'open'}`);
+  }, [companionOpen]);
+
+  /** 关闭陪伴面板时停止语音播放 */
+  useEffect(() => {
+    if (!companionOpen) {
+      stopSpeakingRef.current();
+    }
   }, [companionOpen]);
 
   /** 语音开关：toggleVoice 内部处理开关切换和播报停止 */
@@ -800,7 +915,7 @@ function ChatScreen(): React.JSX.Element {
           sessionId,
           messageText,
           serverAddressRef.current!,
-          false
+          companionOpenRef.current && voiceEnabledRef.current
         );
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
@@ -863,6 +978,11 @@ function ChatScreen(): React.JSX.Element {
   }));
 
   const styles = createStyles(colors);
+
+  // 陪伴回复气泡数据：最新一条 AI 消息（GiftedChat 倒序，messages[0] 即最新）
+  const lastAgentMessage =
+    messages.length > 0 && messages[0].user._id === BOT_ID ? messages[0] : null;
+  const isThinking = lastAgentMessage?.text === textPlaceholder;
 
   return (
     <View style={styles.container}>
@@ -985,6 +1105,24 @@ function ChatScreen(): React.JSX.Element {
           }
         }}
       >
+        {/* 陪伴回复气泡：仅陪伴模式且有 AI 回复时显示 */}
+        {companionOpen && lastAgentMessage && (
+          <Animated.View
+            key={lastAgentMessage._id}
+            entering={FadeInDown.duration(350)}
+            style={bubbleStyles.outer}
+          >
+            <View style={bubbleStyles.inner}>
+              {isThinking ? (
+                <Text style={bubbleStyles.thinking}>思考中...</Text>
+              ) : (
+                <ScrollView style={bubbleStyles.scroll} nestedScrollEnabled>
+                  <Text style={bubbleStyles.text}>{lastAgentMessage.text}</Text>
+                </ScrollView>
+              )}
+            </View>
+          </Animated.View>
+        )}
         <FloatingInputBar
           textInputRef={textInputViewRef}
           onSend={onSend}
