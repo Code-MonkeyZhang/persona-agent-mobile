@@ -164,6 +164,9 @@ function ChatScreen(): React.JSX.Element {
   /** 立绘图加载失败标记 */
   const [poseError, setPoseError] = useState(false);
 
+  /** FIB 容器实际高度（含 paddingBottom），用于 GiftedChat footer 留白 */
+  const [fibWrapperHeight, setFibWrapperHeight] = useState(130);
+
   // ==================== voiceStore ====================
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
   const isSpeaking = useVoiceStore((s) => s.isSpeaking);
@@ -641,7 +644,7 @@ function ChatScreen(): React.JSX.Element {
         screenHeight < 500
           ? screenWidth / 2 - 75 // iphone landscape
           : screenWidth / 2 - 15,
-      bottom: screenHeight > screenWidth ? '1.5%' : '2%',
+      bottom: fibWrapperHeight + 10,
     },
   });
 
@@ -655,6 +658,10 @@ function ChatScreen(): React.JSX.Element {
     pane: {
       width: screenWidth,
       height: '100%',
+    },
+    /** GiftedChat footer 留白，等于 FIB 高度，防止消息被浮动 FIB 遮挡 */
+    chatFooterSpacer: {
+      height: fibWrapperHeight,
     },
   });
 
@@ -884,8 +891,10 @@ function ChatScreen(): React.JSX.Element {
               renderChatEmpty={() => (
                 <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
               )}
-              /** 底部留白：flex 布局下与 FloatingInputBar 之间的视觉间距 */
-              renderChatFooter={() => <View style={styles.chatFooterSpacer} />}
+              /** 底部留白：等于 FIB 高度，防止消息被浮动输入框遮挡 */
+              renderChatFooter={() => (
+                <View style={slideStyle.chatFooterSpacer} />
+              )}
               /** 禁用 GiftedChat 内置输入栏 */
               renderInputToolbar={() => null}
               /** 自定义消息渲染：用 CustomMessageComponent 替代默认气泡，支持 Markdown、Reasoning、引用等 */
@@ -958,13 +967,22 @@ function ChatScreen(): React.JSX.Element {
           </View>
         </Animated.View>
       </View>
-      {/* FIB 容器：paddingBottom 随键盘高度变化，iOS 手动避让，Android 由 adjustResize 处理 */}
+      {/* FIB 容器：绝对定位浮在内容上方，paddingBottom 随键盘高度变化 */}
       <View
-        style={{
-          paddingBottom:
-            Platform.OS === 'ios'
-              ? Math.max(keyboardHeight, insets.bottom)
-              : insets.bottom,
+        style={[
+          styles.fibWrapper,
+          {
+            paddingBottom:
+              Platform.OS === 'ios'
+                ? Math.max(keyboardHeight, insets.bottom)
+                : insets.bottom,
+          },
+        ]}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && h !== fibWrapperHeight) {
+            setFibWrapperHeight(h);
+          }
         }}
       >
         <FloatingInputBar
@@ -984,19 +1002,24 @@ function ChatScreen(): React.JSX.Element {
 /** 聊天页面的样式工厂，根据当前主题色生成各组件样式 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
-    /** 整个聊天页面的容器 */
+    /** 整个聊天页面的容器，relative 定位使 FIB 可以 absolute 浮在上方 */
     container: {
       flex: 1,
       backgroundColor: colors.background,
+      position: 'relative',
     },
     /** 内容区：包裹滑动容器，overflow hidden 裁剪非当前 pane */
     contentArea: {
       flex: 1,
       overflow: 'hidden',
     },
-    /** renderChatFooter 底部间距 */
-    chatFooterSpacer: {
-      height: 8,
+    /** FIB 容器：绝对定位浮在内容上方 */
+    fibWrapper: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 20,
     },
     /** 消息列表的内容容器，flexGrow + justifyContent 保证消息少时内容在底部 */
     contentContainer: {
