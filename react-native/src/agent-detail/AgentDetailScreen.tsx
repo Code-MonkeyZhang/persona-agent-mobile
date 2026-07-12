@@ -1,7 +1,7 @@
 /**
  * @file AgentDetailScreen.tsx
  * @description Agent 详情全屏页面，展示 Agent 的头像、模型配置、系统提示词、
- *              绑定的 MCP 服务器和技能列表。
+ *              绑定的 MCP 服务器和技能列表。卡片式布局对齐 demo 设计。
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -16,7 +16,22 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RouteParamList } from '../types/RouteTypes.ts';
-import { User } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import {
+  Brain,
+  Hash,
+  Gauge,
+  Moon,
+  Languages,
+  MessageSquare,
+  FolderOpen,
+  Plug,
+  Sparkles,
+  ChevronRight,
+  Calendar,
+  Clock,
+  User,
+} from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { logger } from '../lib/logger';
 import {
@@ -38,10 +53,39 @@ function getMcpStatusColor(
   error?: string,
   colors?: ColorScheme
 ): string {
-  if (error) return colors?.error ?? '#ff4444';
-  if (status === 'connected') return colors?.success ?? '#00C851';
-  if (status === 'needs_auth') return '#FF9800';
+  if (error) {
+    return colors?.error ?? '#ff4444';
+  }
+  if (status === 'connected') {
+    return colors?.success ?? '#00C851';
+  }
+  if (status === 'needs_auth') {
+    return '#FF9800';
+  }
   return colors?.textTertiary ?? '#999999';
+}
+
+/** 图标 + 标签 + 右侧值的通用行 */
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  colors,
+  styles,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  colors: ColorScheme;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.row}>
+      <Icon size={16} color={colors.text} />
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
 }
 
 /**
@@ -64,7 +108,9 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   useEffect(() => {
     const load = async () => {
       const address = getServerAddress();
-      if (!address) return;
+      if (!address) {
+        return;
+      }
       try {
         const [agentData, allMcps, allSkills] = await Promise.all([
           fetchAgentDetail(address, agentId),
@@ -106,31 +152,30 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   }
 
   const displayName = agent.name || 'Agent';
-
   const modelDisplay = `${agent.defaultModel.provider} / ${agent.defaultModel.model}`;
+  const serverAddr = getServerAddress();
+  const canLoadAvatar = serverAddr.length > 0 && agentId.length > 0;
+
+  const rowProps = { colors, styles };
 
   return (
     <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.content}
     >
-      {/* 头像 + 名称 + 描述：具备加载条件时请求服务器 URL，否则显示灰色占位符 */}
+      {/* 头像 + 名称 + 描述 */}
       <View style={styles.avatarCard}>
-        {(() => {
-          const serverAddr = getServerAddress();
-          const canLoad = serverAddr.length > 0 && agentId.length > 0;
-          return canLoad && !avatarError ? (
-            <Image
-              source={{ uri: getAgentAvatarUrl(agentId, serverAddr) }}
-              style={styles.avatar}
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: '#E5E7EB' }]}>
-              <User size={32} color="#9CA3AF" />
-            </View>
-          );
-        })()}
+        {canLoadAvatar && !avatarError ? (
+          <Image
+            source={{ uri: getAgentAvatarUrl(agentId, serverAddr) }}
+            style={styles.avatar}
+            onError={() => setAvatarError(true)}
+          />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <User size={32} color={colors.textTertiary} />
+          </View>
+        )}
         <Text style={styles.name}>{displayName}</Text>
         {agent.description ? (
           <Text style={styles.description}>{agent.description}</Text>
@@ -140,32 +185,42 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       {/* 基础设置 */}
       <Text style={styles.sectionLabel}>基础设置</Text>
       <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>默认模型</Text>
-          <Text style={styles.rowValue}>{modelDisplay}</Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Brain}
+          label="默认模型"
+          value={modelDisplay}
+        />
         <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>最大步数</Text>
-          <Text style={styles.rowValue}>{agent.maxSteps}</Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Hash}
+          label="最大步数"
+          value={String(agent.maxSteps)}
+        />
         <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>压缩阈值</Text>
-          <Text style={styles.rowValue}>{agent.compressionThreshold}%</Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Gauge}
+          label="压缩阈值"
+          value={`${agent.compressionThreshold}%`}
+        />
         <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>记忆间隔</Text>
-          <Text style={styles.rowValue}>{agent.dreamIntervalMinutes} 分钟</Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Moon}
+          label="记忆间隔"
+          value={`${agent.dreamIntervalMinutes} 分钟`}
+        />
         {agent.voiceLanguage ? (
           <>
             <View style={styles.divider} />
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>语音语言</Text>
-              <Text style={styles.rowValue}>{agent.voiceLanguage}</Text>
-            </View>
+            <InfoRow
+              {...rowProps}
+              icon={Languages}
+              label="语音语言"
+              value={agent.voiceLanguage}
+            />
           </>
         ) : null}
         <View style={styles.divider} />
@@ -176,41 +231,49 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           onPress={() => setPromptExpanded((v) => !v)}
           activeOpacity={0.7}
         >
+          <MessageSquare size={16} color={colors.text} />
           <Text style={styles.rowLabel}>系统提示词</Text>
-          <Text style={styles.chevron}>{promptExpanded ? '▼' : '▶'}</Text>
+          <ChevronRight
+            size={16}
+            color={colors.textTertiary}
+            style={[styles.chevron, promptExpanded && styles.chevronExpanded]}
+          />
         </TouchableOpacity>
         {promptExpanded && agent.systemPrompt ? (
           <View style={styles.promptContainer}>
             <Text style={styles.promptText}>{agent.systemPrompt}</Text>
           </View>
         ) : null}
+
         {agent.defaultWorkspacePath ? (
           <>
             <View style={styles.divider} />
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>工作区路径</Text>
-            </View>
-            <View style={styles.promptContainer}>
-              <Text style={styles.promptText}>
-                {agent.defaultWorkspacePath}
-              </Text>
+              <FolderOpen size={16} color={colors.text} />
+              <View style={styles.workspaceContent}>
+                <Text style={styles.rowLabel}>工作区路径</Text>
+                <Text style={styles.workspacePath} numberOfLines={1}>
+                  {agent.defaultWorkspacePath}
+                </Text>
+              </View>
             </View>
           </>
         ) : null}
+
         <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>创建时间</Text>
-          <Text style={styles.rowValue}>
-            {new Date(agent.createdAt).toLocaleDateString('zh-CN')}
-          </Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Calendar}
+          label="创建时间"
+          value={new Date(agent.createdAt).toLocaleDateString('zh-CN')}
+        />
         <View style={styles.divider} />
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>更新时间</Text>
-          <Text style={styles.rowValue}>
-            {new Date(agent.updatedAt).toLocaleDateString('zh-CN')}
-          </Text>
-        </View>
+        <InfoRow
+          {...rowProps}
+          icon={Clock}
+          label="更新时间"
+          value={new Date(agent.updatedAt).toLocaleDateString('zh-CN')}
+        />
       </View>
 
       {/* MCP 服务 */}
@@ -235,7 +298,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                     onPress={handleAuth}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.rowLabelMcp}>{mcp.name}</Text>
+                    <Plug size={16} color={colors.text} />
+                    <Text style={styles.rowLabel}>{mcp.name}</Text>
                     <View
                       style={[
                         styles.statusDot,
@@ -272,10 +336,15 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             {skills.map((skill, i) => (
               <React.Fragment key={skill.name}>
                 <View style={styles.skillRow}>
-                  <Text style={styles.rowLabelMcp}>{skill.name}</Text>
-                  {skill.description ? (
-                    <Text style={styles.skillDesc}>{skill.description}</Text>
-                  ) : null}
+                  <Sparkles size={16} color={colors.text} />
+                  <View style={styles.skillContent}>
+                    <Text style={styles.rowLabel}>{skill.name}</Text>
+                    {skill.description ? (
+                      <Text style={styles.skillDesc} numberOfLines={2}>
+                        {skill.description}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
                 {i < skills.length - 1 ? <View style={styles.divider} /> : null}
               </React.Fragment>
@@ -293,7 +362,7 @@ const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     scrollView: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface,
     },
     content: {
       padding: 16,
@@ -302,7 +371,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface,
     },
     emptyText: {
       fontSize: 16,
@@ -313,14 +382,22 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 16,
       padding: 20,
       alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     avatar: {
       width: 64,
       height: 64,
       borderRadius: 32,
+      overflow: 'hidden',
+    },
+    avatarFallback: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: colors.surfaceSecondary,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
     },
     name: {
       fontSize: 18,
@@ -337,7 +414,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     sectionLabel: {
       fontSize: 13,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
       marginLeft: 16,
       marginBottom: 8,
       marginTop: 20,
@@ -346,18 +423,17 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.card,
       borderRadius: 16,
       overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.borderLight,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 12,
       paddingHorizontal: 16,
       paddingVertical: 14,
     },
     rowLabel: {
-      fontSize: 15,
-      color: colors.text,
-    },
-    rowLabelMcp: {
       fontSize: 15,
       color: colors.text,
       flex: 1,
@@ -365,12 +441,12 @@ const createStyles = (colors: ColorScheme) =>
     rowValue: {
       fontSize: 15,
       color: colors.textSecondary,
-      marginLeft: 'auto',
     },
     chevron: {
-      fontSize: 10,
-      color: colors.textTertiary,
       marginLeft: 'auto',
+    },
+    chevronExpanded: {
+      transform: [{ rotate: '90deg' }],
     },
     divider: {
       height: StyleSheet.hairlineWidth,
@@ -389,11 +465,18 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 12,
       padding: 12,
     },
+    workspaceContent: {
+      flex: 1,
+    },
+    workspacePath: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      marginTop: 2,
+    },
     statusDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      marginLeft: 8,
     },
     mcpToolCount: {
       fontSize: 13,
@@ -401,13 +484,19 @@ const createStyles = (colors: ColorScheme) =>
       marginLeft: 8,
     },
     skillRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
       paddingHorizontal: 16,
       paddingVertical: 14,
+    },
+    skillContent: {
+      flex: 1,
     },
     skillDesc: {
       fontSize: 13,
       color: colors.textTertiary,
-      marginTop: 4,
+      marginTop: 2,
     },
     bottomSpacer: {
       height: 20,
