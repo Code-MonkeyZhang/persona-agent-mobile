@@ -22,7 +22,7 @@ import { useTheme, ColorScheme } from '../theme/index.ts';
 type Language = 'zh' | 'en';
 
 function SettingsScreen(): React.JSX.Element {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
   const [language, setLanguage] = useState<Language>('zh');
   const navigation = useNavigation<NavigationProp<RouteParamList>>();
@@ -47,15 +47,11 @@ function SettingsScreen(): React.JSX.Element {
               tapIndex: -1,
             });
           }}
-          imageSource={
-            isDark
-              ? require('../assets/done_dark.png')
-              : require('../assets/done.png')
-          }
+          imageSource={require('../assets/done.png')}
         />
       ),
     });
-  }, [navigation, isDark]);
+  }, [navigation]);
 
   const styles = createStyles(colors);
 

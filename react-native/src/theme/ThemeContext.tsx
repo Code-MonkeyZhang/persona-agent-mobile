@@ -1,11 +1,8 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
-import { lightColors, darkColors, ColorScheme } from './colors';
+import { lightColors, ColorScheme } from './colors';
 
 interface ThemeContextType {
   colors: ColorScheme;
-  isDark: boolean;
-  colorScheme: 'light' | 'dark';
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -15,14 +12,8 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const colorScheme = useColorScheme() ?? 'light';
-  const isDark = colorScheme === 'dark';
-  const colors = isDark ? darkColors : lightColors;
-
   const value: ThemeContextType = {
-    colors,
-    isDark,
-    colorScheme,
+    colors: lightColors,
   };
 
   return (

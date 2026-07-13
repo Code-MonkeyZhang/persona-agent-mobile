@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { TouchableOpacity, Image, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { useTheme } from '../../../theme';
 
 interface CopyButtonProps {
   /** Function that returns the content to copy, or direct content string */
@@ -9,7 +8,6 @@ interface CopyButtonProps {
 }
 
 const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
-  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -19,11 +17,7 @@ const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
   }, [content]);
 
   const imageSource = copied
-    ? isDark
-      ? require('../../../assets/done_dark.png')
-      : require('../../../assets/done.png')
-    : isDark
-    ? require('../../../assets/copy_grey.png')
+    ? require('../../../assets/done.png')
     : require('../../../assets/copy.png');
 
   useEffect(() => {

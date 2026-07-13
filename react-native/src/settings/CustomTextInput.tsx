@@ -42,7 +42,7 @@ const CustomTextInput: React.FC<CustomTextInputProps> = ({
   secureTextEntry = false,
   numberOfLines = 1,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   /** 密码可见性状态：true = 明文显示 */
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
@@ -80,11 +80,7 @@ const CustomTextInput: React.FC<CustomTextInputProps> = ({
             <Image
               source={
                 isPasswordVisible
-                  ? isDark
-                    ? require('../assets/eye_close_dark.png')
-                    : require('../assets/eye_close.png')
-                  : isDark
-                  ? require('../assets/eye_dark.png')
+                  ? require('../assets/eye_close.png')
                   : require('../assets/eye.png')
               }
               style={styles.eyeIcon}

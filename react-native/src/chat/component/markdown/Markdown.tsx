@@ -4,7 +4,7 @@ import React, {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { FlatList, useColorScheme } from 'react-native';
+import { FlatList } from 'react-native';
 import { MarkdownProps } from 'react-native-marked';
 import useMarkdown from './useMarkdown.ts';
 import { ChatStatus } from '../../../types/Chat.ts';
@@ -23,13 +23,10 @@ const Markdown = ({
   tokenizer,
   chatStatus,
 }: ChatMarkdownProps) => {
-  const colorScheme = useColorScheme();
-
   const rnElements = useMarkdown(value, {
     theme,
     baseUrl,
     renderer,
-    colorScheme,
     styles,
     tokenizer,
     chatStatus,
@@ -51,7 +48,7 @@ const Markdown = ({
       initialNumToRender={rnElements.length}
       /* eslint-disable-next-line react-native/no-inline-styles */
       style={{
-        backgroundColor: colorScheme === 'light' ? '#ffffff' : '#000000',
+        backgroundColor: '#ffffff',
       }}
       {...flatListProps}
       data={rnElements}

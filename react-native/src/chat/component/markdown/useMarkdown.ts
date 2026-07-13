@@ -6,13 +6,11 @@ import type {
 } from 'react-native-marked/src/theme/types.ts';
 import Renderer from 'react-native-marked/src/lib/Renderer.tsx';
 import getStyles from 'react-native-marked/src/theme/styles.ts';
-import type { ColorSchemeName } from 'react-native';
 import type { RendererInterface } from 'react-native-marked/src/lib/types.ts';
 import { ChatStatus } from '../../../types/Chat.ts';
 import Parser from './Parser.tsx';
 
 export interface useMarkdownHookOptions {
-  colorScheme?: ColorSchemeName;
   renderer?: RendererInterface;
   theme?: UserTheme;
   styles?: MarkedStyles;
@@ -26,8 +24,8 @@ const useMarkdown = (
   options?: useMarkdownHookOptions
 ): ReactNode[] => {
   const styles = useMemo(
-    () => getStyles(options?.styles, options?.colorScheme, options?.theme),
-    [options?.styles, options?.theme, options?.colorScheme]
+    () => getStyles(options?.styles, 'light', options?.theme),
+    [options?.styles, options?.theme]
   );
 
   const parser = useMemo(

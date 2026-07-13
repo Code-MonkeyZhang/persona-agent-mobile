@@ -48,12 +48,11 @@ const renderCustomDrawerContent = (
  * - drawerContent: 使用自定义的CustomDrawerContent渲染侧边栏内容
  */
 const DrawerNavigator = () => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   return (
     <Drawer.Navigator
       initialRouteName="Bedrock"
       screenOptions={{
-        overlayColor: isDark ? 'rgba(255, 255, 255, 0.1)' : undefined,
         headerTintColor: colors.text,
         headerTitleAlign: 'center',
         drawerStyle: {
@@ -64,8 +63,6 @@ const DrawerNavigator = () => {
         },
         headerStyle: {
           backgroundColor: colors.background,
-          borderBottomWidth: isDark ? 0.3 : undefined,
-          borderBottomColor: isDark ? colors.chatScreenSplit : undefined,
         },
         drawerType: 'slide',
       }}
@@ -148,14 +145,10 @@ const AppNavigator = () => {
  *   - 此处用于每次切换页面时自动收起键盘，防止键盘遮挡其他页面内容
  */
 const AppWithTheme = () => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   return (
     <>
-      {/* 状态栏：深色模式用浅色文字，浅色模式用深色文字 */}
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
       <NavigationContainer
         onStateChange={(_) => {

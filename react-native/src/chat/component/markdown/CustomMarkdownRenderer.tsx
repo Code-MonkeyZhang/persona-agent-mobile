@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import type { RendererInterface } from 'react-native-marked';
 import { Renderer } from 'react-native-marked';
-import { github, vs2015 } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { Cell, Table, TableWrapper } from 'react-native-table-component';
 import RNFS from 'react-native-fs';
 import MDSvg from 'react-native-marked/src/components/MDSvg.tsx';
@@ -35,14 +35,12 @@ const MemoizedCodeHighlighter = React.memo(
     text,
     language,
     colors,
-    isDark,
     onPreviewToggle: _onPreviewToggle,
     isCompleted,
   }: {
     text: string;
     language?: string;
     colors: ColorScheme;
-    isDark: boolean;
     onPreviewToggle?: (
       expanded: boolean,
       height: number,
@@ -54,8 +52,6 @@ const MemoizedCodeHighlighter = React.memo(
     const textRef = React.useRef(text);
     textRef.current = text;
 
-    const hljsStyle = isDark ? vs2015 : github;
-
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -66,7 +62,7 @@ const MemoizedCodeHighlighter = React.memo(
         </View>
         <Suspense fallback={<Text style={styles.loading}>Loading...</Text>}>
           <CustomCodeHighlighter
-            hljsStyle={hljsStyle}
+            hljsStyle={github}
             scrollViewProps={{
               contentContainerStyle: {
                 padding: 12,
@@ -93,8 +89,7 @@ const MemoizedCodeHighlighter = React.memo(
     if (
       prevProps.text !== nextProps.text ||
       prevProps.language !== nextProps.language ||
-      prevProps.colors !== nextProps.colors ||
-      prevProps.isDark !== nextProps.isDark
+      prevProps.colors !== nextProps.colors
     ) {
       return false;
     }
@@ -113,7 +108,6 @@ export class CustomMarkdownRenderer
   private height = Dimensions.get('window').height;
   private colors: ColorScheme;
   private styles: ReturnType<typeof createCustomStyles>;
-  private isDark: boolean;
   private onPreviewToggle?: (
     expanded: boolean,
     height: number,
@@ -123,7 +117,6 @@ export class CustomMarkdownRenderer
   constructor(
     private onImagePress: (pressMode: PressMode, url: string) => void,
     colors: ColorScheme,
-    isDark: boolean,
     _citations: never[] = [],
     onPreviewToggle?: (
       expanded: boolean,
@@ -133,7 +126,6 @@ export class CustomMarkdownRenderer
   ) {
     super();
     this.colors = colors;
-    this.isDark = isDark;
     this.styles = createCustomStyles(colors);
     this.onPreviewToggle = onPreviewToggle;
   }
@@ -252,7 +244,6 @@ export class CustomMarkdownRenderer
           text={text}
           language={language}
           colors={this.colors}
-          isDark={this.isDark}
           onPreviewToggle={this.onPreviewToggle}
           isCompleted={isCompleted}
         />
@@ -282,7 +273,7 @@ export class CustomMarkdownRenderer
         <Table
           borderStyle={{
             borderWidth,
-            borderColor: this.isDark ? this.colors.borderLight : borderColor,
+            borderColor,
           }}
           style={tableStyleRest}
         >

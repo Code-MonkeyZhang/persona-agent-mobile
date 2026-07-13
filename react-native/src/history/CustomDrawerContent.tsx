@@ -58,7 +58,7 @@ import { useTheme, ColorScheme } from '../theme/index.ts';
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   navigation,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   /** 按日期分组后的会话列表（含虚拟标题行），直接传给 FlatList 渲染 */
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
   /** 是否显示删除确认弹窗 */
@@ -355,11 +355,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           onPress={() => navigateToStackScreen('Settings')}
         >
           <Image
-            source={
-              isDark
-                ? require('../assets/settings_dark.png')
-                : require('../assets/settings.png')
-            }
+            source={require('../assets/settings.png')}
             style={styles.settingsImg}
           />
           <Text style={styles.footerText}>Settings</Text>

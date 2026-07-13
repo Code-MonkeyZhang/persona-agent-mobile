@@ -62,7 +62,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   isLastAIMessage,
   onReasoningToggle,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [copied, setCopied] = useState(false);
   const [clickTitleCopied, setClickTitleCopied] = useState(false);
@@ -104,16 +104,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
   const copyButton = useMemo(() => {
     return clickTitleCopied ? (
-      <Image
-        source={
-          isDark
-            ? require('../../assets/done_dark.png')
-            : require('../../assets/done.png')
-        }
-        style={styles.copy}
-      />
+      <Image source={require('../../assets/done.png')} style={styles.copy} />
     ) : null;
-  }, [clickTitleCopied, isDark, styles.copy]);
+  }, [clickTitleCopied, styles.copy]);
 
   const handleImagePress = useCallback((pressMode: PressMode, url: string) => {
     if (pressMode === PressMode.Click) {
@@ -136,11 +129,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       new CustomMarkdownRenderer(
         handleImagePress,
         colors,
-        isDark,
         [],
         onReasoningToggle
       ),
-    [handleImagePress, colors, isDark, onReasoningToggle]
+    [handleImagePress, colors, onReasoningToggle]
   );
 
   const customTokenizer = useMemo(() => new CustomTokenizer(), []);
@@ -226,9 +218,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             <Image
               source={
                 copied
-                  ? isDark
-                    ? require('../../assets/done_dark.png')
-                    : require('../../assets/done.png')
+                  ? require('../../assets/done.png')
                   : require('../../assets/copy_grey.png')
               }
               style={styles.actionButtonIcon}
@@ -243,7 +233,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     handleCopy,
     copied,
     currentMessage?.metrics,
-    isDark,
     styles.actionButtonsContainer,
     styles.actionButtonInnerContainer,
     styles.actionButton,

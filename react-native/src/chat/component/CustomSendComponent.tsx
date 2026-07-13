@@ -32,7 +32,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   onPress,
   onStopPress,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const isRunning = chatStatus === ChatStatus.Running;
@@ -54,11 +54,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       disabled={!isActive}
     >
       <Image
-        source={
-          isDark
-            ? require('../../assets/send_dark.png')
-            : require('../../assets/send.png')
-        }
+        source={require('../../assets/send.png')}
         style={[styles.sendButton, !isActive && styles.sendButtonDisabled]}
       />
     </TouchableOpacity>

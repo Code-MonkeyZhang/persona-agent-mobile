@@ -83,7 +83,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
   mode = DisplayMode.Edit,
   isHideFileList = false,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   /** 图片全屏预览是否可见 */
   const [visible, setIsVisible] = useState(false);
   /** 当前预览的图片索引 */
@@ -298,11 +298,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               </Text>
               <View style={styles.formatContainer}>
                 <Image
-                  source={
-                    isDark
-                      ? require('./../../assets/document_dark.png')
-                      : require('./../../assets/document.png')
-                  }
+                  source={require('./../../assets/document.png')}
                   style={styles.formatIcon}
                 />
                 <Text style={styles.fileFormat}>

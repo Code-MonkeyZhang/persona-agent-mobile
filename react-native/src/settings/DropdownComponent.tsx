@@ -25,21 +25,14 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   placeholder,
   searchPlaceholder = 'Search...',
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const renderItem = (item: DropdownItem) => {
     const isSelected = item.value === value;
     return (
       <View style={styles.item}>
         <Text style={styles.textItem}>{item.label}</Text>
         {isSelected && (
-          <Image
-            source={
-              isDark
-                ? require('../assets/done_dark.png')
-                : require('../assets/done.png')
-            }
-            style={styles.icon}
-          />
+          <Image source={require('../assets/done.png')} style={styles.icon} />
         )}
       </View>
     );

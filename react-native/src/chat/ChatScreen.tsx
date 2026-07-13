@@ -166,7 +166,7 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
@@ -1162,7 +1162,7 @@ function ChatScreen(): React.JSX.Element {
                 ? Math.max(keyboardHeight, insets.bottom)
                 : insets.bottom,
           }}
-          blurType={isDark ? 'dark' : 'light'}
+          blurType="light"
           blurAmount={15}
         >
           <FloatingInputBar
