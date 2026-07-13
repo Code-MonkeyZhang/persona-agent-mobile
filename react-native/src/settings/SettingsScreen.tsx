@@ -9,14 +9,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { NavigationProp, useNavigation } from '@react-navigation/native';
-import { Check, Vibrate, VibrateOff } from 'lucide-react-native';
+import { Vibrate, VibrateOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
-import { CustomHeaderRightButton } from '../chat/component/CustomHeaderRightButton.tsx';
-import { RouteParamList } from '../types/RouteTypes.ts';
 
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
@@ -24,7 +21,6 @@ function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
-  const navigation = useNavigation<NavigationProp<RouteParamList>>();
 
   const toggleHapticFeedback = () => {
     const value = !hapticEnabled;
@@ -35,30 +31,11 @@ function SettingsScreen(): React.JSX.Element {
     }
   };
 
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      // eslint-disable-next-line react/no-unstable-nested-components
-      headerRight: () => (
-        <CustomHeaderRightButton
-          onPress={async () => {
-            navigation.navigate('Bedrock', {
-              sessionId: '',
-              tapIndex: -1,
-            });
-          }}
-        >
-          <Check size={22} color={colors.text} />
-        </CustomHeaderRightButton>
-      ),
-    });
-  }, [navigation, colors, t]);
-
   const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
-        <Text style={styles.sectionLabel}>{t('settings.general')}</Text>
         <View style={styles.card}>
           {/* 震动开关 */}
           <View style={styles.row}>
@@ -98,12 +75,6 @@ const createStyles = (colors: ColorScheme) =>
     container: {
       flex: 1,
       padding: 16,
-    },
-    sectionLabel: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      marginLeft: 16,
-      marginBottom: 8,
     },
     card: {
       backgroundColor: colors.card,

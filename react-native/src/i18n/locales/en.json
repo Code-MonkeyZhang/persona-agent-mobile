@@ -21,7 +21,6 @@
     "startChat": "Start chatting"
   },
   "settings": {
-    "general": "General",
     "vibration": "Vibration",
     "vibrationDesc": "Haptic feedback on interactions"
   },
@@ -61,10 +60,8 @@
     "noAssetHint": "Add expression images in assets/pose/ to enable"
   },
   "server": {
-    "tunnel": "Tunnel",
-    "tunnelDesc": "Connect to your agent server via Cloudflare tunnel",
     "placeholder": "https://xxx.trycloudflare.com",
-    "save": "Save",
+    "connect": "Connect",
     "connecting": "Connecting...",
     "connected": "Connected",
     "failed": "Failed",

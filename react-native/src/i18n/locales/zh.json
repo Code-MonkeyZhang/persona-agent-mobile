@@ -21,7 +21,6 @@
     "startChat": "开始聊天"
   },
   "settings": {
-    "general": "通用",
     "vibration": "震动",
     "vibrationDesc": "交互时触觉反馈"
   },
@@ -61,10 +60,8 @@
     "noAssetHint": "在 assets/pose/ 目录下添加表情图片即可启用"
   },
   "server": {
-    "tunnel": "隧道",
-    "tunnelDesc": "通过 Cloudflare 隧道连接远程服务器",
     "placeholder": "https://xxx.trycloudflare.com",
-    "save": "保存",
+    "connect": "连接",
     "connecting": "连接中...",
     "connected": "已连接",
     "failed": "连接失败",

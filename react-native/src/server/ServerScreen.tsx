@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Globe, Link as LinkIcon, Check } from 'lucide-react-native';
+import { Link as LinkIcon, Check } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import {
@@ -104,55 +104,40 @@ const ServerScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         <View style={styles.card}>
-          <View style={styles.headerRow}>
-            <View style={styles.iconBox}>
-              <Globe size={20} color={colors.text} />
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.cardTitle}>{t('server.tunnel')}</Text>
-              <Text style={styles.cardDesc}>{t('server.tunnelDesc')}</Text>
-            </View>
+          <View style={styles.inputWrap}>
+            <LinkIcon
+              size={16}
+              color={colors.textTertiary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              value={url}
+              onChangeText={setUrl}
+              placeholder={t('server.placeholder')}
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
           </View>
 
-          <View style={styles.inputRow}>
-            <View style={styles.inputWrap}>
-              <LinkIcon
-                size={16}
-                color={colors.textTertiary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                value={url}
-                onChangeText={setUrl}
-                placeholder={t('server.placeholder')}
-                placeholderTextColor={colors.placeholder}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                saved && styles.saveButtonSaved,
-                !url.trim() && styles.saveButtonDisabled,
-              ]}
-              activeOpacity={0.7}
-              onPress={handleSave}
-              disabled={status === 'connecting' || !url.trim()}
-            >
-              {saved ? (
-                <Check size={16} color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>
-                  {status === 'connecting'
-                    ? t('server.connecting')
-                    : t('server.save')}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.saveButton,
+              saved && styles.saveButtonSaved,
+              !url.trim() && styles.saveButtonDisabled,
+            ]}
+            activeOpacity={0.7}
+            onPress={handleSave}
+            disabled={status === 'connecting' || !url.trim()}
+          >
+            {saved ? (
+              <Check size={16} color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>{t('server.connect')}</Text>
+            )}
+          </TouchableOpacity>
 
           {status !== 'idle' && (
             <Text
@@ -193,44 +178,14 @@ const createStyles = (colors: ColorScheme) =>
       borderWidth: 1,
       borderColor: colors.borderLight,
     },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    iconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 8,
-      backgroundColor: colors.surfaceSecondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerText: {
-      flex: 1,
-    },
-    cardTitle: {
-      fontSize: 15,
-      fontWeight: '500',
-      color: colors.text,
-    },
-    cardDesc: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      marginTop: 2,
-    },
-    inputRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
     inputWrap: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.inputBackground,
       borderRadius: 12,
       paddingLeft: 12,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
     },
     inputIcon: {
       position: 'absolute',
@@ -245,8 +200,10 @@ const createStyles = (colors: ColorScheme) =>
       color: colors.text,
     },
     saveButton: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      alignSelf: 'stretch',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
       borderRadius: 12,
       backgroundColor: colors.primary,
     },
