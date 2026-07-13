@@ -43,6 +43,10 @@ import {
   getServerAddress,
   getServerAgentId,
   saveServerAgentId,
+  getCompanionOpen,
+  saveCompanionOpen,
+  getLastSessionId,
+  saveLastSessionId,
 } from '../storage/StorageUtils.ts';
 import {
   ServerClient,
@@ -161,7 +165,7 @@ function ChatScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
-  const initialSessionId = route.params?.sessionId;
+  const initialSessionId = route.params?.sessionId ?? getLastSessionId();
   const tapIndex = route.params?.tapIndex;
 
   // ==================== 状态声明 ====================
@@ -183,6 +187,12 @@ function ChatScreen(): React.JSX.Element {
   const textInputViewRef = useRef<TextInput>(null);
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef(initialSessionId || '');
+
+  /** 统一更新会话 ID：同步到 ref 和 MMKV 持久化 */
+  const setSessionId = useCallback((id: string) => {
+    sessionIdRef.current = id;
+    saveLastSessionId(id);
+  }, []);
   const { sendEvent, event } = useAppContext();
   const sendEventRef = useRef(sendEvent);
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
@@ -197,8 +207,8 @@ function ChatScreen(): React.JSX.Element {
   const serverAddressRef = useRef(getServerAddress());
 
   // ==================== 陪伴模式状态 ====================
-  /** 陪伴面板是否展开（滑动容器右侧 pane） */
-  const [companionOpen, setCompanionOpen] = useState(false);
+  /** 陪伴面板是否展开（滑动容器右侧 pane），从 MMKV 恢复上次状态 */
+  const [companionOpen, setCompanionOpen] = useState(getCompanionOpen);
   /** Agent 是否拥有陪伴资源：null=加载中, true=有, false=无 */
   const [hasAssets, setHasAssets] = useState<boolean | null>(null);
   /** 当前展示的姿态名称，由 show_pose 指令切换 */
@@ -442,7 +452,7 @@ function ChatScreen(): React.JSX.Element {
   const startNewChat = useRef(
     useCallback(() => {
       trigger(HapticFeedbackTypes.impactMedium);
-      sessionIdRef.current = '';
+      setSessionId('');
       isNewChatRef.current = true;
       sendEventRef.current('updateHistorySelectedId', { id: '' });
 
@@ -454,7 +464,7 @@ function ChatScreen(): React.JSX.Element {
           serverClientRef.current
             .createSession(agentId, serverAddressRef.current)
             .then((newSessionId) => {
-              sessionIdRef.current = newSessionId;
+              setSessionId(newSessionId);
               sendEventRef.current('updateHistorySelectedId', {
                 id: newSessionId,
               });
@@ -467,7 +477,7 @@ function ChatScreen(): React.JSX.Element {
       }
 
       showKeyboard();
-    }, [])
+    }, [setSessionId])
   );
 
   // ==================== Agent 切换 ====================
@@ -485,12 +495,12 @@ function ChatScreen(): React.JSX.Element {
       setCurrentAgentId(newAgentId);
 
       setMessages([]);
-      sessionIdRef.current = '';
+      setSessionId('');
       stopSpeakingRef.current();
 
       sendEventRef.current('agentChanged', { id: newAgentId });
     },
-    [currentAgentId]
+    [currentAgentId, setSessionId]
   );
 
   // ==================== 陪伴资源加载 ====================
@@ -526,12 +536,16 @@ function ChatScreen(): React.JSX.Element {
     };
   }, [currentAgentId]);
 
-  /** 切换陪伴面板：先收键盘再 toggle，避免动画与键盘同时变化 */
+  /** 切换陪伴面板：先收键盘再 toggle，避免动画与键盘同时变化；持久化到 MMKV */
   const handleToggleCompanion = useCallback(() => {
     Keyboard.dismiss();
-    setCompanionOpen((prev) => !prev);
-    logger.info(`[ChatScreen] companion ${companionOpen ? 'close' : 'open'}`);
-  }, [companionOpen]);
+    setCompanionOpen((prev) => {
+      const next = !prev;
+      saveCompanionOpen(next);
+      logger.info(`[ChatScreen] companion ${next ? 'open' : 'close'}`);
+      return next;
+    });
+  }, []);
 
   /** 关闭陪伴面板时停止语音播放 */
   useEffect(() => {
@@ -625,7 +639,7 @@ function ChatScreen(): React.JSX.Element {
       setMessages([]);
       isNewChatRef.current = false;
       setIsLoadingMessages(true);
-      sessionIdRef.current = initialSessionId;
+      setSessionId(initialSessionId);
 
       (async () => {
         try {
@@ -649,7 +663,7 @@ function ChatScreen(): React.JSX.Element {
         }
       })();
     }
-  }, [initialSessionId, tapIndex]);
+  }, [initialSessionId, tapIndex, setSessionId]);
 
   // ==================== 事件监听 ====================
   /** 监听 AppContext 事件：删除聊天时清空当前会话 */
@@ -657,14 +671,14 @@ function ChatScreen(): React.JSX.Element {
     if (event?.event === 'deleteChat' && event.params) {
       const { id } = event.params;
       if (sessionIdRef.current === id) {
-        sessionIdRef.current = '';
+        setSessionId('');
         sendEventRef.current('updateHistorySelectedId', {
           id: '',
         });
         setMessages([]);
       }
     }
-  }, [event]);
+  }, [event, setSessionId]);
 
   // ==================== 键盘 & 屏幕 & 生命周期 ====================
   /**
@@ -916,7 +930,7 @@ function ChatScreen(): React.JSX.Element {
             agentId,
             serverAddressRef.current!
           );
-          sessionIdRef.current = sessionId;
+          setSessionId(sessionId);
           logger.debug(
             `[ChatScreen] onSend: auto-created session ${sessionId}`
           );
@@ -940,7 +954,7 @@ function ChatScreen(): React.JSX.Element {
         logger.error(`[ChatScreen] onSend error: ${errMsg}`);
       }
     })();
-  }, []);
+  }, [setSessionId]);
 
   // ==================== 文件 & 语音转录 ====================
   /**

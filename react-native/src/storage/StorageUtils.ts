@@ -24,6 +24,8 @@ const hapticEnabledKey = keyPrefix + 'hapticEnabled';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
+const companionOpenKey = keyPrefix + 'companionOpen';
+const lastSessionIdKey = keyPrefix + 'lastSessionId';
 
 export function saveHapticEnabled(enabled: boolean) {
   storage.set(hapticEnabledKey, enabled);
@@ -65,4 +67,24 @@ export function saveTtsEnabled(enabled: boolean) {
 /** 获取 TTS 语音开关状态 */
 export function getTtsEnabled(): boolean {
   return storage.getBoolean(ttsEnabledKey) ?? false;
+}
+
+/** 保存陪伴面板是否展开 */
+export function saveCompanionOpen(open: boolean) {
+  storage.set(companionOpenKey, open);
+}
+
+/** 获取陪伴面板是否展开，默认 false */
+export function getCompanionOpen(): boolean {
+  return storage.getBoolean(companionOpenKey) ?? false;
+}
+
+/** 保存上次活跃的会话 ID */
+export function saveLastSessionId(sessionId: string) {
+  storage.set(lastSessionIdKey, sessionId);
+}
+
+/** 获取上次活跃的会话 ID，未设置时返回空字符串 */
+export function getLastSessionId(): string {
+  return storage.getString(lastSessionIdKey) ?? '';
 }
