@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { TouchableOpacity, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { Check, Copy } from 'lucide-react-native';
+import { useTheme } from '../../../theme';
 
 interface CopyButtonProps {
   /** Function that returns the content to copy, or direct content string */
@@ -8,6 +10,7 @@ interface CopyButtonProps {
 }
 
 const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
+  const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -15,10 +18,6 @@ const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
     Clipboard.setString(text);
     setCopied(true);
   }, [content]);
-
-  const imageSource = copied
-    ? require('../../../assets/done.png')
-    : require('../../../assets/copy.png');
 
   useEffect(() => {
     if (copied) {
@@ -29,7 +28,11 @@ const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
 
   return (
     <TouchableOpacity style={styles.copyButtonLayout} onPress={handleCopy}>
-      <Image source={imageSource} style={styles.copyButton} />
+      {copied ? (
+        <Check size={18} color={colors.textSecondary} />
+      ) : (
+        <Copy size={18} color={colors.textSecondary} />
+      )}
     </TouchableOpacity>
   );
 });
@@ -38,10 +41,6 @@ const styles = StyleSheet.create({
   copyButtonLayout: {
     padding: 10,
     marginLeft: 'auto',
-  },
-  copyButton: {
-    width: 18,
-    height: 18,
   },
 });
 

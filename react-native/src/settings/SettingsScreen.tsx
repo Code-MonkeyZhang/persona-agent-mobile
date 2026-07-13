@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
-import { Globe, Vibrate, VibrateOff } from 'lucide-react-native';
+import { Check, Globe, Vibrate, VibrateOff } from 'lucide-react-native';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
@@ -47,11 +47,12 @@ function SettingsScreen(): React.JSX.Element {
               tapIndex: -1,
             });
           }}
-          imageSource={require('../assets/done.png')}
-        />
+        >
+          <Check size={22} color={colors.text} />
+        </CustomHeaderRightButton>
       ),
     });
-  }, [navigation]);
+  }, [navigation, colors]);
 
   const styles = createStyles(colors);
 

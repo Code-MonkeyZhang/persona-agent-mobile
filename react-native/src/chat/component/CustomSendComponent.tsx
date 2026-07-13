@@ -7,7 +7,8 @@
  * - 空闲无输入：显示灰色禁用状态的发送按钮
  */
 import React, { useMemo } from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ArrowUp } from 'lucide-react-native';
 import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 
@@ -49,14 +50,11 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
 
   return (
     <TouchableOpacity
-      style={styles.sendContainer}
+      style={[styles.sendContainer, !isActive && styles.sendButtonDisabled]}
       onPress={onPress}
       disabled={!isActive}
     >
-      <Image
-        source={require('../../assets/send.png')}
-        style={[styles.sendButton, !isActive && styles.sendButtonDisabled]}
-      />
+      <ArrowUp size={20} color="#ffffff" />
     </TouchableOpacity>
   );
 };
@@ -65,8 +63,6 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     stopContainer: {
-      marginRight: 10,
-      marginLeft: 10,
       width: 26,
       height: 26,
       justifyContent: 'center',
@@ -90,13 +86,10 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       alignItems: 'center',
       alignSelf: 'flex-end',
-    },
-    sendButton: {
       width: 26,
       height: 26,
-      borderRadius: 15,
-      marginRight: 10,
-      marginLeft: 10,
+      borderRadius: 13,
+      backgroundColor: colors.text,
     },
     sendButtonDisabled: {
       opacity: 0.3,

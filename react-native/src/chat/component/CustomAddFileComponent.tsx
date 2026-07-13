@@ -3,7 +3,6 @@ import {
   Alert,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
 } from 'react-native';
 import React, { useCallback, useMemo } from 'react';
@@ -29,6 +28,7 @@ import { logger } from '../../lib/logger';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { Plus } from 'lucide-react-native';
 
 interface CustomAddFileComponentProps {
   onFileSelected: (files: FileInfo[]) => void;
@@ -212,7 +212,7 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       onPress={handlePress}
       activeOpacity={0.7}
     >
-      <Text style={styles.addIcon}>+</Text>
+      <Plus size={18} color={colors.textSecondary} />
     </TouchableOpacity>
   );
 };
@@ -350,16 +350,12 @@ const getFiles = async (res: ImagePickerResponse) => {
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     addButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
       borderWidth: 1,
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    addIcon: {
-      fontSize: 20,
-      color: colors.textSecondary,
     },
   });

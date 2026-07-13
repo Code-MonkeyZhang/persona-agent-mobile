@@ -13,9 +13,9 @@ import {
   TextInput,
   View,
   TouchableOpacity,
-  Image,
   Platform,
 } from 'react-native';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme';
 
 /** 文本输入框 Props */
@@ -77,14 +77,11 @@ const CustomTextInput: React.FC<CustomTextInputProps> = ({
             style={styles.eyeButton}
             onPress={togglePasswordVisibility}
           >
-            <Image
-              source={
-                isPasswordVisible
-                  ? require('../assets/eye_close.png')
-                  : require('../assets/eye.png')
-              }
-              style={styles.eyeIcon}
-            />
+            {isPasswordVisible ? (
+              <EyeOff size={16} color={colors.text} />
+            ) : (
+              <Eye size={16} color={colors.text} />
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -138,11 +135,6 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 12,
-    },
-    eyeIcon: {
-      width: 16,
-      height: 16,
-      resizeMode: 'contain',
     },
   });
 

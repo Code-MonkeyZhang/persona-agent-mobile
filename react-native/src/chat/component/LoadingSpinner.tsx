@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Image, ImageSourcePropType, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -8,20 +8,19 @@ import Animated, {
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
+import { LoaderCircle } from 'lucide-react-native';
+import { useTheme } from '../../theme/index.ts';
 
-interface ImageSpinnerProps {
+interface LoadingSpinnerProps {
   size?: number;
-  source: ImageSourcePropType;
   visible: boolean;
-  isRotate?: boolean;
 }
 
-const ImageSpinner = ({
-  size = 24,
-  source,
-  visible,
-  isRotate = false,
-}: ImageSpinnerProps) => {
+/**
+ * 旋转加载动画组件，使用 lucide LoaderCircle 图标配合 reanimated 旋转动画。
+ */
+const LoadingSpinner = ({ size = 24, visible }: LoadingSpinnerProps) => {
+  const { colors } = useTheme();
   const rotation = useSharedValue(0);
 
   useEffect(() => {
@@ -46,7 +45,7 @@ const ImageSpinner = ({
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ rotateZ: `${isRotate ? '-' : ''}${rotation.value}deg` }], // Negative value for clockwise rotation
+      transform: [{ rotateZ: `${rotation.value}deg` }],
     };
   });
 
@@ -57,15 +56,7 @@ const ImageSpinner = ({
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       <Animated.View style={animatedStyle}>
-        <Image
-          source={source}
-          style={{
-            width: size,
-            height: size,
-            transform: [{ scaleY: isRotate ? -1 : 1 }, { scaleX: 1 }],
-          }}
-          resizeMode="contain"
-        />
+        <LoaderCircle size={size} color={colors.textSecondary} />
       </Animated.View>
     </View>
   );
@@ -78,4 +69,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ImageSpinner;
+export default LoadingSpinner;

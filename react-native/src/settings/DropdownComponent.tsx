@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Image } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
+import { Check } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
 interface DropdownItem {
@@ -31,9 +32,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     return (
       <View style={styles.item}>
         <Text style={styles.textItem}>{item.label}</Text>
-        {isSelected && (
-          <Image source={require('../assets/done.png')} style={styles.icon} />
-        )}
+        {isSelected && <Check size={20} color={colors.primary} />}
       </View>
     );
   };
@@ -124,10 +123,6 @@ const createStyles = (colors: ColorScheme) =>
     },
     containerStyle: {
       backgroundColor: colors.background,
-    },
-    icon: {
-      width: 20,
-      height: 20,
     },
     item: {
       padding: 12,

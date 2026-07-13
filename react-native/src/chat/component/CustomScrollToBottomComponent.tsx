@@ -1,13 +1,13 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { ChevronDown } from 'lucide-react-native';
+import { useTheme } from '../../theme/index.ts';
 
 export const CustomScrollToBottomComponent = (): React.ReactNode => {
+  const { colors } = useTheme();
   return (
     <View style={styles.scrollToBottomContainer}>
-      <Image
-        source={require('../../assets/scroll_down.png')}
-        style={styles.scrollToBottomIcon}
-      />
+      <ChevronDown size={20} color={colors.text} />
     </View>
   );
 };
@@ -17,9 +17,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  scrollToBottomIcon: {
-    width: 20,
-    height: 20,
   },
 });

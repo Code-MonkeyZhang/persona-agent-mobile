@@ -23,6 +23,7 @@ import * as Progress from 'react-native-progress';
 import { showInfo } from '../util/ToastUtils.ts';
 import { ColorScheme, useTheme } from '../../theme/index.ts';
 import { logger } from '../../lib/logger';
+import { FileText, Play } from 'lucide-react-native';
 
 interface CustomFileProps {
   /** 当前选中的文件列表 */
@@ -279,10 +280,9 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
                 resizeMode="cover"
               />
               {isVideo && !isFileCompressing && (
-                <Image
-                  source={require('../../assets/play.png')}
-                  style={styles.playIcon}
-                />
+                <View style={styles.playIcon}>
+                  <Play size={32} color="white" />
+                </View>
               )}
               {isVideo && isFileCompressing && (
                 <CircularProgress
@@ -297,8 +297,9 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
                 {file.fileName}
               </Text>
               <View style={styles.formatContainer}>
-                <Image
-                  source={require('./../../assets/document.png')}
+                <FileText
+                  size={16}
+                  color={colors.textSecondary}
                   style={styles.formatIcon}
                 />
                 <Text style={styles.fileFormat}>
@@ -422,8 +423,6 @@ const getStyles = (colors: ColorScheme) =>
       left: '50%',
       marginTop: -16,
       marginLeft: -16,
-      width: 32,
-      height: 32,
     },
     /** 文档文件的预览卡片（显示文件名 + 格式图标） */
     filePreview: {
@@ -443,8 +442,6 @@ const getStyles = (colors: ColorScheme) =>
       alignItems: 'center',
     },
     formatIcon: {
-      width: 16,
-      height: 16,
       marginRight: 4,
     },
     fileName: {

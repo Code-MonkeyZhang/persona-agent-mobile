@@ -41,6 +41,7 @@ import {
   MessagesSquare,
   MonitorSmartphone,
   Plus,
+  Settings,
   Sparkles,
   User,
   Wrench,
@@ -354,10 +355,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           activeOpacity={0.7}
           onPress={() => navigateToStackScreen('Settings')}
         >
-          <Image
-            source={require('../assets/settings.png')}
-            style={styles.settingsImg}
-          />
+          <Settings size={20} color={colors.textSecondary} />
           <Text style={styles.footerText}>Settings</Text>
         </TouchableOpacity>
       </View>
@@ -534,11 +532,6 @@ const createStyles = (colors: ColorScheme) =>
       fontSize: 15,
       color: colors.textSecondary,
       marginLeft: 12,
-    },
-    settingsImg: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
     },
   });
 

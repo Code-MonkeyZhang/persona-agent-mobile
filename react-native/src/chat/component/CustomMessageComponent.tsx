@@ -38,6 +38,7 @@ import Markdown from './markdown/Markdown.tsx';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { Check, Copy } from 'lucide-react-native';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
@@ -104,9 +105,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
   const copyButton = useMemo(() => {
     return clickTitleCopied ? (
-      <Image source={require('../../assets/done.png')} style={styles.copy} />
+      <View style={styles.copy}>
+        <Check size={18} color={colors.text} />
+      </View>
     ) : null;
-  }, [clickTitleCopied, styles.copy]);
+  }, [clickTitleCopied, colors.text, styles.copy]);
 
   const handleImagePress = useCallback((pressMode: PressMode, url: string) => {
     if (pressMode === PressMode.Click) {
@@ -215,14 +218,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             }}
             style={styles.actionButton}
           >
-            <Image
-              source={
-                copied
-                  ? require('../../assets/done.png')
-                  : require('../../assets/copy_grey.png')
-              }
-              style={styles.actionButtonIcon}
-            />
+            {copied ? (
+              <Check size={16} color={colors.textSecondary} />
+            ) : (
+              <Copy size={16} color={colors.textSecondary} />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -233,10 +233,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     handleCopy,
     copied,
     currentMessage?.metrics,
+    colors.textSecondary,
     styles.actionButtonsContainer,
     styles.actionButtonInnerContainer,
     styles.actionButton,
-    styles.actionButtonIcon,
     styles.metricsText,
   ]);
 
@@ -264,11 +264,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
         {showLoading && (
           <View style={styles.loadingContainer}>
-            <LoadingSpinner
-              visible={true}
-              size={18}
-              source={require('../../assets/loading.png')}
-            />
+            <LoadingSpinner visible={true} size={18} />
           </View>
         )}
         {!isLoading && (
@@ -325,8 +321,6 @@ const createStyles = (colors: ColorScheme) =>
       marginRight: 6,
     },
     copy: {
-      width: 18,
-      height: 18,
       marginRight: 20,
       marginLeft: 'auto',
     },
@@ -370,10 +364,6 @@ const createStyles = (colors: ColorScheme) =>
     },
     actionButton: {
       padding: 8,
-    },
-    actionButtonIcon: {
-      width: 16,
-      height: 16,
     },
     metricsText: {
       fontSize: 12,

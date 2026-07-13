@@ -27,12 +27,7 @@ export const EmptyChatComponent = ({
   return (
     <View style={styles.emptyChatContainer}>
       {isLoadingMessages ? (
-        <LoadingSpinner
-          visible={true}
-          size={24}
-          isRotate={!isAndroid}
-          source={require('../../assets/loading.png')}
-        />
+        <LoadingSpinner visible={true} size={24} />
       ) : (
         <Text style={styles.hintText}>开始对话</Text>
       )}
