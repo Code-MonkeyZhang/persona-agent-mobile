@@ -10,9 +10,18 @@ import { logger } from './logger';
 
 class AudioPlayer {
   private playing = false;
+  private setupPromise: Promise<void> = Promise.resolve();
 
   get isPlaying(): boolean {
     return this.playing;
+  }
+
+  /**
+   * 注入 setupPlayer() 返回的 Promise，后续所有操作都会等待它完成。
+   * - 避免播放器未初始化时调用 reset / add / play 导致报错
+   */
+  init(setupPromise: Promise<void>): void {
+    this.setupPromise = setupPromise;
   }
 
   /**
@@ -20,6 +29,7 @@ class AudioPlayer {
    * @param filePath - 本地音频文件路径（MP3 格式）
    */
   async play(filePath: string): Promise<void> {
+    await this.setupPromise;
     logger.debug('[Audio] play:', filePath);
     await this.stop();
     await TrackPlayer.add({ url: filePath });
@@ -29,6 +39,7 @@ class AudioPlayer {
 
   /** 停止当前播放并重置队列 */
   async stop(): Promise<void> {
+    await this.setupPromise;
     logger.debug('[Audio] stop');
     await TrackPlayer.reset();
     this.playing = false;

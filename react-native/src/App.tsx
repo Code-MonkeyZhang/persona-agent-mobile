@@ -23,6 +23,7 @@ import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import TrackPlayer from 'react-native-track-player';
 import { ensurePlaybackListener } from './stores/voiceStore';
+import { getAudioPlayer } from './lib/audio-player';
 import { logger } from './lib/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -175,7 +176,9 @@ const App = () => {
     logger.info('[App] root mounted, initializing');
     configureErrorHandling();
     logger.debug('[App] error handling configured');
-    TrackPlayer.setupPlayer()
+    const setupPromise = TrackPlayer.setupPlayer();
+    getAudioPlayer().init(setupPromise);
+    setupPromise
       .then(() => {
         ensurePlaybackListener();
         logger.info('[App] TrackPlayer setup ok');
