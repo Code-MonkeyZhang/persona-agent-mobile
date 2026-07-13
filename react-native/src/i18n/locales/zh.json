@@ -1,0 +1,99 @@
+{
+  "chat": {
+    "typeMessage": "输入消息",
+    "startConversation": "开始对话",
+    "thinking": "思考中...",
+    "error": "错误：{{message}}",
+    "canceled": "已取消...",
+    "waitVideoReady": "请等待所有视频处理完成",
+    "shareImageTitle": "AI 图片"
+  },
+  "drawer": {
+    "chat": "聊天",
+    "tools": "工具",
+    "skills": "技能",
+    "sessions": "会话",
+    "server": "服务器",
+    "settings": "设置",
+    "deleteTitle": "删除会话",
+    "deleteDesc": "此操作不可撤销。",
+    "cancel": "取消",
+    "delete": "删除"
+  },
+  "settings": {
+    "general": "通用",
+    "vibration": "震动",
+    "vibrationDesc": "交互时触觉反馈"
+  },
+  "agent": {
+    "title": "Agent 详情",
+    "notFound": "未找到 Agent",
+    "defaultName": "Agent",
+    "baseSettings": "基础设置",
+    "defaultModel": "默认模型",
+    "maxSteps": "最大步数",
+    "compressionThreshold": "压缩阈值",
+    "memoryInterval": "记忆间隔",
+    "minutes": "{{count}} 分钟",
+    "voiceLanguage": "语音语言",
+    "systemPrompt": "系统提示词",
+    "workspacePath": "工作区路径",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "mcpServices": "MCP 服务",
+    "skills": "技能",
+    "needsAuthArrow": "需要授权 →",
+    "needsAuth": "需要授权",
+    "toolCount": "{{count}} 个工具"
+  },
+  "thought": {
+    "thinking": "思考",
+    "text": "回复",
+    "toolCall": "工具调用",
+    "error": "错误",
+    "ai": "AI",
+    "showThinking": "查看思考过程",
+    "expand": "展开",
+    "collapse": "收起"
+  },
+  "companion": {
+    "noAssetTitle": "该 Agent 还未配置陪伴形象",
+    "noAssetHint": "在 assets/pose/ 目录下添加表情图片即可启用"
+  },
+  "server": {
+    "tunnel": "隧道",
+    "tunnelDesc": "通过 Cloudflare 隧道连接远程服务器",
+    "placeholder": "https://xxx.trycloudflare.com",
+    "save": "保存",
+    "connecting": "连接中...",
+    "connected": "已连接",
+    "failed": "连接失败",
+    "enterAddress": "请输入服务器地址"
+  },
+  "tools": {
+    "mcpServers": "MCP 服务器",
+    "toolCount": "{{count}} 个工具",
+    "notConnected": "未连接",
+    "loading": "加载中...",
+    "empty": "暂无 MCP 服务器"
+  },
+  "skills": {
+    "assigned": "已分配技能",
+    "loading": "加载中...",
+    "empty": "暂无技能"
+  },
+  "error": {
+    "ttsFailed": "语音播报失败",
+    "maxFiles": "最多 {{count}} 个文件",
+    "maxVideos": "最多 {{count}} 个视频",
+    "maxImages": "图片超限，最多 {{count}} 张图片",
+    "maxDocuments": "文档超限，最多 {{count}} 个文件",
+    "unsupportedFormat": "不支持的文件格式：.{{format}}",
+    "fileTooLarge": "文件过大（超过 4.5MB）：{{name}}",
+    "videoTooLarge": "视频过大：{{size}}MB（最大 {{max}}MB）",
+    "videoProcessFailed": "视频处理失败"
+  },
+  "common": {
+    "back": "返回"
+  }
+}

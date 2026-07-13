@@ -10,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
-import { Check, Globe, Vibrate, VibrateOff } from 'lucide-react-native';
+import { Check, Vibrate, VibrateOff } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
@@ -19,12 +20,10 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 
 import { useTheme, ColorScheme } from '../theme/index.ts';
 
-type Language = 'zh' | 'en';
-
 function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
-  const [language, setLanguage] = useState<Language>('zh');
   const navigation = useNavigation<NavigationProp<RouteParamList>>();
 
   const toggleHapticFeedback = () => {
@@ -52,49 +51,15 @@ function SettingsScreen(): React.JSX.Element {
         </CustomHeaderRightButton>
       ),
     });
-  }, [navigation, colors]);
+  }, [navigation, colors, t]);
 
   const styles = createStyles(colors);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
-        <Text style={styles.sectionLabel}>General</Text>
+        <Text style={styles.sectionLabel}>{t('settings.general')}</Text>
         <View style={styles.card}>
-          {/* 语言切换 */}
-          <View style={styles.row}>
-            <Globe size={16} color={colors.text} />
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Language</Text>
-            </View>
-            <View style={styles.langSwitcher}>
-              {[
-                { value: 'zh' as const, label: '中文' },
-                { value: 'en' as const, label: 'English' },
-              ].map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => setLanguage(opt.value)}
-                  style={[
-                    styles.langOption,
-                    language === opt.value && styles.langOptionActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.langOptionText,
-                      language === opt.value && styles.langOptionTextActive,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
           {/* 震动开关 */}
           <View style={styles.row}>
             {hapticEnabled ? (
@@ -103,10 +68,8 @@ function SettingsScreen(): React.JSX.Element {
               <VibrateOff size={16} color={colors.text} />
             )}
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Vibration</Text>
-              <Text style={styles.rowDesc}>
-                Haptic feedback on interactions
-              </Text>
+              <Text style={styles.rowLabel}>{t('settings.vibration')}</Text>
+              <Text style={styles.rowDesc}>{t('settings.vibrationDesc')}</Text>
             </View>
             <TouchableOpacity
               onPress={toggleHapticFeedback}
@@ -168,34 +131,6 @@ const createStyles = (colors: ColorScheme) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 2,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: colors.borderLight,
-      marginLeft: 16,
-      marginRight: 16,
-    },
-    langSwitcher: {
-      flexDirection: 'row',
-      backgroundColor: colors.surfaceSecondary,
-      borderRadius: 999,
-      padding: 2,
-    },
-    langOption: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 999,
-    },
-    langOptionActive: {
-      backgroundColor: colors.background,
-    },
-    langOptionText: {
-      fontSize: 13,
-      fontWeight: '500',
-      color: colors.textSecondary,
-    },
-    langOptionTextActive: {
-      color: colors.text,
     },
     toggle: {
       width: 40,

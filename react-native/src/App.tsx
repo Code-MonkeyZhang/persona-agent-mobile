@@ -5,8 +5,9 @@ import {
   createDrawerNavigator,
   DrawerContentComponentProps,
 } from '@react-navigation/drawer';
+import { useTranslation } from 'react-i18next';
 import CustomDrawerContent from './history/CustomDrawerContent.tsx';
-import { Dimensions, Keyboard, StatusBar } from 'react-native';
+import { Dimensions, Keyboard, StatusBar, AppState } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import { AppProvider } from './history/AppProvider.tsx';
@@ -25,6 +26,8 @@ import TrackPlayer from 'react-native-track-player';
 import { ensurePlaybackListener } from './stores/voiceStore';
 import { getAudioPlayer } from './lib/audio-player';
 import { logger } from './lib/logger';
+import './i18n/index.ts';
+import i18n, { detectLanguage } from './i18n/index.ts';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const minWidth = screenWidth > screenHeight ? screenHeight : screenWidth;
@@ -87,11 +90,12 @@ const DrawerNavigator = () => {
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const stackScreenOptions = {
     headerShown: true,
     headerTintColor: colors.text,
     headerStyle: { backgroundColor: colors.background },
-    headerBackTitle: 'Back',
+    headerBackTitle: t('common.back'),
     animation: 'default' as const,
   };
   return (
@@ -106,28 +110,28 @@ const AppNavigator = () => {
         component={AgentDetailScreen}
         options={{
           ...stackScreenOptions,
-          title: 'Agent Detail',
+          title: t('agent.title'),
         }}
       />
       <Stack.Screen
         name="Server"
         component={ServerScreen}
-        options={{ ...stackScreenOptions, title: 'Server' }}
+        options={{ ...stackScreenOptions, title: t('drawer.server') }}
       />
       <Stack.Screen
         name="Tools"
         component={ToolsScreen}
-        options={{ ...stackScreenOptions, title: 'Tools' }}
+        options={{ ...stackScreenOptions, title: t('drawer.tools') }}
       />
       <Stack.Screen
         name="Skills"
         component={SkillsScreen}
-        options={{ ...stackScreenOptions, title: 'Skills' }}
+        options={{ ...stackScreenOptions, title: t('drawer.skills') }}
       />
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ ...stackScreenOptions, title: 'Settings' }}
+        options={{ ...stackScreenOptions, title: t('drawer.settings') }}
       />
     </Stack.Navigator>
   );
@@ -179,6 +183,20 @@ const App = () => {
       .catch((e) => {
         logger.error('[App] TrackPlayer setup failed:', e);
       });
+
+    // 监听 app 回前台：系统语言可能已变更，重新检测并同步
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const lang = detectLanguage();
+        if (i18n.language !== lang) {
+          logger.info(`[App] app resumed, language changed to: ${lang}`);
+          i18n.changeLanguage(lang);
+        }
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (

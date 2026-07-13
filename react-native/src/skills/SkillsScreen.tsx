@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Sparkles } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import { fetchAgentDetail, fetchSkills, SkillInfo } from '../api/server-api.ts';
@@ -15,6 +16,7 @@ import { logger } from '../lib/logger';
 
 const SkillsScreen: React.FC = () => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -64,7 +66,7 @@ const SkillsScreen: React.FC = () => {
       <ScrollView style={styles.container}>
         <View style={styles.sectionHeader}>
           <Sparkles size={16} color={colors.textSecondary} />
-          <Text style={styles.sectionLabel}>Assigned Skills</Text>
+          <Text style={styles.sectionLabel}>{t('skills.assigned')}</Text>
         </View>
         {skills.length > 0 ? (
           skills.map((skill) => (
@@ -80,7 +82,7 @@ const SkillsScreen: React.FC = () => {
         ) : (
           <View style={styles.card}>
             <Text style={styles.emptyText}>
-              {loading ? 'Loading...' : 'No skills assigned'}
+              {loading ? t('skills.loading') : t('skills.empty')}
             </Text>
           </View>
         )}

@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   getBackgroundImageUrl,
   getPoseImageUrl,
@@ -40,6 +41,7 @@ const CompanionContent = React.memo(function CompanionContent({
   onBgError,
   onPoseError,
 }: CompanionContentProps) {
+  const { t } = useTranslation();
   const showBackground = hasAssets === true && !bgError;
   const showPose = hasAssets === true && !poseError;
 
@@ -75,10 +77,8 @@ const CompanionContent = React.memo(function CompanionContent({
 
       {hasAssets === false && (
         <View style={styles.centerContent}>
-          <Text style={styles.noAssetTitle}>该 Agent 还未配置陪伴形象</Text>
-          <Text style={styles.noAssetHint}>
-            在 assets/pose/ 目录下添加表情图片即可启用
-          </Text>
+          <Text style={styles.noAssetTitle}>{t('companion.noAssetTitle')}</Text>
+          <Text style={styles.noAssetHint}>{t('companion.noAssetHint')}</Text>
         </View>
       )}
     </View>

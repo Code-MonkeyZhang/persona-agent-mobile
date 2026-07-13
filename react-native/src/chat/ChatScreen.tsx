@@ -83,6 +83,8 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { UserRound, Mic, MicOff } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n/index.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
@@ -167,6 +169,7 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
@@ -404,7 +407,7 @@ function ChatScreen(): React.JSX.Element {
               const newMessages = [...prevMessages];
               newMessages[0] = {
                 ...prevMessages[0],
-                text: 'Error: ' + message,
+                text: i18n.t('chat.error', { message }),
               };
               return newMessages;
             });
@@ -890,7 +893,7 @@ function ChatScreen(): React.JSX.Element {
       const files = selectedFilesRef.current;
       // 如果有视频还在转码/压缩中，提示等待
       if (!isAllFileReady(files)) {
-        showInfo('please wait for all videos to be ready');
+        showInfo(t('chat.waitVideoReady'));
         return;
       }
 
@@ -963,7 +966,7 @@ function ChatScreen(): React.JSX.Element {
         }
       })();
     },
-    [setSessionId]
+    [setSessionId, t]
   );
 
   // ==================== 文件 & 语音转录 ====================
@@ -995,7 +998,7 @@ function ChatScreen(): React.JSX.Element {
         newMessages[0].text === textPlaceholder ||
         newMessages[0].text === ''
       ) {
-        newMessages[0] = { ...newMessages[0], text: 'Canceled...' };
+        newMessages[0] = { ...newMessages[0], text: i18n.t('chat.canceled') };
       }
       return newMessages;
     });
@@ -1145,7 +1148,7 @@ function ChatScreen(): React.JSX.Element {
           >
             <View style={bubbleStyles.inner}>
               {isThinking ? (
-                <Text style={bubbleStyles.thinking}>思考中...</Text>
+                <Text style={bubbleStyles.thinking}>{t('chat.thinking')}</Text>
               ) : (
                 <ScrollView style={bubbleStyles.scroll} nestedScrollEnabled>
                   <Text style={bubbleStyles.text}>{lastAgentMessage.text}</Text>

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import uuid from 'uuid';
+import i18n from '../../i18n/index.ts';
 import type { Thought, ThoughtType } from '../../types/Thought';
 import type { ToolCall, WsToolResult } from '../../api/server-api';
 
@@ -99,19 +100,19 @@ export function getThoughtColor(type: ThoughtType, isError?: boolean): string {
   }
 }
 
-/** 获取 Thought 类型对应的中文标签 */
+/** 获取 Thought 类型对应的本地化标签 */
 export function getThoughtLabel(type: ThoughtType): string {
   switch (type) {
     case 'thinking':
-      return '思考';
+      return i18n.t('thought.thinking');
     case 'text':
-      return '回复';
+      return i18n.t('thought.text');
     case 'tool_use':
-      return '工具调用';
+      return i18n.t('thought.toolCall');
     case 'error':
-      return '错误';
+      return i18n.t('thought.error');
     default:
-      return 'AI';
+      return i18n.t('thought.ai');
   }
 }
 

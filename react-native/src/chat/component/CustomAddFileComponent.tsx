@@ -29,6 +29,7 @@ import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from '../util/ToastUtils.ts';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 import { Plus } from 'lucide-react-native';
+import i18n from '../../i18n/index.ts';
 
 interface CustomAddFileComponentProps {
   onFileSelected: (files: FileInfo[]) => void;
@@ -52,16 +53,14 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
             let format = fileNameArr[fileNameArr.length - 1].toLowerCase();
             const fileType = getFileType(format);
             if (fileType === FileType.unSupported) {
-              const msg = 'Selected UnSupported Files format: .' + format;
-              showInfo(msg);
+              showInfo(i18n.t('error.unsupportedFormat', { format }));
               return;
             }
             if (
               fileType === FileType.document &&
               (pickResult.size ?? 0) >= MAX_FILE_SIZE
             ) {
-              const msg = 'File size exceeds 4.5MB limit: ' + pickResult.name;
-              showInfo(msg);
+              showInfo(i18n.t('error.fileTooLarge', { name: pickResult.name }));
               return;
             }
             let localFileUrl: string | null;
@@ -303,8 +302,7 @@ const getFiles = async (res: ImagePickerResponse) => {
         let format = fileNameArr[fileNameArr.length - 1].toLowerCase();
         const fileType = getFileType(format);
         if (fileType === FileType.unSupported) {
-          const msg = 'Selected UnSupported Files format: .' + format;
-          showInfo(msg);
+          showInfo(i18n.t('error.unsupportedFormat', { format }));
           return;
         }
         let width = media.width;

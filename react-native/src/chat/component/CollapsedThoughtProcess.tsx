@@ -12,6 +12,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import type { Thought } from '../../types/Thought';
 import {
   getThoughtIcon,
@@ -34,6 +35,7 @@ const ThoughtItem = memo(function ThoughtItem({
   thought: Thought;
   isLast: boolean;
 }) {
+  const { t } = useTranslation();
   const [isContentExpanded, setIsContentExpanded] = useState(false);
   const [lineCount, setLineCount] = useState(0);
   const needsExpand = lineCount > 2;
@@ -94,7 +96,9 @@ const ThoughtItem = memo(function ThoughtItem({
                 onPress={() => setIsContentExpanded(!isContentExpanded)}
               >
                 <Text style={styles.expandBtnText}>
-                  {isContentExpanded ? '收起' : '展开'}
+                  {isContentExpanded
+                    ? t('thought.collapse')
+                    : t('thought.expand')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -110,6 +114,7 @@ function CollapsedThoughtProcess({
   steps,
   onToggle,
 }: CollapsedThoughtProcessProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const panelRef = useRef<View>(null);
   const panelHeightRef = useRef(0);
@@ -147,7 +152,7 @@ function CollapsedThoughtProcess({
             transform: [{ rotate: isExpanded ? '90deg' : '0deg' }],
           }}
         />
-        <Text style={styles.collapsedLabel}>查看思考过程</Text>
+        <Text style={styles.collapsedLabel}>{t('thought.showThinking')}</Text>
       </TouchableOpacity>
 
       {isExpanded && (

@@ -32,6 +32,7 @@ import {
   Clock,
   User,
 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { logger } from '../lib/logger';
 import {
@@ -96,6 +97,7 @@ function InfoRow({
 const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   const { agentId } = route.params;
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
   const styles = createStyles(colors);
 
   const [agent, setAgent] = useState<AgentInfo | null>(null);
@@ -146,12 +148,12 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   if (!agent) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Agent not found</Text>
+        <Text style={styles.emptyText}>{t('agent.notFound')}</Text>
       </View>
     );
   }
 
-  const displayName = agent.name || 'Agent';
+  const displayName = agent.name || t('agent.defaultName');
   const modelDisplay = `${agent.defaultModel.provider} / ${agent.defaultModel.model}`;
   const serverAddr = getServerAddress();
   const canLoadAvatar = serverAddr.length > 0 && agentId.length > 0;
@@ -183,34 +185,34 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       </View>
 
       {/* 基础设置 */}
-      <Text style={styles.sectionLabel}>基础设置</Text>
+      <Text style={styles.sectionLabel}>{t('agent.baseSettings')}</Text>
       <View style={styles.card}>
         <InfoRow
           {...rowProps}
           icon={Brain}
-          label="默认模型"
+          label={t('agent.defaultModel')}
           value={modelDisplay}
         />
         <View style={styles.divider} />
         <InfoRow
           {...rowProps}
           icon={Hash}
-          label="最大步数"
+          label={t('agent.maxSteps')}
           value={String(agent.maxSteps)}
         />
         <View style={styles.divider} />
         <InfoRow
           {...rowProps}
           icon={Gauge}
-          label="压缩阈值"
+          label={t('agent.compressionThreshold')}
           value={`${agent.compressionThreshold}%`}
         />
         <View style={styles.divider} />
         <InfoRow
           {...rowProps}
           icon={Moon}
-          label="记忆间隔"
-          value={`${agent.dreamIntervalMinutes} 分钟`}
+          label={t('agent.memoryInterval')}
+          value={t('agent.minutes', { count: agent.dreamIntervalMinutes })}
         />
         {agent.voiceLanguage ? (
           <>
@@ -218,7 +220,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             <InfoRow
               {...rowProps}
               icon={Languages}
-              label="语音语言"
+              label={t('agent.voiceLanguage')}
               value={agent.voiceLanguage}
             />
           </>
@@ -232,7 +234,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           activeOpacity={0.7}
         >
           <MessageSquare size={16} color={colors.text} />
-          <Text style={styles.rowLabel}>系统提示词</Text>
+          <Text style={styles.rowLabel}>{t('agent.systemPrompt')}</Text>
           <ChevronRight
             size={16}
             color={colors.textTertiary}
@@ -251,7 +253,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             <View style={styles.row}>
               <FolderOpen size={16} color={colors.text} />
               <View style={styles.workspaceContent}>
-                <Text style={styles.rowLabel}>工作区路径</Text>
+                <Text style={styles.rowLabel}>{t('agent.workspacePath')}</Text>
                 <Text style={styles.workspacePath} numberOfLines={1}>
                   {agent.defaultWorkspacePath}
                 </Text>
@@ -264,22 +266,26 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         <InfoRow
           {...rowProps}
           icon={Calendar}
-          label="创建时间"
-          value={new Date(agent.createdAt).toLocaleDateString('zh-CN')}
+          label={t('agent.createdAt')}
+          value={new Date(agent.createdAt).toLocaleDateString(
+            i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+          )}
         />
         <View style={styles.divider} />
         <InfoRow
           {...rowProps}
           icon={Clock}
-          label="更新时间"
-          value={new Date(agent.updatedAt).toLocaleDateString('zh-CN')}
+          label={t('agent.updatedAt')}
+          value={new Date(agent.updatedAt).toLocaleDateString(
+            i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+          )}
         />
       </View>
 
       {/* MCP 服务 */}
       {mcps.length > 0 && (
         <>
-          <Text style={styles.sectionLabel}>MCP 服务</Text>
+          <Text style={styles.sectionLabel}>{t('agent.mcpServices')}</Text>
           <View style={styles.card}>
             {mcps.map((mcp, i) => {
               const needsAuth = mcp.status === 'needs_auth';
@@ -315,9 +321,9 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                     <Text style={styles.mcpToolCount}>
                       {needsAuth
                         ? mcp.oauthUrl
-                          ? '需要授权 →'
-                          : '需要授权'
-                        : `${mcp.toolCount} 个工具`}
+                          ? t('agent.needsAuthArrow')
+                          : t('agent.needsAuth')
+                        : t('agent.toolCount', { count: mcp.toolCount })}
                     </Text>
                   </TouchableOpacity>
                   {i < mcps.length - 1 ? <View style={styles.divider} /> : null}
@@ -331,7 +337,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       {/* 技能 */}
       {skills.length > 0 && (
         <>
-          <Text style={styles.sectionLabel}>技能</Text>
+          <Text style={styles.sectionLabel}>{t('agent.skills')}</Text>
           <View style={styles.card}>
             {skills.map((skill, i) => (
               <React.Fragment key={skill.name}>

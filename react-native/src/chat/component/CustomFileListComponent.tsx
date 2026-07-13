@@ -24,6 +24,7 @@ import { showInfo } from '../util/ToastUtils.ts';
 import { ColorScheme, useTheme } from '../../theme/index.ts';
 import { logger } from '../../lib/logger';
 import { FileText, Play } from 'lucide-react-native';
+import i18n from '../../i18n/index.ts';
 
 interface CustomFileProps {
   /** 当前选中的文件列表 */
@@ -157,13 +158,14 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
             const newFiles = filesRef.current.filter((f) => f.url !== file.url);
             onFileUpdated!(newFiles, true);
             showInfo(
-              `Video too large: ${currentSize.toFixed(
-                1
-              )}MB (max ${MAX_VIDEO_SIZE}MB)`
+              i18n.t('error.videoTooLarge', {
+                size: currentSize.toFixed(1),
+                max: MAX_VIDEO_SIZE,
+              })
             );
           }
         } catch (error) {
-          showInfo('Video process failed');
+          showInfo(i18n.t('error.videoProcessFailed'));
           compressingFiles.current = '';
           isCompressing.current = false;
           // 压缩失败，移除该视频并提示

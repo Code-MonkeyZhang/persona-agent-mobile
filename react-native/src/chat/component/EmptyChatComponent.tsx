@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { Text, Platform, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 
@@ -22,6 +23,7 @@ export const EmptyChatComponent = ({
   isLoadingMessages = false,
 }: EmptyChatComponentProps): React.ReactElement => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const styles = createStyles(colors);
 
   return (
@@ -29,7 +31,7 @@ export const EmptyChatComponent = ({
       {isLoadingMessages ? (
         <LoadingSpinner visible={true} size={24} />
       ) : (
-        <Text style={styles.hintText}>开始对话</Text>
+        <Text style={styles.hintText}>{t('chat.startConversation')}</Text>
       )}
     </View>
   );

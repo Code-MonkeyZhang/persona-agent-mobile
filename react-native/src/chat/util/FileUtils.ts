@@ -13,6 +13,7 @@ import { Platform } from 'react-native';
 import { FileInfo, FileType } from '../../types/Chat.ts';
 import { getTextModel } from '../../storage/StorageUtils.ts';
 import { showInfo } from './ToastUtils.ts';
+import i18n from '../../i18n/index.ts';
 import { logger } from '../../lib/logger';
 
 /**
@@ -145,7 +146,7 @@ export const checkFileNumberLimit = (
 
   if (isNova()) {
     if (prevFiles.length + newFiles.length > MAX_NOVA_FILES) {
-      showInfo(`Maximum ${MAX_NOVA_FILES} files allowed`);
+      showInfo(i18n.t('error.maxFiles', { count: MAX_NOVA_FILES }));
     }
     if (prevFiles.length >= MAX_NOVA_FILES) {
       return prevFiles;
@@ -156,7 +157,7 @@ export const checkFileNumberLimit = (
     const newVideos = newFiles.filter((file) => file.type === FileType.video);
 
     if (existingVideos + newVideos.length > MAX_NOVA_VIDEOS) {
-      showInfo(`Maximum ${MAX_NOVA_VIDEOS} video allowed`);
+      showInfo(i18n.t('error.maxVideos', { count: MAX_NOVA_VIDEOS }));
     }
 
     const filteredNewFiles =
@@ -185,12 +186,10 @@ export const checkFileNumberLimit = (
 
   if (showWarning) {
     if (totalImages > MAX_IMAGES) {
-      showInfo(`Image limit exceeded, maximum ${MAX_IMAGES} images allowed`);
+      showInfo(i18n.t('error.maxImages', { count: MAX_IMAGES }));
     }
     if (totalDocs > MAX_DOCUMENTS) {
-      showInfo(
-        `Document limit exceeded, maximum ${MAX_DOCUMENTS} files allowed`
-      );
+      showInfo(i18n.t('error.maxDocuments', { count: MAX_DOCUMENTS }));
     }
   }
   return [...prevFiles, ...processedNewImages, ...processedNewDocs];

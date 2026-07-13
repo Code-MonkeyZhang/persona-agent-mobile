@@ -19,6 +19,7 @@ import {
   DrawerContentComponentProps,
   useDrawerStatus,
 } from '@react-navigation/drawer';
+import { useTranslation } from 'react-i18next';
 import { Chat } from '../types/Chat.ts';
 import { logger } from '../lib/logger';
 import {
@@ -60,6 +61,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   navigation,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   /** 按日期分组后的会话列表（含虚拟标题行），直接传给 FlatList 渲染 */
   const [groupChatHistory, setGroupChatHistory] = useState<Chat[]>([]);
   /** 是否显示删除确认弹窗 */
@@ -265,7 +267,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         <View style={styles.chatIconWrapper}>
           <MessageCircle size={20} color={colors.text} />
         </View>
-        <Text style={styles.chatCardText}>Chat</Text>
+        <Text style={styles.chatCardText}>{t('drawer.chat')}</Text>
       </TouchableOpacity>
 
       <View style={styles.divider} />
@@ -278,7 +280,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           onPress={() => navigateToStackScreen('Tools')}
         >
           <Wrench size={20} color={colors.textSecondary} />
-          <Text style={styles.navButtonText}>Tools</Text>
+          <Text style={styles.navButtonText}>{t('drawer.tools')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navButton}
@@ -286,7 +288,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           onPress={() => navigateToStackScreen('Skills')}
         >
           <Sparkles size={20} color={colors.textSecondary} />
-          <Text style={styles.navButtonText}>Skills</Text>
+          <Text style={styles.navButtonText}>{t('drawer.skills')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -294,7 +296,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       <View style={styles.sessionsHeader}>
         <View style={styles.sessionsHeaderLeft}>
           <MessagesSquare size={20} color={colors.textSecondary} />
-          <Text style={styles.sessionsHeaderText}>Sessions</Text>
+          <Text style={styles.sessionsHeaderText}>{t('drawer.sessions')}</Text>
         </View>
         <TouchableOpacity
           onPress={handleNewChat}
@@ -348,7 +350,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           onPress={() => navigateToStackScreen('Server')}
         >
           <MonitorSmartphone size={20} color={colors.textSecondary} />
-          <Text style={styles.footerText}>Server</Text>
+          <Text style={styles.footerText}>{t('drawer.server')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.footerButton}
@@ -356,22 +358,22 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           onPress={() => navigateToStackScreen('Settings')}
         >
           <Settings size={20} color={colors.textSecondary} />
-          <Text style={styles.footerText}>Settings</Text>
+          <Text style={styles.footerText}>{t('drawer.settings')}</Text>
         </TouchableOpacity>
       </View>
 
       {/* 删除会话确认弹窗 */}
       <Dialog.Container visible={showDialog}>
-        <Dialog.Title>Delete Message</Dialog.Title>
-        <Dialog.Description>You cannot undo this action.</Dialog.Description>
+        <Dialog.Title>{t('drawer.deleteTitle')}</Dialog.Title>
+        <Dialog.Description>{t('drawer.deleteDesc')}</Dialog.Description>
         <Dialog.Button
-          label="Cancel"
+          label={t('drawer.cancel')}
           onPress={() => {
             setShowDialog(false);
           }}
         />
         <Dialog.Button
-          label="Delete"
+          label={t('drawer.delete')}
           onPress={() => {
             handleDelete();
             setShowDialog(false);

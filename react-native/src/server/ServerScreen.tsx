@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Globe, Link as LinkIcon, Check } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import {
   getServerAddress,
@@ -24,6 +25,7 @@ import { logger } from '../lib/logger';
  */
 const ServerScreen: React.FC = () => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const savedAddress = getServerAddress();
   const [url, setUrl] = useState(savedAddress);
@@ -44,7 +46,7 @@ const ServerScreen: React.FC = () => {
     logger.info(`[Server] handleSave: address="${address}"`);
     if (!address) {
       setStatus('failed');
-      setError('Please enter a server address');
+      setError(t('server.enterAddress'));
       return;
     }
     setUrl(address);
@@ -107,10 +109,8 @@ const ServerScreen: React.FC = () => {
               <Globe size={20} color={colors.text} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.cardTitle}>Tunnel</Text>
-              <Text style={styles.cardDesc}>
-                Connect to your agent server via Cloudflare tunnel
-              </Text>
+              <Text style={styles.cardTitle}>{t('server.tunnel')}</Text>
+              <Text style={styles.cardDesc}>{t('server.tunnelDesc')}</Text>
             </View>
           </View>
 
@@ -125,7 +125,7 @@ const ServerScreen: React.FC = () => {
                 style={styles.input}
                 value={url}
                 onChangeText={setUrl}
-                placeholder="https://xxx.trycloudflare.com"
+                placeholder={t('server.placeholder')}
                 placeholderTextColor={colors.placeholder}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -146,7 +146,9 @@ const ServerScreen: React.FC = () => {
                 <Check size={16} color="#fff" />
               ) : (
                 <Text style={styles.saveButtonText}>
-                  {status === 'connecting' ? 'Connecting...' : 'Save'}
+                  {status === 'connecting'
+                    ? t('server.connecting')
+                    : t('server.save')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -161,9 +163,10 @@ const ServerScreen: React.FC = () => {
                 status === 'failed' && { color: colors.error },
               ]}
             >
-              {status === 'connecting' && 'Connecting...'}
-              {status === 'connected' && 'Connected'}
-              {status === 'failed' && `Failed${error ? ': ' + error : ''}`}
+              {status === 'connecting' && t('server.connecting')}
+              {status === 'connected' && t('server.connected')}
+              {status === 'failed' &&
+                `${t('server.failed')}${error ? ': ' + error : ''}`}
             </Text>
           )}
         </View>

@@ -7,6 +7,7 @@
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import { ColorScheme, useTheme } from '../../theme/index.ts';
 import CustomSendComponent from './CustomSendComponent.tsx';
@@ -41,6 +42,7 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   onFileUpdated,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
 
@@ -70,7 +72,7 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
           style={styles.textInput}
           value={text}
           onChangeText={setText}
-          placeholder="Type a message..."
+          placeholder={t('chat.typeMessage')}
           placeholderTextColor={colors.placeholder}
           multiline
           blurOnSubmit={false}

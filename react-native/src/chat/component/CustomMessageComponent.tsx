@@ -39,6 +39,7 @@ import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 import { Check, Copy } from 'lucide-react-native';
+import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
@@ -120,7 +121,11 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         });
     } else if (pressMode === PressMode.LongPress) {
       trigger(HapticFeedbackTypes.notificationSuccess);
-      const shareOptions = { url: url, type: 'image/png', title: 'AI Image' };
+      const shareOptions = {
+        url: url,
+        type: 'image/png',
+        title: i18n.t('chat.shareImageTitle'),
+      };
       Share.open(shareOptions)
         .then((res) => logger.debug('[Message] share result:', res))
         .catch((err) => err && logger.warn('[Message] share failed:', err));

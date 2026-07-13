@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Wrench } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import {
@@ -19,6 +20,7 @@ import { logger } from '../lib/logger';
 
 const ToolsScreen: React.FC = () => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,7 +70,7 @@ const ToolsScreen: React.FC = () => {
       <ScrollView style={styles.container}>
         <View style={styles.sectionHeader}>
           <Wrench size={16} color={colors.textSecondary} />
-          <Text style={styles.sectionLabel}>MCP Servers</Text>
+          <Text style={styles.sectionLabel}>{t('tools.mcpServers')}</Text>
         </View>
         <View style={styles.card}>
           {mcpServers.length > 0 ? (
@@ -92,8 +94,8 @@ const ToolsScreen: React.FC = () => {
                     <Text style={styles.listItemTitle}>{server.name}</Text>
                     <Text style={styles.listItemDesc}>
                       {server.toolCount > 0
-                        ? `${server.toolCount} tools`
-                        : 'Not connected'}
+                        ? t('tools.toolCount', { count: server.toolCount })
+                        : t('tools.notConnected')}
                     </Text>
                   </View>
                 </View>
@@ -101,7 +103,7 @@ const ToolsScreen: React.FC = () => {
             })
           ) : (
             <Text style={styles.emptyText}>
-              {loading ? 'Loading...' : 'No MCP servers assigned'}
+              {loading ? t('tools.loading') : t('tools.empty')}
             </Text>
           )}
         </View>

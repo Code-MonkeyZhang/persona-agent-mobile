@@ -16,6 +16,7 @@ import {
   getTtsEnabled,
   saveTtsEnabled,
 } from '../storage/StorageUtils';
+import i18n from '../i18n/index.ts';
 
 const CACHE_DIR = `${RNFS.DocumentDirectoryPath}/tts_cache`;
 
@@ -133,7 +134,8 @@ export const useVoiceStore = create<VoiceStore>()(
           await getAudioPlayer().play(filePath);
           logger.debug('[TTS] playing...');
         } catch (err) {
-          const message = err instanceof Error ? err.message : '语音播报失败';
+          const message =
+            err instanceof Error ? err.message : i18n.t('error.ttsFailed');
           logger.error(`[TTS] speak failed: ${message}`);
           Toast.show({
             type: 'error',

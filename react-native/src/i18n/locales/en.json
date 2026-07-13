@@ -1,0 +1,99 @@
+{
+  "chat": {
+    "typeMessage": "Type a message",
+    "startConversation": "Start a conversation",
+    "thinking": "Thinking...",
+    "error": "Error: {{message}}",
+    "canceled": "Canceled...",
+    "waitVideoReady": "Please wait for all videos to be ready",
+    "shareImageTitle": "AI Image"
+  },
+  "drawer": {
+    "chat": "Chat",
+    "tools": "Tools",
+    "skills": "Skills",
+    "sessions": "Sessions",
+    "server": "Server",
+    "settings": "Settings",
+    "deleteTitle": "Delete Session",
+    "deleteDesc": "You cannot undo this action.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "settings": {
+    "general": "General",
+    "vibration": "Vibration",
+    "vibrationDesc": "Haptic feedback on interactions"
+  },
+  "agent": {
+    "title": "Agent Detail",
+    "notFound": "Agent not found",
+    "defaultName": "Agent",
+    "baseSettings": "Basic Settings",
+    "defaultModel": "Default Model",
+    "maxSteps": "Max Steps",
+    "compressionThreshold": "Compression Threshold",
+    "memoryInterval": "Memory Interval",
+    "minutes": "{{count}} min",
+    "voiceLanguage": "Voice Language",
+    "systemPrompt": "System Prompt",
+    "workspacePath": "Workspace Path",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "mcpServices": "MCP Services",
+    "skills": "Skills",
+    "needsAuthArrow": "Authorize →",
+    "needsAuth": "Authorization needed",
+    "toolCount": "{{count}} tools"
+  },
+  "thought": {
+    "thinking": "Thinking",
+    "text": "Response",
+    "toolCall": "Tool Call",
+    "error": "Error",
+    "ai": "AI",
+    "showThinking": "Show thinking process",
+    "expand": "More",
+    "collapse": "Less"
+  },
+  "companion": {
+    "noAssetTitle": "This agent has no companion avatar",
+    "noAssetHint": "Add expression images in assets/pose/ to enable"
+  },
+  "server": {
+    "tunnel": "Tunnel",
+    "tunnelDesc": "Connect to your agent server via Cloudflare tunnel",
+    "placeholder": "https://xxx.trycloudflare.com",
+    "save": "Save",
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "failed": "Failed",
+    "enterAddress": "Please enter a server address"
+  },
+  "tools": {
+    "mcpServers": "MCP Servers",
+    "toolCount": "{{count}} tools",
+    "notConnected": "Not connected",
+    "loading": "Loading...",
+    "empty": "No MCP servers assigned"
+  },
+  "skills": {
+    "assigned": "Assigned Skills",
+    "loading": "Loading...",
+    "empty": "No skills assigned"
+  },
+  "error": {
+    "ttsFailed": "TTS playback failed",
+    "maxFiles": "Maximum {{count}} files allowed",
+    "maxVideos": "Maximum {{count}} video allowed",
+    "maxImages": "Image limit exceeded, maximum {{count}} images allowed",
+    "maxDocuments": "Document limit exceeded, maximum {{count}} files allowed",
+    "unsupportedFormat": "Unsupported file format: .{{format}}",
+    "fileTooLarge": "File size exceeds 4.5MB limit: {{name}}",
+    "videoTooLarge": "Video too large: {{size}}MB (max {{max}}MB)",
+    "videoProcessFailed": "Video process failed"
+  },
+  "common": {
+    "back": "Back"
+  }
+}
