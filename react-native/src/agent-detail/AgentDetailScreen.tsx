@@ -6,7 +6,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -30,7 +29,6 @@ import {
   ChevronRight,
   Calendar,
   Clock,
-  User,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
@@ -42,9 +40,9 @@ import {
   fetchAgentDetail,
   fetchMcpServers,
   fetchSkills,
-  getAgentAvatarUrl,
 } from '../api/server-api.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
+import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 
 type Props = NativeStackScreenProps<RouteParamList, 'AgentDetail'>;
 
@@ -105,7 +103,6 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [promptExpanded, setPromptExpanded] = useState(false);
-  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -120,7 +117,6 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           fetchSkills(address),
         ]);
         setAgent(agentData);
-        setAvatarError(false);
 
         // 按 Agent 绑定的名称过滤，只展示该 Agent 实际使用的 MCP 和 Skill
         const nameSet = new Set(agentData.mcpNames);
@@ -156,7 +152,6 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   const displayName = agent.name || t('agent.defaultName');
   const modelDisplay = `${agent.defaultModel.provider} / ${agent.defaultModel.model}`;
   const serverAddr = getServerAddress();
-  const canLoadAvatar = serverAddr.length > 0 && agentId.length > 0;
 
   const rowProps = { colors, styles };
 
@@ -167,17 +162,13 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
     >
       {/* 头像 + 名称 + 描述 */}
       <View style={styles.avatarCard}>
-        {canLoadAvatar && !avatarError ? (
-          <Image
-            source={{ uri: getAgentAvatarUrl(agentId, serverAddr) }}
-            style={styles.avatar}
-            onError={() => setAvatarError(true)}
-          />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <User size={32} color={colors.textTertiary} />
-          </View>
-        )}
+        <AgentAvatar
+          agentId={agentId}
+          serverAddress={serverAddr}
+          size={64}
+          fallbackIconSize={32}
+          fallbackBackgroundColor={colors.surfaceSecondary}
+        />
         <Text style={styles.name}>{displayName}</Text>
         {agent.description ? (
           <Text style={styles.description}>{agent.description}</Text>
