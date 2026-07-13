@@ -8,6 +8,7 @@ import {
   AppState,
   Dimensions,
   FlatList,
+  Image,
   Keyboard,
   LayoutAnimation,
   LayoutChangeEvent,
@@ -549,6 +550,17 @@ function ChatScreen(): React.JSX.Element {
     };
   }, [currentAgentId]);
 
+  /** 预加载 Agent 头像，填充 OS HTTP 缓存以避免逐条消息重复请求 */
+  useEffect(() => {
+    if (!currentAgentId || !serverAddressRef.current) {
+      return;
+    }
+    const url = getAgentAvatarUrl(currentAgentId, serverAddressRef.current);
+    Image.prefetch(url)
+      .then(() => logger.debug(`[ChatScreen] avatar prefetched: ${url}`))
+      .catch((err) => logger.warn('[ChatScreen] avatar prefetch failed:', err));
+  }, [currentAgentId]);
+
   /** 切换陪伴面板：先收键盘再 toggle，避免动画与键盘同时变化；持久化到 MMKV */
   const handleToggleCompanion = useCallback(() => {
     Keyboard.dismiss();
@@ -1087,6 +1099,8 @@ function ChatScreen(): React.JSX.Element {
                     onReasoningToggle={handleReasoningToggle}
                     messageIndex={messageIndex}
                     flatListRef={flatListRef}
+                    agentId={currentAgentId}
+                    serverAddress={serverAddressRef.current}
                   />
                 );
               }}

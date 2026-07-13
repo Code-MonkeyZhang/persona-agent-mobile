@@ -3,10 +3,9 @@
  * @description Agent 选择触发按钮，渲染在聊天页面导航栏中央。
  * 点击后测量按钮位置，弹出 AgentSelectionModal 下拉菜单供用户切换 Agent。
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
-  Image,
   Platform,
   StatusBar,
   StyleSheet,
@@ -14,12 +13,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
-import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
 import AgentSelectionModal from './AgentSelectionModal';
+import AgentAvatar from './AgentAvatar';
 import { logger } from '../../lib/logger';
 
 /** Agent 选择器 Props */
@@ -58,20 +56,7 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
 
   const currentAgent = agents.find((a) => a.id === currentAgentId);
   const displayName = currentAgent?.name ?? 'Agent';
-  const [avatarError, setAvatarError] = useState(false);
-
-  /**
-   * 是否具备加载头像的条件：服务器地址和 Agent ID 都不为空。
-   * Android 端对无效 URL（如 /api/agents//avatar）不会触发 onError，
-   * 因此需要在渲染前拦截，避免 warning 且不显示占位符。
-   */
   const serverAddr = getServerAddress();
-  const canLoadAvatar = serverAddr.length > 0 && currentAgentId.length > 0;
-
-  /** 切换 Agent 时重置头像加载失败状态 */
-  useEffect(() => {
-    setAvatarError(false);
-  }, [currentAgentId]);
 
   /**
    * 点击触发按钮时，测量按钮在屏幕上的位置，
@@ -111,25 +96,12 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
       >
         {/* collapsable=false 确保 Android 上 ref.measure() 能正确获取坐标 */}
         <View ref={triggerRef} collapsable={false} style={styles.triggerInner}>
-          {/* Agent 头像：具备加载条件时请求服务器 URL，否则显示灰色占位符 */}
-          {canLoadAvatar && !avatarError ? (
-            <Image
-              source={{ uri: getAgentAvatarUrl(currentAgentId, serverAddr) }}
-              style={styles.triggerAvatar}
-              onError={() => {
-                logger.warn(
-                  `[AgentSelector] avatar load failed, agentId=${currentAgentId}`
-                );
-                setAvatarError(true);
-              }}
-            />
-          ) : (
-            <View
-              style={[styles.triggerAvatar, { backgroundColor: '#E5E7EB' }]}
-            >
-              <User size={12} color="#9CA3AF" />
-            </View>
-          )}
+          <AgentAvatar
+            agentId={currentAgentId}
+            serverAddress={serverAddr}
+            size={22}
+            fallbackIconSize={12}
+          />
           <Text style={styles.triggerName} numberOfLines={1}>
             {displayName}
           </Text>
@@ -161,14 +133,6 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       paddingHorizontal: 10,
       paddingVertical: 6,
-    },
-    triggerAvatar: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
     },
     triggerName: {
       fontSize: 16,

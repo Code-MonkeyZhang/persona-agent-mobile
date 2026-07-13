@@ -13,7 +13,6 @@ import React, {
 import {
   Dimensions,
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -41,6 +40,7 @@ import { useTheme, ColorScheme } from '../../theme/index.ts';
 import { Check, Copy } from 'lucide-react-native';
 import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
+import AgentAvatar from './AgentAvatar.tsx';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
 interface CustomMessageProps extends MessageProps<ChatMessage> {
@@ -53,6 +53,10 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
   ) => void;
   messageIndex?: number;
   flatListRef?: RefObject<FlatList<ChatMessage>>;
+  /** 当前 Agent ID，用于渲染头像 */
+  agentId: string;
+  /** 服务器地址，用于渲染头像 */
+  serverAddress: string;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -63,6 +67,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   chatStatus,
   isLastAIMessage,
   onReasoningToggle,
+  agentId,
+  serverAddress,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -85,24 +91,21 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     Clipboard.setString(copyText);
   }, [currentMessage?.text]);
 
-  const userInfo = useMemo(() => {
-    if (!currentMessage || !currentMessage.user) {
-      return { userName: '', avatar: '' };
-    }
-    return {
-      userName: currentMessage.user.name ?? 'AI',
-      avatar: currentMessage.user.avatar as string | undefined,
-    };
-  }, [currentMessage]);
+  const userName = currentMessage?.user?.name ?? 'AI';
 
   const headerContent = useMemo(() => {
     return (
       <>
-        <Image source={{ uri: userInfo.avatar }} style={styles.avatar} />
-        <Text style={styles.name}>{userInfo.userName}</Text>
+        <AgentAvatar
+          agentId={agentId}
+          serverAddress={serverAddress}
+          size={22}
+          marginRight={6}
+        />
+        <Text style={styles.name}>{userName}</Text>
       </>
     );
-  }, [userInfo, styles.avatar, styles.name]);
+  }, [agentId, serverAddress, userName, styles.name]);
 
   const copyButton = useMemo(() => {
     return clickTitleCopied ? (
@@ -319,12 +322,6 @@ const createStyles = (colors: ColorScheme) =>
       flexDirection: 'row',
       alignItems: 'center',
     },
-    avatar: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      marginRight: 6,
-    },
     copy: {
       marginRight: 20,
       marginLeft: 'auto',
@@ -389,7 +386,7 @@ const customMarkedStyles: MarkedStyles = {
   paragraph: { paddingVertical: 6 },
 };
 
-/** 导出组件并自定义 memo 比较函数，仅在消息内容、状态、索引等关键属性变化时才重新渲染 */
+/** 导出组件并自定义 memo 比较函数，仅在消息内容、状态、索引、头像等关键属性变化时才重新渲染 */
 export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
   return (
     prevProps.currentMessage?.text === nextProps.currentMessage?.text &&
@@ -397,6 +394,8 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     prevProps.currentMessage?.steps === nextProps.currentMessage?.steps &&
     prevProps.chatStatus === nextProps.chatStatus &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
-    prevProps.messageIndex === nextProps.messageIndex
+    prevProps.messageIndex === nextProps.messageIndex &&
+    prevProps.agentId === nextProps.agentId &&
+    prevProps.serverAddress === nextProps.serverAddress
   );
 });

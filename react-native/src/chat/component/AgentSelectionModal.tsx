@@ -6,7 +6,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
-  Image,
   Modal,
   StyleSheet,
   Text,
@@ -20,12 +19,11 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { User } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../theme';
 import type { AgentInfo } from '../../api/server-api';
-import { getAgentAvatarUrl } from '../../api/server-api';
 import { getServerAddress } from '../../storage/StorageUtils';
 import { logger } from '../../lib/logger';
+import AgentAvatar from './AgentAvatar';
 
 /** 下拉菜单 Props */
 interface AgentSelectionModalProps {
@@ -74,12 +72,6 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
   const heightValue = useSharedValue(0);
   /** 动画驱动：菜单内容透明度 */
   const opacityValue = useSharedValue(0);
-
-  /**
-   * 记录头像加载失败的 Agent ID 集合，
-   * 用 Set 而非 state-per-item 避免在 FlatList renderItem 中创建大量独立 state。
-   */
-  const [avatarErrorIds, setAvatarErrorIds] = useState<Set<string>>(new Set());
 
   /** 展开动画：高度和透明度从 0 过渡到目标值 */
   const startOpenAnimation = useCallback(() => {
@@ -138,12 +130,10 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
     opacity: opacityValue.value,
   }));
 
-  /** 渲染单个 Agent 列表项：具备加载条件时请求服务器头像 URL，否则显示灰色占位符 */
+  /** 渲染单个 Agent 列表项 */
   const renderAgentItem = ({ item }: { item: AgentInfo; index: number }) => {
     const isSelected = item.id === currentAgentId;
-    const hasError = avatarErrorIds.has(item.id);
     const serverAddr = getServerAddress();
-    const canLoad = serverAddr.length > 0 && item.id.length > 0;
 
     return (
       <TouchableOpacity
@@ -151,22 +141,13 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
         onPress={() => handleAgentSelect(item.id)}
         activeOpacity={0.6}
       >
-        {canLoad && !hasError ? (
-          <Image
-            source={{ uri: getAgentAvatarUrl(item.id, serverAddr) }}
-            style={styles.agentIcon}
-            onError={() => {
-              logger.warn(
-                `[AgentModal] avatar load failed, agentId=${item.id}`
-              );
-              setAvatarErrorIds((prev) => new Set(prev).add(item.id));
-            }}
-          />
-        ) : (
-          <View style={[styles.agentIcon, { backgroundColor: '#E5E7EB' }]}>
-            <User size={14} color="#9CA3AF" />
-          </View>
-        )}
+        <AgentAvatar
+          agentId={item.id}
+          serverAddress={serverAddr}
+          size={24}
+          fallbackIconSize={14}
+          marginRight={10}
+        />
         <Text style={styles.agentName}>{item.name}</Text>
       </TouchableOpacity>
     );
@@ -247,15 +228,6 @@ const createStyles = (colors: ColorScheme) =>
     /** 选中的 Agent 项高亮背景 */
     agentItemSelected: {
       backgroundColor: colors.selectedBackground,
-    },
-    agentIcon: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 10,
-      overflow: 'hidden',
     },
     agentName: {
       fontSize: 15,
