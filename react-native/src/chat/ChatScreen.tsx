@@ -87,6 +87,7 @@ import { UserRound, Mic, MicOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n/index.ts';
 import { useVoiceStore } from '../stores/voiceStore';
+import { useSessionStore, extractPreview } from '../stores/sessionStore';
 
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
 const BOT_ID = 2;
@@ -378,6 +379,16 @@ function ChatScreen(): React.JSX.Element {
                 );
               }
             }
+
+            // 更新侧边栏会话预览为 assistant 最新回复
+            if (content) {
+              const sid = sessionIdRef.current;
+              if (sid) {
+                useSessionStore
+                  .getState()
+                  .updateSessionPreview(sid, extractPreview(content));
+              }
+            }
           };
 
           client.onComplete = () => {
@@ -652,6 +663,15 @@ function ChatScreen(): React.JSX.Element {
             getAgentAvatarUrl(agentId, serverAddressRef.current)
           );
           setMessages(chatMessages);
+          // 从加载的消息中提取最新一条作为会话预览
+          if (chatMessages.length > 0 && chatMessages[0].text) {
+            useSessionStore
+              .getState()
+              .updateSessionPreview(
+                initialSessionId,
+                extractPreview(chatMessages[0].text)
+              );
+          }
           serverClientRef.current?.subscribe(initialSessionId);
         } catch (e) {
           logger.error(`[ChatScreen] loadSession failed: ${e}`);
@@ -953,6 +973,10 @@ function ChatScreen(): React.JSX.Element {
               80
             )}" sessionId=${sessionId}`
           );
+          // 更新侧边栏会话预览为用户消息
+          useSessionStore
+            .getState()
+            .updateSessionPreview(sessionId, extractPreview(messageText));
           serverClientRef.current?.subscribe(sessionId);
           await serverClientRef.current!.sendChatMessage(
             agentId,

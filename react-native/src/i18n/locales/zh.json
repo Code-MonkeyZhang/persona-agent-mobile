@@ -17,7 +17,8 @@
     "deleteTitle": "删除会话",
     "deleteDesc": "此操作不可撤销。",
     "cancel": "取消",
-    "delete": "删除"
+    "delete": "删除",
+    "startChat": "开始聊天"
   },
   "settings": {
     "general": "通用",

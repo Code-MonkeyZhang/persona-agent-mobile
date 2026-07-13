@@ -17,7 +17,8 @@
     "deleteTitle": "Delete Session",
     "deleteDesc": "You cannot undo this action.",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "startChat": "Start chatting"
   },
   "settings": {
     "general": "General",
