@@ -54,6 +54,7 @@ import {
   fetchPoses,
   fetchSessionMessages,
   convertToChatMessages,
+  getAgentAvatarUrl,
 } from '../api/server-api.ts';
 import type { AgentInfo } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
@@ -88,16 +89,19 @@ const BOT_ID = 2;
 
 /**
  * 创建一条 AI 占位消息，在流式回复开始前插入消息列表。
+ * @param agentName 当前 Agent 的显示名称
+ * @param avatar Agent 头像 URL
  * @returns 占位的 ChatMessage，文本内容为 "..."，steps 为空数组
  */
-const createBotMessage = () => {
+const createBotMessage = (agentName: string, avatar: string) => {
   return {
-    _id: uuid.v4(),
+    _id: uuid.v4() as string,
     text: textPlaceholder,
     createdAt: new Date(),
     user: {
       _id: BOT_ID,
-      name: 'AI',
+      name: agentName,
+      avatar,
     },
     steps: [] as ChatMessage['steps'],
   };
@@ -232,6 +236,8 @@ function ChatScreen(): React.JSX.Element {
   const voiceEnabledRef = useRef(voiceEnabled);
   const speakRef = useRef(speak);
   const stopSpeakingRef = useRef(stopSpeaking);
+  /** 当前 Agent 显示名称的 ref，供 onSend / loadSession 等异步回调中读取 */
+  const currentAgentNameRef = useRef('AI');
 
   // ==================== Ref 同步 & 副作用 ====================
   /** 每次状态变化后同步到 ref，供异步回调中读取最新值 */
@@ -242,7 +248,18 @@ function ChatScreen(): React.JSX.Element {
     voiceEnabledRef.current = voiceEnabled;
     speakRef.current = speak;
     stopSpeakingRef.current = stopSpeaking;
-  }, [chatStatus, messages, companionOpen, voiceEnabled, speak, stopSpeaking]);
+    currentAgentNameRef.current =
+      agents.find((a) => a.id === currentAgentId)?.name ?? 'AI';
+  }, [
+    chatStatus,
+    messages,
+    companionOpen,
+    voiceEnabled,
+    speak,
+    stopSpeaking,
+    agents,
+    currentAgentId,
+  ]);
 
   /** AI 流式输出期间保持屏幕常亮，避免锁屏中断 */
   useEffect(() => {
@@ -625,7 +642,9 @@ function ChatScreen(): React.JSX.Element {
           );
           const chatMessages = convertToChatMessages(
             session.messages,
-            session.createdAt
+            session.createdAt,
+            currentAgentNameRef.current,
+            getAgentAvatarUrl(agentId, serverAddressRef.current)
           );
           setMessages(chatMessages);
           serverClientRef.current?.subscribe(initialSessionId);
@@ -897,11 +916,14 @@ function ChatScreen(): React.JSX.Element {
     scrollToBottom();
 
     setChatStatus(ChatStatus.Running);
+    const agentId = getServerAgentId();
     setMessages((previousMessages) => [
-      createBotMessage(),
+      createBotMessage(
+        currentAgentNameRef.current,
+        getAgentAvatarUrl(agentId, serverAddressRef.current)
+      ),
       ...GiftedChat.append(previousMessages, [message]),
     ]);
-    const agentId = getServerAgentId();
 
     (async () => {
       try {

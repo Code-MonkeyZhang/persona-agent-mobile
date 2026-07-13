@@ -85,22 +85,18 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
   const userInfo = useMemo(() => {
     if (!currentMessage || !currentMessage.user) {
-      return {
-        userName: '',
-        modelIcon: require('../../assets/openai_api.png'),
-      };
+      return { userName: '', avatar: '' };
     }
-    const userName = currentMessage.user.name ?? 'AI';
     return {
-      userName,
-      modelIcon: require('../../assets/openai_api.png'),
+      userName: currentMessage.user.name ?? 'AI',
+      avatar: currentMessage.user.avatar as string | undefined,
     };
   }, [currentMessage]);
 
   const headerContent = useMemo(() => {
     return (
       <>
-        <Image source={userInfo.modelIcon} style={styles.avatar} />
+        <Image source={{ uri: userInfo.avatar }} style={styles.avatar} />
         <Text style={styles.name}>{userInfo.userName}</Text>
       </>
     );

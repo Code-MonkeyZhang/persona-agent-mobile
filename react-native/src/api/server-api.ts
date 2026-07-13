@@ -756,7 +756,9 @@ export async function deleteSession(
  */
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
-  sessionCreatedAt: number
+  sessionCreatedAt: number,
+  agentName: string,
+  avatar: string
 ): ChatMessage[] {
   const result: ChatMessage[] = [];
   let pendingThoughts: Thought[] = [];
@@ -774,7 +776,7 @@ export function convertToChatMessages(
       text: pendingContent,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       createdAt: new Date(sessionCreatedAt + result.length * 1000),
-      user: { _id: BOT_ID, name: 'AI' },
+      user: { _id: BOT_ID, name: agentName, avatar },
     });
     pendingThoughts = [];
     pendingContent = '';
