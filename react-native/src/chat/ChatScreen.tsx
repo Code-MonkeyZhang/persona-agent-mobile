@@ -80,7 +80,7 @@ import Animated, {
   Easing,
   FadeInDown,
 } from 'react-native-reanimated';
-import { UserRound } from 'lucide-react-native';
+import { UserRound, Mic, MicOff } from 'lucide-react-native';
 import { useVoiceStore } from '../stores/voiceStore';
 
 /** AI 消息的用户 ID，用于 GiftedChat 区分用户和 AI */
@@ -161,7 +161,7 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
@@ -200,7 +200,6 @@ function ChatScreen(): React.JSX.Element {
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
-  const isNewChatRef = useRef(!initialSessionId);
   /** 当前活跃的 ServerClient 实例，未连接时为 null */
   const serverClientRef = useRef<ServerClient | null>(null);
   /** 服务器地址缓存，从 MMKV 加载 */
@@ -446,36 +445,17 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== 新建聊天 & 导航栏 ====================
   /**
-   * 开始新聊天：置空会话 ID，清空消息，然后在服务器上创建新会话。
-   * 创建完成后更新 sessionIdRef 并订阅 WebSocket 事件。
+   * 开始新聊天：纯前端操作，不立即创建服务器会话。
+   * 清空当前会话 ID 和消息，取消侧边栏高亮，弹出键盘。
+   * 服务器会话在用户发送第一条消息时由 onSend 懒创建。
    */
   const startNewChat = useRef(
     useCallback(() => {
       trigger(HapticFeedbackTypes.impactMedium);
+      logger.info('[ChatScreen] startNewChat');
       setSessionId('');
-      isNewChatRef.current = true;
       sendEventRef.current('updateHistorySelectedId', { id: '' });
-
       setMessages([]);
-
-      if (serverClientRef.current && serverAddressRef.current) {
-        const agentId = getServerAgentId();
-        if (agentId) {
-          serverClientRef.current
-            .createSession(agentId, serverAddressRef.current)
-            .then((newSessionId) => {
-              setSessionId(newSessionId);
-              sendEventRef.current('updateHistorySelectedId', {
-                id: newSessionId,
-              });
-              serverClientRef.current?.subscribe(newSessionId);
-            })
-            .catch((e: Error) => {
-              logger.error(`[ChatScreen] createSession failed: ${e.message}`);
-            });
-        }
-      }
-
       showKeyboard();
     }, [setSessionId])
   );
@@ -573,29 +553,22 @@ function ChatScreen(): React.JSX.Element {
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <View style={headerRightContainerStyle.root}>
+          <CustomHeaderRightButton onPress={handleToggleVoice}>
+            {voiceEnabled ? (
+              <Mic
+                size={20}
+                color={isSpeaking ? colors.primary : colors.text}
+              />
+            ) : (
+              <MicOff size={20} color={colors.text} />
+            )}
+          </CustomHeaderRightButton>
           <CustomHeaderRightButton onPress={handleToggleCompanion}>
             <UserRound
               size={22}
               color={companionOpen ? colors.primary : colors.text}
             />
           </CustomHeaderRightButton>
-          <CustomHeaderRightButton
-            onPress={() => {
-              textInputViewRef?.current?.clear();
-              setSelectedFiles([]);
-              if (
-                messagesRef.current.length > 0 &&
-                chatStatusRef.current !== ChatStatus.Running
-              ) {
-                startNewChat.current();
-              }
-            }}
-            imageSource={
-              isDark
-                ? require('../assets/edit_dark.png')
-                : require('../assets/edit.png')
-            }
-          />
         </View>
       ),
     };
@@ -606,13 +579,15 @@ function ChatScreen(): React.JSX.Element {
     );
   }, [
     navigation,
-    isDark,
     agents,
     currentAgentId,
     handleSelectAgent,
     companionOpen,
+    voiceEnabled,
+    isSpeaking,
     colors.primary,
     colors.text,
+    handleToggleVoice,
     handleToggleCompanion,
   ]);
 
@@ -637,7 +612,6 @@ function ChatScreen(): React.JSX.Element {
       }
       // click from history — 从服务器拉取消息
       setMessages([]);
-      isNewChatRef.current = false;
       setIsLoadingMessages(true);
       setSessionId(initialSessionId);
 
@@ -666,6 +640,16 @@ function ChatScreen(): React.JSX.Element {
   }, [initialSessionId, tapIndex, setSessionId]);
 
   // ==================== 事件监听 ====================
+  /** 监听 AppContext 事件：侧边栏点击新建对话 */
+  useEffect(() => {
+    if (event?.event === 'newChat') {
+      logger.info('[ChatScreen] newChat event received');
+      textInputViewRef?.current?.clear();
+      setSelectedFiles([]);
+      startNewChat.current();
+    }
+  }, [event]);
+
   /** 监听 AppContext 事件：删除聊天时清空当前会话 */
   useEffect(() => {
     if (event?.event === 'deleteChat' && event.params) {

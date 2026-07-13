@@ -40,6 +40,7 @@ import {
   MessageCircle,
   MessagesSquare,
   MonitorSmartphone,
+  Plus,
   Sparkles,
   User,
   Wrench,
@@ -175,6 +176,14 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     deleteIdRef.current = '';
   };
 
+  /** 新建对话：通知 ChatScreen 清空并创建新会话，然后关闭侧边栏 */
+  const handleNewChat = () => {
+    trigger(HapticFeedbackTypes.impactMedium);
+    logger.info('[Drawer] new chat');
+    sendEvent('newChat');
+    navigation.dispatch(DrawerActions.closeDrawer());
+  };
+
   /** 导航到常驻聊天会话并关闭侧边栏 */
   const navigateToChatSession = () => {
     const agentId = getServerAgentId();
@@ -282,8 +291,17 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
       {/* === 4. 会话列表（可滚动） === */}
       <View style={styles.sessionsHeader}>
-        <MessagesSquare size={20} color={colors.textSecondary} />
-        <Text style={styles.sessionsHeaderText}>Sessions</Text>
+        <View style={styles.sessionsHeaderLeft}>
+          <MessagesSquare size={20} color={colors.textSecondary} />
+          <Text style={styles.sessionsHeaderText}>Sessions</Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleNewChat}
+          style={styles.newChatButton}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Plus size={20} color={colors.text} />
+        </TouchableOpacity>
       </View>
       <FlatList
         data={groupChatHistory}
@@ -467,13 +485,21 @@ const createStyles = (colors: ColorScheme) =>
       color: colors.text,
       marginLeft: 12,
     },
-    /** Sessions 分区标题 */
+    /** Sessions 分区标题，左侧图标+文字，右侧新建对话按钮 */
     sessionsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 4,
+    },
+    sessionsHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    newChatButton: {
+      padding: 4,
     },
     sessionsHeaderText: {
       fontSize: 15,
