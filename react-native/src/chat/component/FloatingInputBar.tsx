@@ -1,13 +1,12 @@
 /**
  * @file FloatingInputBar.tsx
  * @description 聊天页底部的浮动输入框组件。
- * 毛玻璃背景 + 白底圆角卡片，纵向排列文件标签区、TextInput 和按钮行。
+ * 白底圆角卡片，纵向排列文件标签区、TextInput 和按钮行。
  * 按钮行左侧为加号按钮、右侧为发送/停止按钮。
  * 组件内部持有文本 state，通过 onSend 回调通知 ChatScreen 发送消息。
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
 import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import { ColorScheme, useTheme } from '../../theme/index.ts';
 import CustomSendComponent from './CustomSendComponent.tsx';
@@ -41,7 +40,7 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   onFileSelected,
   onFileUpdated,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
 
@@ -58,11 +57,7 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   }, [text, selectedFiles, chatStatus, onSend]);
 
   return (
-    <BlurView
-      style={styles.blurContainer}
-      blurType={isDark ? 'dark' : 'light'}
-      blurAmount={15}
-    >
+    <View style={styles.wrapper}>
       <View style={styles.card}>
         <CustomChatFooter
           files={selectedFiles}
@@ -91,15 +86,14 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
           />
         </View>
       </View>
-    </BlurView>
+    </View>
   );
 };
 
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
-    blurContainer: {
+    wrapper: {
       paddingHorizontal: 12,
-      paddingVertical: 8,
     },
     card: {
       backgroundColor: colors.card,

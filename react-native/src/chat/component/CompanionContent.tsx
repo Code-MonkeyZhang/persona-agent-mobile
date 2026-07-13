@@ -1,11 +1,10 @@
 /**
  * @file CompanionContent.tsx
- * @description 陪伴模式纯展示组件：背景图 + 角色立绘 + 语音开关。
+ * @description 陪伴模式纯展示组件：背景图 + 角色立绘。
  * 所有数据通过 props 传入，内部不做任何 WebSocket 或 API 调用。
  */
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Mic, MicOff } from 'lucide-react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import {
   getBackgroundImageUrl,
   getPoseImageUrl,
@@ -25,13 +24,10 @@ interface CompanionContentProps {
   poseError: boolean;
   onBgError: () => void;
   onPoseError: () => void;
-  voiceEnabled: boolean;
-  isSpeaking: boolean;
-  onToggleVoice: () => void;
 }
 
 /**
- * 陪伴内容展示层：背景图、角色立绘、语音开关。
+ * 陪伴内容展示层：背景图、角色立绘。
  * 作为滑动容器的右侧 pane 渲染，所有状态由 ChatScreen 通过 props 驱动。
  */
 const CompanionContent = React.memo(function CompanionContent({
@@ -43,9 +39,6 @@ const CompanionContent = React.memo(function CompanionContent({
   poseError,
   onBgError,
   onPoseError,
-  voiceEnabled,
-  isSpeaking,
-  onToggleVoice,
 }: CompanionContentProps) {
   const showBackground = hasAssets === true && !bgError;
   const showPose = hasAssets === true && !poseError;
@@ -88,14 +81,6 @@ const CompanionContent = React.memo(function CompanionContent({
           </Text>
         </View>
       )}
-
-      <TouchableOpacity onPress={onToggleVoice} style={styles.micButton}>
-        {voiceEnabled ? (
-          <Mic size={20} color={isSpeaking ? '#228be6' : '#333'} />
-        ) : (
-          <MicOff size={20} color="#999" />
-        )}
-      </TouchableOpacity>
     </View>
   );
 });
@@ -107,21 +92,10 @@ const styles = StyleSheet.create({
   },
   poseLayer: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 40,
     left: 0,
     right: 0,
     height: '85%',
-  },
-  micButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   centerContent: {
     flex: 1,

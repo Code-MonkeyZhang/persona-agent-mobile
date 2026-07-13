@@ -21,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from '@react-native-community/blur';
 import {
   activateKeepAwake,
   deactivateKeepAwake,
@@ -165,7 +166,7 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 // 聊天页面主组件：管理消息收发、AI 流式输出、语音聊天、文件上传等
 function ChatScreen(): React.JSX.Element {
   // ==================== 路由参数 ====================
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const route = useRoute<ChatScreenRouteProp>();
@@ -794,7 +795,7 @@ function ChatScreen(): React.JSX.Element {
       width: 30,
       height: 30,
       right: 16,
-      bottom: fibWrapperHeight + 10,
+      bottom: fibWrapperHeight + 44,
     },
   });
 
@@ -881,86 +882,89 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== 发送消息 ====================
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
-  const onSend = useCallback(async (text: string) => {
-    // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
-    setUserScrolled(false);
-    // 取出当前选中的附件文件
-    const files = selectedFilesRef.current;
-    // 如果有视频还在转码/压缩中，提示等待
-    if (!isAllFileReady(files)) {
-      showInfo('please wait for all videos to be ready');
-      return;
-    }
-
-    // 确定消息文本：有输入文本则用输入文本，否则用文件摘要作为占位
-    const messageText =
-      text || (files.length > 0 ? getFileTypeSummary(files) : '');
-    if (!messageText && files.length === 0) {
-      return;
-    }
-
-    // 构造用户消息
-    const message: ChatMessage = {
-      text: messageText,
-      user: { _id: 1 },
-      createdAt: new Date(),
-      _id: uuid.v4(),
-    };
-
-    if (files.length > 0) {
-      message.image = JSON.stringify(files);
-      setSelectedFiles([]);
-    }
-
-    trigger(HapticFeedbackTypes.impactMedium);
-    scrollToBottom();
-
-    setChatStatus(ChatStatus.Running);
-    const agentId = getServerAgentId();
-    setMessages((previousMessages) => [
-      createBotMessage(
-        currentAgentNameRef.current,
-        getAgentAvatarUrl(agentId, serverAddressRef.current)
-      ),
-      ...GiftedChat.append(previousMessages, [message]),
-    ]);
-
-    (async () => {
-      try {
-        let sessionId = sessionIdRef.current;
-        if (!sessionId) {
-          logger.debug(
-            '[ChatScreen] onSend: no server session, auto-creating...'
-          );
-          sessionId = await serverClientRef.current!.createSession(
-            agentId,
-            serverAddressRef.current!
-          );
-          setSessionId(sessionId);
-          logger.debug(
-            `[ChatScreen] onSend: auto-created session ${sessionId}`
-          );
-        }
-        logger.debug(
-          `[ChatScreen] onSend: text="${messageText.substring(
-            0,
-            80
-          )}" sessionId=${sessionId}`
-        );
-        serverClientRef.current?.subscribe(sessionId);
-        await serverClientRef.current!.sendChatMessage(
-          agentId,
-          sessionId,
-          messageText,
-          serverAddressRef.current!,
-          companionOpenRef.current && voiceEnabledRef.current
-        );
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        logger.error(`[ChatScreen] onSend error: ${errMsg}`);
+  const onSend = useCallback(
+    async (text: string) => {
+      // 发新消息时，重置用户滚动状态，让界面能自动滚到底部
+      setUserScrolled(false);
+      // 取出当前选中的附件文件
+      const files = selectedFilesRef.current;
+      // 如果有视频还在转码/压缩中，提示等待
+      if (!isAllFileReady(files)) {
+        showInfo('please wait for all videos to be ready');
+        return;
       }
-    })();
-  }, [setSessionId]);
+
+      // 确定消息文本：有输入文本则用输入文本，否则用文件摘要作为占位
+      const messageText =
+        text || (files.length > 0 ? getFileTypeSummary(files) : '');
+      if (!messageText && files.length === 0) {
+        return;
+      }
+
+      // 构造用户消息
+      const message: ChatMessage = {
+        text: messageText,
+        user: { _id: 1 },
+        createdAt: new Date(),
+        _id: uuid.v4(),
+      };
+
+      if (files.length > 0) {
+        message.image = JSON.stringify(files);
+        setSelectedFiles([]);
+      }
+
+      trigger(HapticFeedbackTypes.impactMedium);
+      scrollToBottom();
+
+      setChatStatus(ChatStatus.Running);
+      const agentId = getServerAgentId();
+      setMessages((previousMessages) => [
+        createBotMessage(
+          currentAgentNameRef.current,
+          getAgentAvatarUrl(agentId, serverAddressRef.current)
+        ),
+        ...GiftedChat.append(previousMessages, [message]),
+      ]);
+
+      (async () => {
+        try {
+          let sessionId = sessionIdRef.current;
+          if (!sessionId) {
+            logger.debug(
+              '[ChatScreen] onSend: no server session, auto-creating...'
+            );
+            sessionId = await serverClientRef.current!.createSession(
+              agentId,
+              serverAddressRef.current!
+            );
+            setSessionId(sessionId);
+            logger.debug(
+              `[ChatScreen] onSend: auto-created session ${sessionId}`
+            );
+          }
+          logger.debug(
+            `[ChatScreen] onSend: text="${messageText.substring(
+              0,
+              80
+            )}" sessionId=${sessionId}`
+          );
+          serverClientRef.current?.subscribe(sessionId);
+          await serverClientRef.current!.sendChatMessage(
+            agentId,
+            sessionId,
+            messageText,
+            serverAddressRef.current!,
+            companionOpenRef.current && voiceEnabledRef.current
+          );
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          logger.error(`[ChatScreen] onSend error: ${errMsg}`);
+        }
+      })();
+    },
+    [setSessionId]
+  );
 
   // ==================== 文件 & 语音转录 ====================
   /**
@@ -1118,24 +1122,13 @@ function ChatScreen(): React.JSX.Element {
               poseError={poseError}
               onBgError={() => setBgError(true)}
               onPoseError={() => setPoseError(true)}
-              voiceEnabled={voiceEnabled}
-              isSpeaking={isSpeaking}
-              onToggleVoice={handleToggleVoice}
             />
           </View>
         </Animated.View>
       </View>
-      {/* FIB 容器：绝对定位浮在内容上方，paddingBottom 随键盘高度变化 */}
+      {/* FIB 容器：绝对定位浮在内容上方，onLayout 测量总高度（气泡 + 模糊层）供消息列表留白 */}
       <View
-        style={[
-          styles.fibWrapper,
-          {
-            paddingBottom:
-              Platform.OS === 'ios'
-                ? Math.max(keyboardHeight, insets.bottom)
-                : insets.bottom,
-          },
-        ]}
+        style={styles.fibWrapper}
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
           if (h > 0 && h !== fibWrapperHeight) {
@@ -1143,7 +1136,7 @@ function ChatScreen(): React.JSX.Element {
           }
         }}
       >
-        {/* 陪伴回复气泡：仅陪伴模式且有 AI 回复时显示 */}
+        {/* 陪伴回复气泡：在模糊层外部，使用正常背景渲染 */}
         {companionOpen && lastAgentMessage && (
           <Animated.View
             key={lastAgentMessage._id}
@@ -1161,15 +1154,27 @@ function ChatScreen(): React.JSX.Element {
             </View>
           </Animated.View>
         )}
-        <FloatingInputBar
-          textInputRef={textInputViewRef}
-          onSend={onSend}
-          selectedFiles={selectedFiles}
-          chatStatus={chatStatus}
-          onStopPress={handleStopPress}
-          onFileSelected={handleNewFileSelected}
-          onFileUpdated={handleFileUpdated}
-        />
+        {/* BlurView 只覆盖输入框区域 */}
+        <BlurView
+          style={{
+            paddingBottom:
+              Platform.OS === 'ios'
+                ? Math.max(keyboardHeight, insets.bottom)
+                : insets.bottom,
+          }}
+          blurType={isDark ? 'dark' : 'light'}
+          blurAmount={15}
+        >
+          <FloatingInputBar
+            textInputRef={textInputViewRef}
+            onSend={onSend}
+            selectedFiles={selectedFiles}
+            chatStatus={chatStatus}
+            onStopPress={handleStopPress}
+            onFileSelected={handleNewFileSelected}
+            onFileUpdated={handleFileUpdated}
+          />
+        </BlurView>
       </View>
     </View>
   );
