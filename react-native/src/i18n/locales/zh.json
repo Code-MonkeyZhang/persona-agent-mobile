@@ -4,7 +4,6 @@
     "startConversation": "开始对话",
     "thinking": "思考中...",
     "error": "错误：{{message}}",
-    "canceled": "已取消...",
     "waitVideoReady": "请等待所有视频处理完成",
     "shareImageTitle": "AI 图片"
   },

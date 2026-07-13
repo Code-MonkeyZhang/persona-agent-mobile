@@ -14,6 +14,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -986,25 +987,6 @@ function ChatScreen(): React.JSX.Element {
     setSelectedFiles(files);
   }, []);
 
-  /** 停止 AI 回复：将占位消息改为已取消，设置状态为完成 */
-  const handleStopPress = useCallback(() => {
-    trigger(HapticFeedbackTypes.notificationWarning);
-    setMessages((prevMessages) => {
-      if (prevMessages.length === 0) {
-        return prevMessages;
-      }
-      const newMessages = [...prevMessages];
-      if (
-        newMessages[0].text === textPlaceholder ||
-        newMessages[0].text === ''
-      ) {
-        newMessages[0] = { ...newMessages[0], text: i18n.t('chat.canceled') };
-      }
-      return newMessages;
-    });
-    setChatStatus(ChatStatus.Complete);
-  }, []);
-
   // ==================== UI 渲染 ====================
   /**
    * 滑动容器动画：companionOpen 切换时通过 translateX 横向滑动，
@@ -1114,8 +1096,8 @@ function ChatScreen(): React.JSX.Element {
               scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
-          {/* Pane 2: 陪伴内容 */}
-          <View style={slideStyle.pane}>
+          {/* Pane 2: 陪伴内容，点击空白区域收起键盘 */}
+          <Pressable style={slideStyle.pane} onPress={() => Keyboard.dismiss()}>
             <CompanionContent
               agentId={currentAgentId}
               serverAddr={serverAddressRef.current}
@@ -1126,7 +1108,7 @@ function ChatScreen(): React.JSX.Element {
               onBgError={() => setBgError(true)}
               onPoseError={() => setPoseError(true)}
             />
-          </View>
+          </Pressable>
         </Animated.View>
       </View>
       {/* FIB 容器：绝对定位浮在内容上方，onLayout 测量总高度（气泡 + 模糊层）供消息列表留白 */}
@@ -1173,7 +1155,6 @@ function ChatScreen(): React.JSX.Element {
             onSend={onSend}
             selectedFiles={selectedFiles}
             chatStatus={chatStatus}
-            onStopPress={handleStopPress}
             onFileSelected={handleNewFileSelected}
             onFileUpdated={handleFileUpdated}
           />

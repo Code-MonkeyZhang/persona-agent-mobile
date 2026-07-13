@@ -4,7 +4,6 @@
     "startConversation": "Start a conversation",
     "thinking": "Thinking...",
     "error": "Error: {{message}}",
-    "canceled": "Canceled...",
     "waitVideoReady": "Please wait for all videos to be ready",
     "shareImageTitle": "AI Image"
   },
