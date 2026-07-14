@@ -15,6 +15,7 @@ import uuid from 'uuid';
 import i18n from '../../i18n/index.ts';
 import type { Thought, ThoughtType } from '../../types/Thought';
 import type { ToolCall, WsToolResult } from '../../api/server-api';
+import type { ColorScheme } from '../../theme/colors';
 
 /**
  * 将一个 step_complete 事件转换为 Thought 数组。
@@ -83,20 +84,24 @@ export function getThoughtIcon(
   }
 }
 
-/** 获取 Thought 类型对应的颜色（hex 值，用于图标和文本） */
-export function getThoughtColor(type: ThoughtType, isError?: boolean): string {
+/** 获取 Thought 类型对应的颜色（用于图标和文本） */
+export function getThoughtColor(
+  type: ThoughtType,
+  isError: boolean | undefined,
+  colors: ColorScheme
+): string {
   if (isError) {
-    return '#f59e0b';
+    return colors.warning;
   }
   switch (type) {
     case 'thinking':
     case 'text':
     case 'tool_use':
-      return '#60a5fa';
+      return colors.info;
     case 'error':
-      return '#ef4444';
+      return colors.error;
     default:
-      return '#6b7280';
+      return colors.textSecondary;
   }
 }
 

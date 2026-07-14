@@ -117,7 +117,7 @@ const createStyles = (colors: ColorScheme) =>
       width: 20,
       height: 20,
       borderRadius: 10,
-      backgroundColor: '#ffffff',
+      backgroundColor: colors.card,
       marginHorizontal: 2,
       alignSelf: 'flex-start',
     },

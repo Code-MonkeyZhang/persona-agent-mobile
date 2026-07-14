@@ -49,19 +49,19 @@ type Props = NativeStackScreenProps<RouteParamList, 'AgentDetail'>;
 /** 根据 MCP 状态返回对应圆点颜色 */
 function getMcpStatusColor(
   status: McpServerInfo['status'],
-  error?: string,
-  colors?: ColorScheme
+  error: string | undefined,
+  colors: ColorScheme
 ): string {
   if (error) {
-    return colors?.error ?? '#ff4444';
+    return colors.error;
   }
   if (status === 'connected') {
-    return colors?.success ?? '#00C851';
+    return colors.success;
   }
   if (status === 'needs_auth') {
-    return '#FF9800';
+    return colors.warning;
   }
-  return colors?.textTertiary ?? '#999999';
+  return colors.textTertiary;
 }
 
 /** 图标 + 标签 + 右侧值的通用行 */

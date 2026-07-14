@@ -201,7 +201,7 @@ const createStyles = (colors: ColorScheme) =>
     /** 全屏半透明遮罩 */
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+      backgroundColor: colors.overlayLight,
     },
     /** 菜单容器：圆角卡片 + 阴影 */
     modalContainer: {

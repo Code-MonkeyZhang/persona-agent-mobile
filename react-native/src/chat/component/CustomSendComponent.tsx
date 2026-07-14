@@ -39,7 +39,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       onPress={onPress}
       disabled={!isActive}
     >
-      <ArrowUp size={24} color="#ffffff" />
+      <ArrowUp size={24} color={colors.primaryForeground} />
     </TouchableOpacity>
   );
 };

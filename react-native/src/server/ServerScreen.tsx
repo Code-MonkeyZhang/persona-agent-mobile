@@ -133,7 +133,7 @@ const ServerScreen: React.FC = () => {
             disabled={status === 'connecting' || !url.trim()}
           >
             {saved ? (
-              <Check size={19} color="#fff" />
+              <Check size={19} color={colors.primaryForeground} />
             ) : (
               <Text style={styles.saveButtonText}>{t('server.connect')}</Text>
             )}
@@ -214,7 +214,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.textTertiary,
     },
     saveButtonText: {
-      color: '#ffffff',
+      color: colors.primaryForeground,
       fontSize: 17,
       fontWeight: '600',
     },

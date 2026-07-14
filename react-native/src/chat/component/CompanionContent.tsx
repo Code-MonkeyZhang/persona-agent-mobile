@@ -11,6 +11,7 @@ import {
   getPoseImageUrl,
 } from '../../api/server-api.ts';
 import { logger } from '../../lib/logger';
+import { useTheme, type ColorScheme } from '../../theme';
 
 interface CompanionContentProps {
   agentId: string;
@@ -42,6 +43,9 @@ const CompanionContent = React.memo(function CompanionContent({
   onPoseError,
 }: CompanionContentProps) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useCompanionStyles(colors);
+
   const showBackground = hasAssets === true && !bgError;
   const showPose = hasAssets === true && !poseError;
 
@@ -85,38 +89,43 @@ const CompanionContent = React.memo(function CompanionContent({
   );
 });
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#e5e5e5',
-  },
-  poseLayer: {
-    position: 'absolute',
-    bottom: 40,
-    left: 0,
-    right: 0,
-    height: '85%',
-  },
-  centerContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  noAssetTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#555',
-    textAlign: 'center',
-    lineHeight: 32,
-  },
-  noAssetHint: {
-    fontSize: 17,
-    color: '#999',
-    marginTop: 12,
-    textAlign: 'center',
-    lineHeight: 26,
-  },
-});
+const useCompanionStyles = (colors: ColorScheme) =>
+  React.useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.surface,
+        },
+        poseLayer: {
+          position: 'absolute',
+          bottom: 40,
+          left: 0,
+          right: 0,
+          height: '85%',
+        },
+        centerContent: {
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 32,
+        },
+        noAssetTitle: {
+          fontSize: 22,
+          fontWeight: '600',
+          color: colors.textDarkGray,
+          textAlign: 'center',
+          lineHeight: 32,
+        },
+        noAssetHint: {
+          fontSize: 17,
+          color: colors.textTertiary,
+          marginTop: 12,
+          textAlign: 'center',
+          lineHeight: 26,
+        },
+      }),
+    [colors]
+  );
 
 export default CompanionContent;

@@ -1,109 +1,86 @@
+/**
+ * 颜色 token 定义，所有组件应通过 useTheme() 引用此处的值，不得硬编码颜色。
+ */
+
 export interface ColorScheme {
+  // 表面与背景
   background: string;
   surface: string;
   surfaceSecondary: string;
+  surfaceTranslucent: string;
+  card: string;
+  codeBackground: string;
+  selectedBackground: string;
+  messageBackground: string;
+  labelBackground: string;
+  drawerBackground: string;
+  fileListBackground: string;
+  // 输入相关
+  input: string;
+  inputBackground: string;
+  inputBorder: string;
+  // 文字
   text: string;
   textSecondary: string;
   textTertiary: string;
+  textDarkGray: string;
+  placeholder: string;
+  primaryForeground: string;
+  // 线条与阴影
   border: string;
   borderLight: string;
   shadow: string;
-  card: string;
-  input: string;
-  placeholder: string;
+  // 遮罩
+  overlay: string;
+  overlayLight: string;
+  // 品牌与状态
+  primary: string;
   error: string;
   success: string;
   warning: string;
+  warningBackground: string;
   info: string;
-  primary: string;
-  primaryLight: string;
-  accent: string;
-  overlay: string;
-  codeBackground: string;
-  selectedBackground: string;
-  inputBackground: string;
-  chatInputBackground: string;
-  labelBackground: string;
-  messageBackground: string;
-  inputBorder: string;
-  drawerBackground: string;
-  promptButtonBackground: string;
-  promptButtonBorder: string;
-  promptText: string;
-  promptSelectedBorder: string;
-  promptAddButtonBackground: string;
-  promptAddButtonBorder: string;
-  promptAddText: string;
-  promptDeleteBackground: string;
-  promptDeleteText: string;
-  promptScreenInputBorder: string;
-  promptScreenSaveButton: string;
-  promptScreenSaveButtonText: string;
-  textDarkGray: string;
-  inputToolbarBorder: string;
-  fileListBackground: string;
+  // 文件列表
   fileItemBorder: string;
-  addButtonBackground: string;
-  chatScreenSplit: string;
-  citationBackground: string;
-  citationText: string;
-  citationListBackground: string;
-  citationBorder: string;
-  citationBadgeBackground: string;
-  citationBadgeText: string;
 }
 
 export const lightColors: ColorScheme = {
   background: '#ffffff',
   surface: '#f5f5f5',
   surfaceSecondary: '#f9f9f9',
+  surfaceTranslucent: 'rgba(255, 255, 255, 0.95)',
+  card: '#ffffff',
+  codeBackground: '#F8F8F8',
+  selectedBackground: '#F5F5F5',
+  messageBackground: '#f2f2f2',
+  labelBackground: '#ffffff',
+  drawerBackground: 'transparent',
+  fileListBackground: '#ffffff',
+
+  input: '#f8f8f8',
+  inputBackground: '#ffffff',
+  inputBorder: '#808080',
+
   text: '#000000',
   textSecondary: '#666666',
   textTertiary: '#999999',
+  textDarkGray: '#333333',
+  placeholder: '#999999',
+  primaryForeground: '#ffffff',
+
   border: '#e0e0e0',
   borderLight: '#eaeaea',
   shadow: 'rgba(0,0,0,0.1)',
-  card: '#ffffff',
-  input: '#f8f8f8',
-  placeholder: '#999999',
+
+  overlay: 'rgba(0,0,0,0.5)',
+  overlayLight: 'rgba(0, 0, 0, 0.1)',
+
+  primary: '#007AFF',
   error: '#ff4444',
   success: '#00C851',
   warning: '#ffbb33',
+  warningBackground: 'rgba(245,158,11,0.15)',
   info: '#33b5e5',
-  primary: '#007AFF',
-  primaryLight: '#E3F2FD',
-  accent: '#FF6B6B',
-  overlay: 'rgba(0,0,0,0.5)',
-  codeBackground: '#F8F8F8',
-  selectedBackground: '#F5F5F5',
-  inputBackground: '#ffffff',
-  chatInputBackground: '#f2f2f7',
-  labelBackground: '#ffffff',
-  messageBackground: '#f2f2f2',
-  inputBorder: '#808080',
-  drawerBackground: 'transparent',
-  promptButtonBackground: '#E8E8E8',
-  promptButtonBorder: '#E8E8E8',
-  promptText: '#333333',
-  promptSelectedBorder: '#000000',
-  promptAddButtonBackground: '#ffffff',
-  promptAddButtonBorder: '#666666',
-  promptAddText: '#666666',
-  promptDeleteBackground: '#666666',
-  promptDeleteText: '#ffffff',
-  promptScreenInputBorder: '#e0e0e0',
-  promptScreenSaveButton: '#007AFF',
-  promptScreenSaveButtonText: '#ffffff',
-  textDarkGray: '#333333',
-  inputToolbarBorder: '#000000',
-  fileListBackground: '#ffffff',
+
   fileItemBorder: '#e0e0e0',
-  addButtonBackground: '#f0f0f0',
-  chatScreenSplit: '#c7c7c7',
-  citationBackground: '#E3F2FD',
-  citationText: '#1976D2',
-  citationListBackground: '#F5F5F5',
-  citationBorder: '#E0E0E0',
-  citationBadgeBackground: '#E8E8E8',
-  citationBadgeText: '#888888',
 };

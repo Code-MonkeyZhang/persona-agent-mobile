@@ -8,6 +8,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { User } from 'lucide-react-native';
 import { getAgentAvatarUrl } from '../../api/server-api';
 import { logger } from '../../lib/logger';
+import { useTheme } from '../../theme';
 
 /** Agent 头像组件 Props */
 export interface AgentAvatarProps {
@@ -19,7 +20,7 @@ export interface AgentAvatarProps {
   size: number;
   /** 回退状态下 User 图标的尺寸，默认为 size * 0.55 */
   fallbackIconSize?: number;
-  /** 回退背景色，默认 '#E5E7EB' */
+  /** 回退背景色，未指定时使用 surface */
   fallbackBackgroundColor?: string;
   /** 右侧间距，用于行布局中头像与文字之间的分隔 */
   marginRight?: number;
@@ -37,9 +38,10 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
   serverAddress,
   size,
   fallbackIconSize,
-  fallbackBackgroundColor = '#E5E7EB',
+  fallbackBackgroundColor,
   marginRight = 0,
 }) => {
+  const { colors } = useTheme();
   const [avatarError, setAvatarError] = useState(false);
 
   /** agentId 或 serverAddress 变化时重置错误状态 */
@@ -74,12 +76,12 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
       style={[
         baseStyle,
         styles.fallback,
-        { backgroundColor: fallbackBackgroundColor },
+        { backgroundColor: fallbackBackgroundColor ?? colors.surface },
       ]}
     >
       <User
         size={fallbackIconSize ?? Math.round(size * 0.55)}
-        color="#9CA3AF"
+        color={colors.textTertiary}
       />
     </View>
   );

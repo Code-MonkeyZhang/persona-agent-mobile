@@ -20,6 +20,7 @@ import {
   getThoughtLabel,
   getToolFriendlyFormat,
 } from '../util/thought-utils';
+import { useTheme, type ColorScheme } from '../../theme';
 
 interface CollapsedThoughtProcessProps {
   steps: Thought[];
@@ -31,9 +32,11 @@ interface CollapsedThoughtProcessProps {
 const ThoughtItem = memo(function ThoughtItem({
   thought,
   isLast,
+  colors,
 }: {
   thought: Thought;
   isLast: boolean;
+  colors: ColorScheme;
 }) {
   const { t } = useTranslation();
   const [isContentExpanded, setIsContentExpanded] = useState(false);
@@ -42,13 +45,18 @@ const ThoughtItem = memo(function ThoughtItem({
 
   const isError = !!thought.toolResult?.isError;
   const hasToolResult = thought.type === 'tool_use' && !!thought.toolResult;
-  const color = getThoughtColor(thought.type, isError);
+  const color = getThoughtColor(thought.type, isError, colors);
   const Icon = getThoughtIcon(thought.type);
   const label = getThoughtLabel(thought.type);
-  const headerColor = isError ? '#f59e0b' : color;
-  const circleBg = isError ? 'rgba(245,158,11,0.15)' : '#f5f5f5';
+  const headerColor = isError ? colors.warning : color;
+  const circleBg = isError ? colors.warningBackground : colors.surface;
   const circleStyle = [styles.circle, { backgroundColor: circleBg }];
   const headerStyle = [styles.header, { color: headerColor }];
+  const contentStyle = [styles.content, { color: colors.textSecondary }];
+  const thinkingContentStyle = [
+    styles.content,
+    { fontStyle: 'italic' as const, color: colors.textTertiary },
+  ];
 
   const content =
     thought.type === 'tool_use'
@@ -62,15 +70,19 @@ const ThoughtItem = memo(function ThoughtItem({
         <View style={circleStyle}>
           {hasToolResult ? (
             isError ? (
-              <AlertTriangle size={17} color="#f59e0b" />
+              <AlertTriangle size={17} color={colors.warning} />
             ) : (
-              <CheckCircle size={17} color="#4ade80" />
+              <CheckCircle size={17} color={colors.success} />
             )
           ) : (
             <Icon size={17} color={color} />
           )}
         </View>
-        {!isLast && <View style={styles.connector} />}
+        {!isLast && (
+          <View
+            style={[styles.connector, { backgroundColor: colors.border }]}
+          />
+        )}
       </View>
 
       {/* 内容：标签 + 正文 */}
@@ -81,10 +93,11 @@ const ThoughtItem = memo(function ThoughtItem({
         {content.length > 0 && (
           <View style={styles.bodyRow}>
             <Text
-              style={[
-                styles.content,
-                thought.type === 'thinking' && styles.thinkingContent,
-              ]}
+              style={
+                thought.type === 'thinking'
+                  ? thinkingContentStyle
+                  : contentStyle
+              }
               numberOfLines={isContentExpanded ? undefined : 2}
               onTextLayout={(e) => setLineCount(e.nativeEvent.lines.length)}
             >
@@ -95,7 +108,7 @@ const ThoughtItem = memo(function ThoughtItem({
                 style={styles.expandBtn}
                 onPress={() => setIsContentExpanded(!isContentExpanded)}
               >
-                <Text style={styles.expandBtnText}>
+                <Text style={[styles.expandBtnText, { color: colors.info }]}>
                   {isContentExpanded
                     ? t('thought.collapse')
                     : t('thought.expand')}
@@ -115,6 +128,7 @@ function CollapsedThoughtProcess({
   onToggle,
 }: CollapsedThoughtProcessProps) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
   const panelRef = useRef<View>(null);
   const panelHeightRef = useRef(0);
@@ -141,24 +155,26 @@ function CollapsedThoughtProcess({
   return (
     <View style={styles.wrapper}>
       <TouchableOpacity
-        style={styles.collapsedBtn}
+        style={[styles.collapsedBtn, { backgroundColor: colors.surface }]}
         activeOpacity={0.6}
         onPress={handleToggle}
       >
         <ChevronRight
           size={15}
-          color="#9ca3af"
+          color={colors.textTertiary}
           style={{
             transform: [{ rotate: isExpanded ? '90deg' : '0deg' }],
           }}
         />
-        <Text style={styles.collapsedLabel}>{t('thought.showThinking')}</Text>
+        <Text style={[styles.collapsedLabel, { color: colors.textSecondary }]}>
+          {t('thought.showThinking')}
+        </Text>
       </TouchableOpacity>
 
       {isExpanded && (
         <View
           ref={panelRef}
-          style={styles.panel}
+          style={[styles.panel, { backgroundColor: colors.surface }]}
           onLayout={(e) => {
             panelHeightRef.current = e.nativeEvent.layout.height;
           }}
@@ -169,6 +185,7 @@ function CollapsedThoughtProcess({
                 key={`${thought.id}-${index}`}
                 thought={thought}
                 isLast={index === steps.length - 1}
+                colors={colors}
               />
             ))}
           </ScrollView>
@@ -190,17 +207,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#f5f5f5',
     alignSelf: 'flex-start',
   },
   collapsedLabel: {
     fontSize: 14,
-    color: '#6b7280',
   },
   panel: {
     marginTop: 4,
     paddingVertical: 8,
-    backgroundColor: '#f5f5f5',
     borderRadius: 8,
     maxHeight: 250,
   },
@@ -226,7 +240,6 @@ const styles = StyleSheet.create({
   connector: {
     width: 2,
     flex: 1,
-    backgroundColor: '#e0e0e0',
     marginTop: 4,
     minHeight: 8,
   },
@@ -250,11 +263,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     fontSize: 14,
-    color: '#6b7280',
-  },
-  thinkingContent: {
-    fontStyle: 'italic',
-    color: '#9ca3af',
   },
   expandBtn: {
     paddingVertical: 2,
@@ -262,7 +270,6 @@ const styles = StyleSheet.create({
   },
   expandBtnText: {
     fontSize: 14,
-    color: '#3b82f6',
   },
 });
 

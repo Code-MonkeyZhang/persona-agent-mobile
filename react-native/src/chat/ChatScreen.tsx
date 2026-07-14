@@ -2,7 +2,13 @@
  * @file ChatScreen.tsx
  * @description 聊天页面主组件，管理消息收发、AI 流式回复、WebSocket 连接、Agent 切换、文件附件等功能。
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { GiftedChat } from 'react-native-gifted-chat';
 import {
   AppState,
@@ -122,42 +128,43 @@ const headerRightContainerStyle = StyleSheet.create({
 });
 
 /** 陪伴回复气泡样式 */
-const bubbleStyles = StyleSheet.create({
-  outer: {
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  inner: {
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  scroll: {
-    maxHeight: 160,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  text: {
-    fontSize: 17,
-    color: '#333',
-    lineHeight: 26,
-  },
-  thinking: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-});
+const createBubbleStyles = (colors: ColorScheme) =>
+  StyleSheet.create({
+    outer: {
+      paddingHorizontal: 20,
+      marginBottom: 8,
+    },
+    inner: {
+      borderRadius: 24,
+      backgroundColor: colors.surfaceTranslucent,
+      borderWidth: 1,
+      borderColor: colors.overlayLight,
+      overflow: 'hidden',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    scroll: {
+      maxHeight: 160,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 12,
+    },
+    text: {
+      fontSize: 17,
+      color: colors.textDarkGray,
+      lineHeight: 26,
+    },
+    thinking: {
+      fontSize: 16,
+      color: colors.textTertiary,
+      textAlign: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+  });
 
 /** 聊天页面的路由参数类型，携带 sessionId 和 tapIndex */
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Bedrock'>;
@@ -1041,6 +1048,7 @@ function ChatScreen(): React.JSX.Element {
   }));
 
   const styles = createStyles(colors);
+  const bubbleStyles = useMemo(() => createBubbleStyles(colors), [colors]);
 
   // 陪伴回复气泡数据：最新一条 AI 消息（GiftedChat 倒序，messages[0] 即最新）
   const lastAgentMessage =

@@ -71,8 +71,8 @@ const CircularProgress = ({
     <View style={styles.progressContainer}>
       <Progress.Pie
         size={38}
-        color="rgba(180, 180, 180, 1)"
-        borderColor="rgba(180, 180, 180, 1)"
+        color={colors.textTertiary}
+        borderColor={colors.textTertiary}
         progress={progress}
       />
     </View>
@@ -396,13 +396,13 @@ const getStyles = (colors: ColorScheme) =>
     deleteLayout: {
       width: 25,
       height: 25,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       borderRadius: 13,
       alignItems: 'center',
       justifyContent: 'center',
     },
     deleteText: {
-      color: '#fff',
+      color: colors.primaryForeground,
       fontSize: 19,
       marginTop: -1.5,
       marginRight: -0.5,
