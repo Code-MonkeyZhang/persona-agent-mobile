@@ -9,8 +9,6 @@
   },
   "drawer": {
     "chat": "聊天",
-    "tools": "工具",
-    "skills": "技能",
     "sessions": "会话",
     "server": "服务器",
     "settings": "设置",
@@ -66,18 +64,6 @@
     "connected": "已连接",
     "failed": "连接失败",
     "enterAddress": "请输入服务器地址"
-  },
-  "tools": {
-    "mcpServers": "MCP 服务器",
-    "toolCount": "{{count}} 个工具",
-    "notConnected": "未连接",
-    "loading": "加载中...",
-    "empty": "暂无 MCP 服务器"
-  },
-  "skills": {
-    "assigned": "已分配技能",
-    "loading": "加载中...",
-    "empty": "暂无技能"
   },
   "error": {
     "ttsFailed": "语音播报失败",

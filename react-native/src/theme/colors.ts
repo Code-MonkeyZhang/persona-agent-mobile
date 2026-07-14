@@ -35,6 +35,7 @@ export interface ColorScheme {
   overlayLight: string;
   // 品牌与状态
   primary: string;
+  primarySelectedBackground: string;
   error: string;
   success: string;
   warning: string;
@@ -76,6 +77,7 @@ export const lightColors: ColorScheme = {
   overlayLight: 'rgba(0, 0, 0, 0.1)',
 
   primary: '#007AFF',
+  primarySelectedBackground: 'rgba(0, 122, 255, 0.1)',
   error: '#ff4444',
   success: '#00C851',
   warning: '#ffbb33',

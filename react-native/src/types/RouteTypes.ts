@@ -23,6 +23,4 @@ export type RouteParamList = {
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
   Server: NonNullable<unknown>;
-  Tools: NonNullable<unknown>;
-  Skills: NonNullable<unknown>;
 };

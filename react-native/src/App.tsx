@@ -14,8 +14,6 @@ import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
-import ToolsScreen from './tools/ToolsScreen.tsx';
-import SkillsScreen from './skills/SkillsScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -80,9 +78,7 @@ const DrawerNavigator = () => {
  * 包含页面：
  * - Drawer: 抽屉导航器(默认首页)
  * - AgentDetail: Agent 详情页
- * - Server: 服务器/隧道连接页（占位，步骤 09 填充）
- * - Tools: 工具管理页（占位，步骤 09 填充）
- * - Skills: 技能展示页（占位，步骤 09 填充）
+ * - Server: 服务器/隧道连接页
  * - Settings: 设置页
  *
  * 从侧边栏入口进入的页面统一使用 slide_from_bottom 动画，
@@ -117,16 +113,6 @@ const AppNavigator = () => {
         name="Server"
         component={ServerScreen}
         options={{ ...stackScreenOptions, title: t('drawer.server') }}
-      />
-      <Stack.Screen
-        name="Tools"
-        component={ToolsScreen}
-        options={{ ...stackScreenOptions, title: t('drawer.tools') }}
-      />
-      <Stack.Screen
-        name="Skills"
-        component={SkillsScreen}
-        options={{ ...stackScreenOptions, title: t('drawer.skills') }}
       />
       <Stack.Screen
         name="Settings"

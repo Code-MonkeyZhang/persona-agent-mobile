@@ -1,7 +1,7 @@
 /**
  * @file CustomDrawerContent.tsx
- * @description 侧边栏（Drawer）内容组件，五段式垂直布局：
- *   Agent 卡片 → 常驻聊天入口 → 导航按钮(工具/技能) → 会话列表 → 底部(Server/Settings)。
+ * @description 侧边栏（Drawer）内容组件，四段式垂直布局：
+ *   Agent 卡片 → 常驻聊天入口 → 会话列表 → 底部(Server/Settings)。
  *   会话列表支持点击切换、长按删除，每项显示最新消息预览。常驻聊天会话(chat-*)不显示在列表中。
  */
 import * as React from 'react';
@@ -41,8 +41,6 @@ import {
   MonitorSmartphone,
   Plus,
   Settings,
-  Sparkles,
-  Wrench,
 } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { useSessionStore } from '../stores/sessionStore';
@@ -71,6 +69,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const drawerStatus = useDrawerStatus();
   /** 当前选中的会话 ID，用于高亮显示 */
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Stack 中当前激活的路由名，用于高亮对应的侧边栏入口 */
+  const [activeRoute, setActiveRoute] = useState<string | undefined>();
   /** 点击计数器，每次跳转会话时递增，用作路由参数触发 useEffect */
   const tapIndexRef = useRef<number>(1);
   /** Drawer 顶部展示的当前 Agent 信息（点击可进入详情页） */
@@ -114,6 +114,28 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       trigger(HapticFeedbackTypes.soft);
     }
   }, [drawerStatus, navigation]);
+
+  /**
+   * 监听父级 Stack 导航器的路由变化，实时更新 activeRoute。
+   * 用于高亮侧边栏中 Server / Settings 等入口。
+   */
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) {
+      return;
+    }
+    const updateActiveRoute = () => {
+      const parentState = parent.getState();
+      setActiveRoute(parentState.routes[parentState.index]?.name);
+    };
+    updateActiveRoute();
+    // navigation.getParent() 运行时包含 addListener，但 TS 类型 NavigationHelpers 未声明
+    return (
+      parent as unknown as {
+        addListener: (event: string, callback: () => void) => () => void;
+      }
+    ).addListener('state', updateActiveRoute);
+  }, [navigation]);
 
   /**
    * 从服务器拉取会话列表并更新 UI。
@@ -202,9 +224,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   };
 
   /** 导航到 Stack 页面，侧边栏保持开启状态 */
-  const navigateToStackScreen = (
-    route: 'Tools' | 'Skills' | 'Server' | 'Settings'
-  ) => {
+  const navigateToStackScreen = (route: 'Server' | 'Settings') => {
     navigation.navigate(route);
   };
 
@@ -263,15 +283,32 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
       {/* === 2. 常驻聊天入口 === */}
       <TouchableOpacity
-        style={styles.chatCard}
+        style={[
+          styles.chatCard,
+          activeRoute === 'Drawer' && !selectedId && styles.chatCardSelected,
+        ]}
         activeOpacity={0.7}
         onPress={navigateToChatSession}
       >
-        <View style={styles.chatIconWrapper}>
-          <MessageCircle size={24} color={colors.text} />
-        </View>
+        <MessageCircle
+          size={24}
+          color={
+            activeRoute === 'Drawer' && !selectedId
+              ? colors.primary
+              : colors.textSecondary
+          }
+        />
         <View style={styles.chatTextContainer}>
-          <Text style={styles.chatCardText}>{t('drawer.chat')}</Text>
+          <Text
+            style={[
+              styles.chatCardText,
+              activeRoute === 'Drawer' &&
+                !selectedId &&
+                styles.chatCardTextSelected,
+            ]}
+          >
+            {t('drawer.chat')}
+          </Text>
           <Text style={styles.chatPreview} numberOfLines={1}>
             {sessionPreviews[chatSessionIdFor(getServerAgentId())] ||
               t('drawer.startChat')}
@@ -281,27 +318,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
       <View style={styles.divider} />
 
-      {/* === 3. 导航按钮区：工具 / 技能 === */}
-      <View style={styles.navSection}>
-        <TouchableOpacity
-          style={styles.navButton}
-          activeOpacity={0.7}
-          onPress={() => navigateToStackScreen('Tools')}
-        >
-          <Wrench size={24} color={colors.textSecondary} />
-          <Text style={styles.navButtonText}>{t('drawer.tools')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navButton}
-          activeOpacity={0.7}
-          onPress={() => navigateToStackScreen('Skills')}
-        >
-          <Sparkles size={24} color={colors.textSecondary} />
-          <Text style={styles.navButtonText}>{t('drawer.skills')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* === 4. 会话列表（可滚动） === */}
+      {/* === 3. 会话列表（可滚动） === */}
       <View style={styles.sessionsHeader}>
         <View style={styles.sessionsHeaderLeft}>
           <MessagesSquare size={24} color={colors.textSecondary} />
@@ -342,7 +359,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
               }}
               style={[styles.touch, isSelected && styles.touchSelected]}
             >
-              <Text numberOfLines={1} style={styles.title}>
+              <Text
+                numberOfLines={1}
+                style={[styles.title, isSelected && styles.titleSelected]}
+              >
                 {item.title}
               </Text>
             </TouchableOpacity>
@@ -350,7 +370,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         }}
       />
 
-      {/* === 5. 底部入口：Server / Settings === */}
+      {/* === 4. 底部入口：Server / Settings === */}
       <View style={styles.divider} />
       <View style={styles.footer}>
         <TouchableOpacity
@@ -444,19 +464,20 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 12,
       marginHorizontal: 12,
       marginVertical: 8,
+      borderRadius: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: 'transparent',
     },
-    chatIconWrapper: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
+    chatCardSelected: {
+      backgroundColor: colors.primarySelectedBackground,
+      borderLeftColor: colors.primary,
     },
     chatCardText: {
       fontSize: 18,
-      fontWeight: '500',
-      color: colors.text,
+      color: colors.textSecondary,
+    },
+    chatCardTextSelected: {
+      color: colors.primary,
     },
     chatTextContainer: {
       flex: 1,
@@ -467,27 +488,13 @@ const createStyles = (colors: ColorScheme) =>
       color: colors.textSecondary,
       marginTop: 2,
     },
-    /** 导航按钮区 */
-    navSection: {
-      paddingHorizontal: 16,
-      paddingVertical: 4,
-    },
-    navButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 10,
-    },
-    navButtonText: {
-      fontSize: 18,
-      color: colors.text,
-      marginLeft: 12,
-    },
     /** Sessions 分区标题，左侧图标+文字，右侧新建对话按钮 */
     sessionsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
+      paddingLeft: 31,
+      paddingRight: 16,
       paddingTop: 8,
       paddingBottom: 4,
     },
@@ -508,18 +515,25 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     touch: {
-      paddingHorizontal: 16,
+      paddingLeft: 28,
+      paddingRight: 16,
       paddingVertical: 12,
       marginHorizontal: 12,
       marginVertical: 2,
       borderRadius: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: 'transparent',
     },
     touchSelected: {
-      backgroundColor: colors.selectedBackground,
+      backgroundColor: colors.primarySelectedBackground,
+      borderLeftColor: colors.primary,
     },
     title: {
       fontSize: 18,
       color: colors.text,
+    },
+    titleSelected: {
+      color: colors.primary,
     },
     /** 底部 Server / Settings */
     footer: {
@@ -528,8 +542,10 @@ const createStyles = (colors: ColorScheme) =>
     footerButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingVertical: 12,
+      marginHorizontal: 12,
+      marginVertical: 2,
     },
     footerText: {
       fontSize: 18,

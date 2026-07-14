@@ -9,8 +9,6 @@
   },
   "drawer": {
     "chat": "Chat",
-    "tools": "Tools",
-    "skills": "Skills",
     "sessions": "Sessions",
     "server": "Server",
     "settings": "Settings",
@@ -66,18 +64,6 @@
     "connected": "Connected",
     "failed": "Failed",
     "enterAddress": "Please enter a server address"
-  },
-  "tools": {
-    "mcpServers": "MCP Servers",
-    "toolCount": "{{count}} tools",
-    "notConnected": "Not connected",
-    "loading": "Loading...",
-    "empty": "No MCP servers assigned"
-  },
-  "skills": {
-    "assigned": "Assigned Skills",
-    "loading": "Loading...",
-    "empty": "No skills assigned"
   },
   "error": {
     "ttsFailed": "TTS playback failed",
