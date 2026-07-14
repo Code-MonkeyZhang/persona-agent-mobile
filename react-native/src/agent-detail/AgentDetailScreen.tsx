@@ -80,7 +80,7 @@ function InfoRow({
 }) {
   return (
     <View style={styles.row}>
-      <Icon size={16} color={colors.text} />
+      <Icon size={19} color={colors.text} />
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
@@ -165,8 +165,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         <AgentAvatar
           agentId={agentId}
           serverAddress={serverAddr}
-          size={64}
-          fallbackIconSize={32}
+          size={72}
+          fallbackIconSize={38}
           fallbackBackgroundColor={colors.surfaceSecondary}
         />
         <Text style={styles.name}>{displayName}</Text>
@@ -224,10 +224,10 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           onPress={() => setPromptExpanded((v) => !v)}
           activeOpacity={0.7}
         >
-          <MessageSquare size={16} color={colors.text} />
+          <MessageSquare size={19} color={colors.text} />
           <Text style={styles.rowLabel}>{t('agent.systemPrompt')}</Text>
           <ChevronRight
-            size={16}
+            size={19}
             color={colors.textTertiary}
             style={[styles.chevron, promptExpanded && styles.chevronExpanded]}
           />
@@ -242,7 +242,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           <>
             <View style={styles.divider} />
             <View style={styles.row}>
-              <FolderOpen size={16} color={colors.text} />
+              <FolderOpen size={19} color={colors.text} />
               <View style={styles.workspaceContent}>
                 <Text style={styles.rowLabel}>{t('agent.workspacePath')}</Text>
                 <Text style={styles.workspacePath} numberOfLines={1}>
@@ -295,7 +295,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                     onPress={handleAuth}
                     activeOpacity={0.7}
                   >
-                    <Plug size={16} color={colors.text} />
+                    <Plug size={19} color={colors.text} />
                     <Text style={styles.rowLabel}>{mcp.name}</Text>
                     <View
                       style={[
@@ -333,7 +333,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             {skills.map((skill, i) => (
               <React.Fragment key={skill.name}>
                 <View style={styles.skillRow}>
-                  <Sparkles size={16} color={colors.text} />
+                  <Sparkles size={19} color={colors.text} />
                   <View style={styles.skillContent}>
                     <Text style={styles.rowLabel}>{skill.name}</Text>
                     {skill.description ? (
@@ -371,7 +371,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.surface,
     },
     emptyText: {
-      fontSize: 16,
+      fontSize: 19,
       color: colors.textSecondary,
     },
     avatarCard: {
@@ -382,35 +382,21 @@ const createStyles = (colors: ColorScheme) =>
       borderWidth: 1,
       borderColor: colors.borderLight,
     },
-    avatar: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      overflow: 'hidden',
-    },
-    avatarFallback: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: colors.surfaceSecondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     name: {
-      fontSize: 18,
+      fontSize: 22,
       fontWeight: '500',
       color: colors.text,
       marginTop: 12,
     },
     description: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
       marginTop: 6,
       textAlign: 'center',
-      lineHeight: 18,
+      lineHeight: 22,
     },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textSecondary,
       marginLeft: 16,
       marginBottom: 8,
@@ -431,12 +417,12 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 14,
     },
     rowLabel: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.text,
       flex: 1,
     },
     rowValue: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.textSecondary,
     },
     chevron: {
@@ -455,9 +441,9 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 14,
     },
     promptText: {
-      fontSize: 14,
+      fontSize: 17,
       color: colors.textSecondary,
-      lineHeight: 20,
+      lineHeight: 24,
       backgroundColor: colors.surface,
       borderRadius: 12,
       padding: 12,
@@ -466,7 +452,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     workspacePath: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
       marginTop: 2,
     },
@@ -476,7 +462,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 4,
     },
     mcpToolCount: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
       marginLeft: 8,
     },
@@ -491,7 +477,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     skillDesc: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
       marginTop: 2,
     },

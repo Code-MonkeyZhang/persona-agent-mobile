@@ -146,12 +146,12 @@ const bubbleStyles = StyleSheet.create({
     paddingBottom: 12,
   },
   text: {
-    fontSize: 14,
+    fontSize: 17,
     color: '#333',
-    lineHeight: 22,
+    lineHeight: 26,
   },
   thinking: {
-    fontSize: 13,
+    fontSize: 16,
     color: '#999',
     textAlign: 'center',
     paddingHorizontal: 16,
@@ -601,16 +601,16 @@ function ChatScreen(): React.JSX.Element {
           <CustomHeaderRightButton onPress={handleToggleVoice}>
             {voiceEnabled ? (
               <Mic
-                size={20}
+                size={24}
                 color={isSpeaking ? colors.primary : colors.text}
               />
             ) : (
-              <MicOff size={20} color={colors.text} />
+              <MicOff size={24} color={colors.text} />
             )}
           </CustomHeaderRightButton>
           <CustomHeaderRightButton onPress={handleToggleCompanion}>
             <UserRound
-              size={22}
+              size={26}
               color={companionOpen ? colors.primary : colors.text}
             />
           </CustomHeaderRightButton>

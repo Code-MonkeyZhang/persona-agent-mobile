@@ -3,7 +3,7 @@
  * @description Agent 选择下拉菜单，从触发按钮下方展开，支持高度 + 透明度动画。
  * 选中项通过背景色高亮，点击外部区域关闭。
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   FlatList,
   Modal,
@@ -144,8 +144,8 @@ const AgentSelectionModal: React.FC<AgentSelectionModalProps> = ({
         <AgentAvatar
           agentId={item.id}
           serverAddress={serverAddr}
-          size={24}
-          fallbackIconSize={14}
+          size={28}
+          fallbackIconSize={17}
           marginRight={10}
         />
         <Text style={styles.agentName}>{item.name}</Text>
@@ -230,7 +230,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.selectedBackground,
     },
     agentName: {
-      fontSize: 15,
+      fontSize: 18,
       flex: 1,
       color: colors.text,
     },

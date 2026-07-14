@@ -8,7 +8,6 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
-  Image,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -28,7 +27,6 @@ import {
   deleteSession,
   fetchAgentDetail,
   fetchSessions,
-  getAgentAvatarUrl,
   isChatSession,
 } from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
@@ -44,11 +42,11 @@ import {
   Plus,
   Settings,
   Sparkles,
-  User,
   Wrench,
 } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { useSessionStore } from '../stores/sessionStore';
+import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 
 /**
  * 自定义侧边栏内容组件
@@ -77,7 +75,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const tapIndexRef = useRef<number>(1);
   /** Drawer 顶部展示的当前 Agent 信息（点击可进入详情页） */
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
-  const [agentAvatarError, setAgentAvatarError] = useState(false);
   const { event, sendEvent } = useAppContext();
 
   /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、标题变更、Agent 切换 */
@@ -153,7 +150,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     try {
       const detail = await fetchAgentDetail(address, agentId);
       setAgentInfo(detail);
-      setAgentAvatarError(false);
     } catch (e) {
       logger.error(`[Drawer] fetchAgentDetail failed: ${e}`);
     }
@@ -216,8 +212,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* === 1. Agent 信息卡片，点击进入详情页 === */}
-      {agentInfo && (
+      {/* === 1. Agent 信息卡片，点击进入详情页；未连接时显示占位符保持布局 === */}
+      {agentInfo ? (
         <TouchableOpacity
           style={styles.agentCard}
           activeOpacity={0.7}
@@ -231,17 +227,13 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         >
           {(() => {
             const serverAddr = getServerAddress();
-            const canLoad = serverAddr.length > 0 && agentInfo.id.length > 0;
-            return canLoad && !agentAvatarError ? (
-              <Image
-                source={{ uri: getAgentAvatarUrl(agentInfo.id, serverAddr) }}
-                style={styles.agentAvatar}
-                onError={() => setAgentAvatarError(true)}
+            return (
+              <AgentAvatar
+                agentId={agentInfo.id}
+                serverAddress={serverAddr}
+                size={50}
+                fallbackIconSize={26}
               />
-            ) : (
-              <View style={styles.agentAvatarFallback}>
-                <User size={22} color="#9CA3AF" />
-              </View>
             );
           })()}
           <View style={styles.agentInfo}>
@@ -256,6 +248,15 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           </View>
           <Text style={styles.agentArrow}>›</Text>
         </TouchableOpacity>
+      ) : (
+        <View style={styles.agentCard}>
+          <AgentAvatar
+            agentId=""
+            serverAddress=""
+            size={50}
+            fallbackIconSize={26}
+          />
+        </View>
       )}
 
       <View style={styles.divider} />
@@ -267,7 +268,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         onPress={navigateToChatSession}
       >
         <View style={styles.chatIconWrapper}>
-          <MessageCircle size={20} color={colors.text} />
+          <MessageCircle size={24} color={colors.text} />
         </View>
         <View style={styles.chatTextContainer}>
           <Text style={styles.chatCardText}>{t('drawer.chat')}</Text>
@@ -287,7 +288,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           activeOpacity={0.7}
           onPress={() => navigateToStackScreen('Tools')}
         >
-          <Wrench size={20} color={colors.textSecondary} />
+          <Wrench size={24} color={colors.textSecondary} />
           <Text style={styles.navButtonText}>{t('drawer.tools')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -295,7 +296,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           activeOpacity={0.7}
           onPress={() => navigateToStackScreen('Skills')}
         >
-          <Sparkles size={20} color={colors.textSecondary} />
+          <Sparkles size={24} color={colors.textSecondary} />
           <Text style={styles.navButtonText}>{t('drawer.skills')}</Text>
         </TouchableOpacity>
       </View>
@@ -303,7 +304,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       {/* === 4. 会话列表（可滚动） === */}
       <View style={styles.sessionsHeader}>
         <View style={styles.sessionsHeaderLeft}>
-          <MessagesSquare size={20} color={colors.textSecondary} />
+          <MessagesSquare size={24} color={colors.textSecondary} />
           <Text style={styles.sessionsHeaderText}>{t('drawer.sessions')}</Text>
         </View>
         <TouchableOpacity
@@ -311,7 +312,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           style={styles.newChatButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Plus size={20} color={colors.text} />
+          <Plus size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
       <FlatList
@@ -357,7 +358,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           activeOpacity={0.7}
           onPress={() => navigateToStackScreen('Server')}
         >
-          <MonitorSmartphone size={20} color={colors.textSecondary} />
+          <MonitorSmartphone size={24} color={colors.textSecondary} />
           <Text style={styles.footerText}>{t('drawer.server')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -365,7 +366,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           activeOpacity={0.7}
           onPress={() => navigateToStackScreen('Settings')}
         >
-          <Settings size={20} color={colors.textSecondary} />
+          <Settings size={24} color={colors.textSecondary} />
           <Text style={styles.footerText}>{t('drawer.settings')}</Text>
         </TouchableOpacity>
       </View>
@@ -416,38 +417,22 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 12,
       backgroundColor: colors.surface,
     },
-    agentAvatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
-    agentAvatarFallback: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#E5E7EB',
-    },
     agentInfo: {
       flex: 1,
       marginLeft: 12,
     },
     agentName: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '600',
       color: colors.text,
     },
     agentDesc: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textTertiary,
       marginTop: 2,
     },
     agentArrow: {
-      fontSize: 20,
+      fontSize: 24,
       color: colors.textTertiary,
       marginLeft: 4,
     },
@@ -461,15 +446,15 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 8,
     },
     chatIconWrapper: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
     },
     chatCardText: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '500',
       color: colors.text,
     },
@@ -478,7 +463,7 @@ const createStyles = (colors: ColorScheme) =>
       marginLeft: 12,
     },
     chatPreview: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textSecondary,
       marginTop: 2,
     },
@@ -493,7 +478,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
     },
     navButtonText: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.text,
       marginLeft: 12,
     },
@@ -514,7 +499,7 @@ const createStyles = (colors: ColorScheme) =>
       padding: 4,
     },
     sessionsHeaderText: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.text,
       marginLeft: 12,
     },
@@ -533,7 +518,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.selectedBackground,
     },
     title: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.text,
     },
     /** 底部 Server / Settings */
@@ -547,7 +532,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 12,
     },
     footerText: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.textSecondary,
       marginLeft: 12,
     },

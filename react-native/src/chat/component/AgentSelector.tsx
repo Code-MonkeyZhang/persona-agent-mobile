@@ -99,8 +99,8 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
           <AgentAvatar
             agentId={currentAgentId}
             serverAddress={serverAddr}
-            size={22}
-            fallbackIconSize={12}
+            size={26}
+            fallbackIconSize={15}
           />
           <Text style={styles.triggerName} numberOfLines={1}>
             {displayName}
@@ -135,14 +135,14 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 6,
     },
     triggerName: {
-      fontSize: 16,
+      fontSize: 19,
       fontWeight: '600',
       color: colors.text,
       marginLeft: 8,
       maxWidth: 160,
     },
     triggerArrow: {
-      fontSize: 10,
+      fontSize: 13,
       color: colors.textSecondary,
       marginLeft: 4,
     },

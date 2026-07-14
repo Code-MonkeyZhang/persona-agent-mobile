@@ -70,8 +70,17 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
   }
 
   return (
-    <View style={[baseStyle, styles.fallback, { backgroundColor: fallbackBackgroundColor }]}>
-      <User size={fallbackIconSize ?? Math.round(size * 0.55)} color="#9CA3AF" />
+    <View
+      style={[
+        baseStyle,
+        styles.fallback,
+        { backgroundColor: fallbackBackgroundColor },
+      ]}
+    >
+      <User
+        size={fallbackIconSize ?? Math.round(size * 0.55)}
+        color="#9CA3AF"
+      />
     </View>
   );
 };

@@ -93,24 +93,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
   const userName = currentMessage?.user?.name ?? 'AI';
 
-  const headerContent = useMemo(() => {
-    return (
-      <>
-        <AgentAvatar
-          agentId={agentId}
-          serverAddress={serverAddress}
-          size={22}
-          marginRight={6}
-        />
-        <Text style={styles.name}>{userName}</Text>
-      </>
-    );
-  }, [agentId, serverAddress, userName, styles.name]);
-
   const copyButton = useMemo(() => {
     return clickTitleCopied ? (
       <View style={styles.copy}>
-        <Check size={18} color={colors.text} />
+        <Check size={22} color={colors.text} />
       </View>
     ) : null;
   }, [clickTitleCopied, colors.text, styles.copy]);
@@ -227,9 +213,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             style={styles.actionButton}
           >
             {copied ? (
-              <Check size={16} color={colors.textSecondary} />
+              <Check size={19} color={colors.textSecondary} />
             ) : (
-              <Copy size={16} color={colors.textSecondary} />
+              <Copy size={19} color={colors.textSecondary} />
             )}
           </TouchableOpacity>
         </View>
@@ -260,7 +246,17 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         activeOpacity={1}
         onPress={() => setClickTitleCopied(true)}
       >
-        {!isUser.current && headerContent}
+        {!isUser.current && (
+          <>
+            <AgentAvatar
+              agentId={agentId}
+              serverAddress={serverAddress}
+              size={26}
+              marginRight={6}
+            />
+            <Text style={styles.name}>{userName}</Text>
+          </>
+        )}
         {copyButton}
       </TouchableOpacity>
       <View style={styles.marked_box}>
@@ -272,7 +268,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
         {showLoading && (
           <View style={styles.loadingContainer}>
-            <LoadingSpinner visible={true} size={18} />
+            <LoadingSpinner visible={true} size={22} />
           </View>
         )}
         {!isLoading && (
@@ -328,7 +324,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     name: {
       flex: 1,
-      fontSize: 16,
+      fontSize: 19,
       fontWeight: '500',
       color: colors.text,
     },
@@ -342,8 +338,8 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
     },
     questionText: {
-      lineHeight: 24,
-      fontSize: 16,
+      lineHeight: 29,
+      fontSize: 19,
       color: colors.text,
     },
     loadingContainer: {
@@ -368,7 +364,7 @@ const createStyles = (colors: ColorScheme) =>
       padding: 8,
     },
     metricsText: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textTertiary,
       marginRight: 4,
     },
@@ -378,10 +374,10 @@ const createStyles = (colors: ColorScheme) =>
 const customMarkedStyles: MarkedStyles = {
   table: { marginVertical: 4 },
   li: { paddingVertical: 4 },
-  h1: { fontSize: 28 },
-  h2: { fontSize: 24 },
-  h3: { fontSize: 20 },
-  h4: { fontSize: 18 },
+  h1: { fontSize: 34 },
+  h2: { fontSize: 29 },
+  h3: { fontSize: 24 },
+  h4: { fontSize: 22 },
   blockquote: { marginVertical: 8 },
   paragraph: { paddingVertical: 6 },
 };
