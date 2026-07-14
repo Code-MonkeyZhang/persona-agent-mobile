@@ -1138,7 +1138,7 @@ function ChatScreen(): React.JSX.Element {
                   : {}),
               }}
               scrollToBottom={true}
-              scrollToBottomComponent={CustomScrollToBottomComponent}
+              scrollToBottomComponent={() => <CustomScrollToBottomComponent />}
               scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
