@@ -69,7 +69,7 @@ const ToolsScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         <View style={styles.sectionHeader}>
-          <Wrench size={16} color={colors.textSecondary} />
+          <Wrench size={19} color={colors.textSecondary} />
           <Text style={styles.sectionLabel}>{t('tools.mcpServers')}</Text>
         </View>
         <View style={styles.card}>
@@ -130,7 +130,7 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: 8,
     },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textSecondary,
     },
     card: {
@@ -155,11 +155,11 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     listItemTitle: {
-      fontSize: 15,
+      fontSize: 18,
       color: colors.text,
     },
     listItemDesc: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textSecondary,
       marginTop: 2,
     },
@@ -178,7 +178,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingHorizontal: 16,
       paddingVertical: 24,
       textAlign: 'center',
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
     },
   });

@@ -366,7 +366,7 @@ const getTableWidthArr = (
 const createCustomStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     text: {
-      fontSize: 12,
+      fontSize: 15,
       paddingVertical: 1.3,
       fontFamily: Platform.OS === 'ios' ? 'Menlo-Regular' : 'monospace',
       color: colors.text,
@@ -374,7 +374,7 @@ const createCustomStyles = (colors: ColorScheme) =>
     codeSpanText: {
       fontStyle: 'normal',
       backgroundColor: colors.input,
-      fontSize: 16,
+      fontSize: 19,
       color: colors.text,
     },
     imageContainer: {

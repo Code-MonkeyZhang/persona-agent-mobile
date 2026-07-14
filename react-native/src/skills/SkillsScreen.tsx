@@ -65,7 +65,7 @@ const SkillsScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         <View style={styles.sectionHeader}>
-          <Sparkles size={16} color={colors.textSecondary} />
+          <Sparkles size={19} color={colors.textSecondary} />
           <Text style={styles.sectionLabel}>{t('skills.assigned')}</Text>
         </View>
         {skills.length > 0 ? (
@@ -109,7 +109,7 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: 8,
     },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textSecondary,
     },
     card: {
@@ -121,18 +121,18 @@ const createStyles = (colors: ColorScheme) =>
       borderColor: colors.borderLight,
     },
     cardTitle: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '500',
       color: colors.text,
     },
     cardDesc: {
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textSecondary,
       marginTop: 4,
     },
     emptyText: {
       textAlign: 'center',
-      fontSize: 13,
+      fontSize: 16,
       color: colors.textTertiary,
       paddingVertical: 8,
     },

@@ -32,7 +32,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     return (
       <View style={styles.item}>
         <Text style={styles.textItem}>{item.label}</Text>
-        {isSelected && <Check size={20} color={colors.primary} />}
+        {isSelected && <Check size={24} color={colors.primary} />}
       </View>
     );
   };
@@ -87,7 +87,7 @@ const createStyles = (colors: ColorScheme) =>
       top: -8,
       zIndex: 999,
       paddingHorizontal: 4,
-      fontSize: 12,
+      fontSize: 15,
       fontWeight: '500',
     },
     dropdown: {
@@ -108,16 +108,16 @@ const createStyles = (colors: ColorScheme) =>
       elevation: 0,
     },
     placeholderStyle: {
-      fontSize: 14,
+      fontSize: 17,
       color: colors.placeholder,
     },
     selectedTextStyle: {
-      fontSize: 14,
+      fontSize: 17,
       color: colors.text,
     },
     inputSearchStyle: {
       height: 36,
-      fontSize: 14,
+      fontSize: 17,
       color: colors.text,
       borderRadius: 4,
     },
@@ -133,7 +133,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     textItem: {
       flex: 1,
-      fontSize: 14,
+      fontSize: 17,
       color: colors.text,
     },
   });

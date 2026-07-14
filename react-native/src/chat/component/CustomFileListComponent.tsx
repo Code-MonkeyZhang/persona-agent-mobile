@@ -70,7 +70,7 @@ const CircularProgress = ({
   return (
     <View style={styles.progressContainer}>
       <Progress.Pie
-        size={32}
+        size={38}
         color="rgba(180, 180, 180, 1)"
         borderColor="rgba(180, 180, 180, 1)"
         progress={progress}
@@ -283,7 +283,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               />
               {isVideo && !isFileCompressing && (
                 <View style={styles.playIcon}>
-                  <Play size={32} color="white" />
+                  <Play size={38} color="white" />
                 </View>
               )}
               {isVideo && isFileCompressing && (
@@ -300,7 +300,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
               </Text>
               <View style={styles.formatContainer}>
                 <FileText
-                  size={16}
+                  size={19}
                   color={colors.textSecondary}
                   style={styles.formatIcon}
                 />
@@ -394,16 +394,16 @@ const getStyles = (colors: ColorScheme) =>
     },
     /** 删除按钮圆形背景 */
     deleteLayout: {
-      width: 20,
-      height: 20,
+      width: 25,
+      height: 25,
       backgroundColor: 'rgba(0,0,0,0.5)',
-      borderRadius: 10,
+      borderRadius: 13,
       alignItems: 'center',
       justifyContent: 'center',
     },
     deleteText: {
       color: '#fff',
-      fontSize: 16,
+      fontSize: 19,
       marginTop: -1.5,
       marginRight: -0.5,
       fontWeight: 'normal',
@@ -423,8 +423,8 @@ const getStyles = (colors: ColorScheme) =>
       position: 'absolute',
       top: '50%',
       left: '50%',
-      marginTop: -16,
-      marginLeft: -16,
+      marginTop: -19,
+      marginLeft: -19,
     },
     /** 文档文件的预览卡片（显示文件名 + 格式图标） */
     filePreview: {
@@ -447,12 +447,12 @@ const getStyles = (colors: ColorScheme) =>
       marginRight: 4,
     },
     fileName: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.text,
       paddingRight: 12,
     },
     fileFormat: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textSecondary,
       marginTop: 2,
     },
@@ -461,10 +461,10 @@ const getStyles = (colors: ColorScheme) =>
       position: 'absolute',
       top: '50%',
       left: '50%',
-      marginTop: -16,
-      marginLeft: -16,
-      width: 32,
-      height: 32,
+      marginTop: -19,
+      marginLeft: -19,
+      width: 38,
+      height: 38,
       alignItems: 'center',
       justifyContent: 'center',
     },

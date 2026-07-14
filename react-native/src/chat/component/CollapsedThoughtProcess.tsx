@@ -62,12 +62,12 @@ const ThoughtItem = memo(function ThoughtItem({
         <View style={circleStyle}>
           {hasToolResult ? (
             isError ? (
-              <AlertTriangle size={14} color="#f59e0b" />
+              <AlertTriangle size={17} color="#f59e0b" />
             ) : (
-              <CheckCircle size={14} color="#4ade80" />
+              <CheckCircle size={17} color="#4ade80" />
             )
           ) : (
-            <Icon size={14} color={color} />
+            <Icon size={17} color={color} />
           )}
         </View>
         {!isLast && <View style={styles.connector} />}
@@ -146,7 +146,7 @@ function CollapsedThoughtProcess({
         onPress={handleToggle}
       >
         <ChevronRight
-          size={12}
+          size={15}
           color="#9ca3af"
           style={{
             transform: [{ rotate: isExpanded ? '90deg' : '0deg' }],
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   collapsedLabel: {
-    fontSize: 11,
+    fontSize: 14,
     color: '#6b7280',
   },
   panel: {
@@ -217,9 +217,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   circle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   header: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '500',
   },
   bodyRow: {
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 14,
     color: '#6b7280',
   },
   thinkingContent: {
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   expandBtnText: {
-    fontSize: 11,
+    fontSize: 14,
     color: '#3b82f6',
   },
 });

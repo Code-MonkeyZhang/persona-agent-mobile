@@ -29,7 +29,7 @@ export const EmptyChatComponent = ({
   return (
     <View style={styles.emptyChatContainer}>
       {isLoadingMessages ? (
-        <LoadingSpinner visible={true} size={24} />
+        <LoadingSpinner visible={true} size={28} />
       ) : (
         <Text style={styles.hintText}>{t('chat.startConversation')}</Text>
       )}
@@ -46,7 +46,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     hintText: {
-      fontSize: 16,
+      fontSize: 19,
       fontWeight: '500',
       paddingHorizontal: 16,
       textAlign: 'center',

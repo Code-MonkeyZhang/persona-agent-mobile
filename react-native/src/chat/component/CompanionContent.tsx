@@ -104,18 +104,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   noAssetTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#555',
     textAlign: 'center',
-    lineHeight: 26,
+    lineHeight: 32,
   },
   noAssetHint: {
-    fontSize: 14,
+    fontSize: 17,
     color: '#999',
     marginTop: 12,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 26,
   },
 });
 

@@ -29,9 +29,9 @@ const CopyButton: React.FC<CopyButtonProps> = React.memo(({ content }) => {
   return (
     <TouchableOpacity style={styles.copyButtonLayout} onPress={handleCopy}>
       {copied ? (
-        <Check size={18} color={colors.textSecondary} />
+        <Check size={22} color={colors.textSecondary} />
       ) : (
-        <Copy size={18} color={colors.textSecondary} />
+        <Copy size={22} color={colors.textSecondary} />
       )}
     </TouchableOpacity>
   );

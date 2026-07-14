@@ -39,7 +39,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
       onPress={onPress}
       disabled={!isActive}
     >
-      <ArrowUp size={20} color="#ffffff" />
+      <ArrowUp size={24} color="#ffffff" />
     </TouchableOpacity>
   );
 };
@@ -51,9 +51,9 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       alignItems: 'center',
       alignSelf: 'flex-end',
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       backgroundColor: colors.text,
     },
     sendButtonDisabled: {

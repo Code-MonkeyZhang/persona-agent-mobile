@@ -211,7 +211,7 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       onPress={handlePress}
       activeOpacity={0.7}
     >
-      <Plus size={18} color={colors.textSecondary} />
+      <Plus size={22} color={colors.textSecondary} />
     </TouchableOpacity>
   );
 };
@@ -348,9 +348,9 @@ const getFiles = async (res: ImagePickerResponse) => {
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     addButton: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
       alignItems: 'center',

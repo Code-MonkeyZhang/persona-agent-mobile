@@ -7,7 +7,7 @@ export const CustomScrollToBottomComponent = (): React.ReactNode => {
   const { colors } = useTheme();
   return (
     <View style={styles.scrollToBottomContainer}>
-      <ChevronDown size={20} color={colors.text} />
+      <ChevronDown size={24} color={colors.text} />
     </View>
   );
 };

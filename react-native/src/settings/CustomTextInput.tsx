@@ -62,7 +62,7 @@ const CustomTextInput: React.FC<CustomTextInputProps> = ({
           style={{
             ...styles.input,
             ...(secureTextEntry && styles.inputPadding),
-            ...(numberOfLines > 1 && { lineHeight: 22 }),
+            ...(numberOfLines > 1 && { lineHeight: 26 }),
           }}
           value={value}
           numberOfLines={Platform.OS === 'ios' ? numberOfLines : undefined}
@@ -78,9 +78,9 @@ const CustomTextInput: React.FC<CustomTextInputProps> = ({
             onPress={togglePasswordVisibility}
           >
             {isPasswordVisible ? (
-              <EyeOff size={16} color={colors.text} />
+              <EyeOff size={19} color={colors.text} />
             ) : (
-              <Eye size={16} color={colors.text} />
+              <Eye size={19} color={colors.text} />
             )}
           </TouchableOpacity>
         )}
@@ -105,7 +105,7 @@ const createStyles = (colors: ColorScheme) =>
       top: -8,
       zIndex: 999,
       paddingHorizontal: 4,
-      fontSize: 12,
+      fontSize: 15,
       fontWeight: '500',
     },
     inputContainer: {

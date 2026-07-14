@@ -296,7 +296,7 @@ export const CustomCodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
 
 const styles = StyleSheet.create({
   inputText: {
-    lineHeight: 20,
+    lineHeight: 24,
     marginTop: -5,
   },
 });

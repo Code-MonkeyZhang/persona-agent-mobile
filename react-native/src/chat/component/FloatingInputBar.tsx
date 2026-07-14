@@ -103,7 +103,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     textInput: {
       color: colors.text,
-      fontSize: 16,
+      fontSize: 19,
       fontWeight: 'normal',
       maxHeight: 200,
       textAlignVertical: 'top',

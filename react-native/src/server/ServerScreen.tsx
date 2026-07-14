@@ -106,7 +106,7 @@ const ServerScreen: React.FC = () => {
         <View style={styles.card}>
           <View style={styles.inputWrap}>
             <LinkIcon
-              size={16}
+              size={19}
               color={colors.textTertiary}
               style={styles.inputIcon}
             />
@@ -133,7 +133,7 @@ const ServerScreen: React.FC = () => {
             disabled={status === 'connecting' || !url.trim()}
           >
             {saved ? (
-              <Check size={16} color="#fff" />
+              <Check size={19} color="#fff" />
             ) : (
               <Text style={styles.saveButtonText}>{t('server.connect')}</Text>
             )}
@@ -196,7 +196,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
       paddingLeft: 32,
       paddingRight: 12,
-      fontSize: 14,
+      fontSize: 17,
       color: colors.text,
     },
     saveButton: {
@@ -215,11 +215,11 @@ const createStyles = (colors: ColorScheme) =>
     },
     saveButtonText: {
       color: '#ffffff',
-      fontSize: 14,
+      fontSize: 17,
       fontWeight: '600',
     },
     statusText: {
-      fontSize: 13,
+      fontSize: 16,
       marginTop: 4,
     },
   });

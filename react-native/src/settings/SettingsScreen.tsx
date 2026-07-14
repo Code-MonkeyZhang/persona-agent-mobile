@@ -40,9 +40,9 @@ function SettingsScreen(): React.JSX.Element {
           {/* 震动开关 */}
           <View style={styles.row}>
             {hapticEnabled ? (
-              <Vibrate size={16} color={colors.text} />
+              <Vibrate size={19} color={colors.text} />
             ) : (
-              <VibrateOff size={16} color={colors.text} />
+              <VibrateOff size={19} color={colors.text} />
             )}
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>{t('settings.vibration')}</Text>
@@ -94,12 +94,12 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     rowLabel: {
-      fontSize: 15,
+      fontSize: 18,
       fontWeight: '500',
       color: colors.text,
     },
     rowDesc: {
-      fontSize: 12,
+      fontSize: 15,
       color: colors.textSecondary,
       marginTop: 2,
     },
