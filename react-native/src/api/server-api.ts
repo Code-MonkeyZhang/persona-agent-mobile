@@ -680,6 +680,8 @@ interface SessionMeta {
   model: ModelConfig;
   /** 原始消息已压缩到的下标（仅聊天 Session）；undefined/0 表示尚未压缩 */
   summarizedUpTo?: number;
+  /** 当前立绘表情名称；undefined 时前端 fallback 到 'default' */
+  currentPose?: string;
 }
 
 interface Session extends SessionMeta {

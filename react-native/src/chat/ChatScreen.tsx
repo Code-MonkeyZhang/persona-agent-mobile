@@ -365,7 +365,10 @@ function ChatScreen(): React.JSX.Element {
               for (const tc of toolCalls) {
                 if (tc.name === 'show_pose' && tc.arguments) {
                   const pose = tc.arguments.pose as string;
-                  if (pose) {
+                  const result = toolResults?.find(
+                    (tr) => tr.toolCallId === tc.id
+                  );
+                  if (pose && result?.success) {
                     logger.debug(`[ChatScreen] pose change: ${pose}`);
                     setCurrentPose(pose);
                     setPoseError(false);
@@ -497,13 +500,16 @@ function ChatScreen(): React.JSX.Element {
       setSessionId('');
       sendEventRef.current('updateHistorySelectedId', { id: '' });
       setMessages([]);
+      setCurrentPose('default');
+      setPoseError(false);
       showKeyboard();
     }, [setSessionId])
   );
 
   // ==================== Agent 切换 ====================
   /**
-   * 切换当前 Agent：保存选择、清空消息、通知侧边栏刷新。
+   * 切换当前 Agent：保存选择、清空消息、通知侧边栏刷新，
+   * 并自动加载新 Agent 的聊天 session 以恢复消息和 pose。
    * @param newAgentId 用户选中的 Agent ID
    */
   const handleSelectAgent = useCallback(
@@ -520,14 +526,23 @@ function ChatScreen(): React.JSX.Element {
       stopSpeakingRef.current();
 
       sendEventRef.current('agentChanged', { id: newAgentId });
+
+      logger.info(
+        `[ChatScreen] agent switch → loading chat session for ${newAgentId}`
+      );
+      navigation.setParams({
+        sessionId: `chat-${newAgentId}`,
+        tapIndex: Date.now(),
+      });
     },
-    [currentAgentId, setSessionId]
+    [currentAgentId, setSessionId, navigation]
   );
 
   // ==================== 陪伴资源加载 ====================
   /**
    * Agent 切换时请求 pose 列表，判断是否有陪伴资源。
-   * 结果写入 hasAssets 三态，同时重置错误标记和姿态。
+   * 结果写入 hasAssets 三态，同时重置错误标记。
+   * pose 的初始值由 session 加载逻辑统一回填。
    */
   useEffect(() => {
     if (!currentAgentId || !serverAddressRef.current) {
@@ -537,7 +552,6 @@ function ChatScreen(): React.JSX.Element {
     setHasAssets(null);
     setBgError(false);
     setPoseError(false);
-    setCurrentPose('default');
     logger.info(`[ChatScreen] fetchPoses agentId=${currentAgentId}`);
     fetchPoses(currentAgentId, serverAddressRef.current)
       .then((poses) => {
@@ -556,6 +570,11 @@ function ChatScreen(): React.JSX.Element {
       cancelled = true;
     };
   }, [currentAgentId]);
+
+  /** currentPose 变化时清除立绘加载错误，确保切换表情后能重新尝试渲染 */
+  useEffect(() => {
+    setPoseError(false);
+  }, [currentPose]);
 
   /** 预加载 Agent 头像，填充 OS HTTP 缓存以避免逐条消息重复请求 */
   useEffect(() => {
@@ -682,6 +701,11 @@ function ChatScreen(): React.JSX.Element {
             getAgentAvatarUrl(agentId, serverAddressRef.current)
           );
           setMessages(chatMessages);
+          // 从 session 元数据恢复 pose
+          const pose = session.currentPose ?? 'default';
+          setCurrentPose(pose);
+          setPoseError(false);
+          logger.debug(`[ChatScreen] session loaded, pose: ${pose}`);
           // 从加载的消息中提取最新一条作为会话预览
           if (chatMessages.length > 0 && chatMessages[0].text) {
             useSessionStore
