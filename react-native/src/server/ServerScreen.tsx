@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -9,23 +9,36 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Link as LinkIcon, Check } from 'lucide-react-native';
+import { Link as LinkIcon, Check, ScanLine } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme, ColorScheme } from '../theme/index.ts';
 import {
-  getServerAddress,
-  saveServerAddress,
-} from '../storage/StorageUtils.ts';
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTheme, ColorScheme } from '../theme/index.ts';
+import { getServerAddress } from '../storage/StorageUtils.ts';
+import { connectToServer } from '../api/connection-service.ts';
 import { logger } from '../lib/logger';
+import type { RouteParamList } from '../types/RouteTypes.ts';
+
+type ServerScreenNavigationProp = NativeStackNavigationProp<
+  RouteParamList,
+  'Server'
+>;
+type ServerScreenRouteProp = RouteProp<RouteParamList, 'Server'>;
 
 /**
  * @file ServerScreen.tsx
- * @description 服务器隧道连接页面。用户输入 Cloudflare 隧道地址，
- *              校验 /api/status 通过后保存到 MMKV。接管原 SettingsScreen 的连接功能。
+ * @description 服务器隧道连接页面。支持手动输入地址和扫码连接两种方式，
+ *              通过 connection-service 发送配对请求并保存到 MMKV。
  */
 const ServerScreen: React.FC = () => {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation<ServerScreenNavigationProp>();
+  const route = useRoute<ServerScreenRouteProp>();
 
   const savedAddress = getServerAddress();
   const [url, setUrl] = useState(savedAddress);
@@ -39,71 +52,67 @@ const ServerScreen: React.FC = () => {
 
   /**
    * 校验隧道地址连通性并保存。
-   * 用 XMLHttpRequest 请求 /api/status，成功后存入 MMKV。
+   * 调用 connection-service 完成实际请求和存储，组件只管 UI 状态。
+   * 支持 overrideUrl 参数（扫码场景下由 useEffect 传入）。
    */
-  const handleSave = async () => {
-    const address = url.trim().replace(/\/+$/, '');
-    logger.info(`[Server] handleSave: address="${address}"`);
-    if (!address) {
+  const handleSave = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl ?? url).trim();
+    if (!targetUrl) {
       setStatus('failed');
       setError(t('server.enterAddress'));
       return;
     }
-    setUrl(address);
     setStatus('connecting');
     setError('');
-    try {
-      const data = await new Promise<{ status: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const timer = setTimeout(() => {
-          xhr.abort();
-          reject(new Error('Timeout (10s)'));
-        }, 10000);
-        xhr.onreadystatechange = () => {
-          if (xhr.readyState === 4) {
-            clearTimeout(timer);
-            if (xhr.status === 200) {
-              try {
-                resolve(JSON.parse(xhr.responseText));
-              } catch {
-                reject(new Error('Invalid response'));
-              }
-            } else {
-              reject(new Error(`HTTP ${xhr.status}`));
-            }
-          }
-        };
-        xhr.onerror = () => {
-          clearTimeout(timer);
-          reject(new Error('Network error'));
-        };
-        xhr.open('GET', address + '/api/status');
-        xhr.send();
-      });
-      if (data.status === 'ok') {
-        logger.info(`[Server] connection ok, saving address="${address}"`);
-        setStatus('connected');
-        saveServerAddress(address);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-      } else {
-        logger.warn(`[Server] unexpected response: ${JSON.stringify(data)}`);
-        setStatus('failed');
-        setError('Unexpected response');
-      }
-    } catch (e) {
-      logger.error(
-        `[Server] connection failed: ${e instanceof Error ? e.message : e}`
-      );
+    logger.info(`[Server] handleSave: address="${targetUrl}"`);
+
+    const result = await connectToServer(targetUrl);
+    if (result.success) {
+      logger.info('[Server] connection ok');
+      setStatus('connected');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      logger.error(`[Server] connection failed: ${result.error}`);
       setStatus('failed');
-      setError(e instanceof Error ? e.message : 'Connection failed');
+      setError(result.error ?? 'Connection failed');
     }
   };
+
+  // 保存 handleSave 的最新引用，供 useEffect 安全调用
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  /**
+   * 监听 scannedUrl 导航参数：扫码页面返回后自动填充地址并触发连接。
+   * 用 ref 避免 StrictMode / 重渲染重复触发。
+   */
+  useEffect(() => {
+    const scannedUrl = route.params?.scannedUrl;
+    if (!scannedUrl) {
+      return;
+    }
+    logger.info(`[Server] Received scannedUrl: ${scannedUrl}`);
+    setUrl(scannedUrl);
+    handleSaveRef.current(scannedUrl);
+    navigation.setParams({ scannedUrl: undefined });
+  }, [route.params?.scannedUrl, navigation]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.scanButton}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('ScanQR')}
+          >
+            <ScanLine size={19} color={colors.primary} />
+            <Text style={styles.scanButtonText}>
+              {t('server.scanToConnect')}
+            </Text>
+          </TouchableOpacity>
+
           <View style={styles.inputWrap}>
             <LinkIcon
               size={19}
@@ -129,7 +138,7 @@ const ServerScreen: React.FC = () => {
               !url.trim() && styles.saveButtonDisabled,
             ]}
             activeOpacity={0.7}
-            onPress={handleSave}
+            onPress={() => handleSave()}
             disabled={status === 'connecting' || !url.trim()}
           >
             {saved ? (
@@ -177,6 +186,21 @@ const createStyles = (colors: ColorScheme) =>
       gap: 12,
       borderWidth: 1,
       borderColor: colors.borderLight,
+    },
+    scanButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    scanButtonText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '600',
     },
     inputWrap: {
       flexDirection: 'row',

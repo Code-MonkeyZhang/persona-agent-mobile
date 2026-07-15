@@ -14,6 +14,7 @@ import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
+import ScanQRScreen from './server/ScanQRScreen.tsx';
 import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -113,6 +114,11 @@ const AppNavigator = () => {
         name="Server"
         component={ServerScreen}
         options={{ ...stackScreenOptions, title: t('drawer.server') }}
+      />
+      <Stack.Screen
+        name="ScanQR"
+        component={ScanQRScreen}
+        options={{ ...stackScreenOptions, title: t('server.scanToConnect') }}
       />
       <Stack.Screen
         name="Settings"

@@ -63,7 +63,13 @@
     "connecting": "连接中...",
     "connected": "已连接",
     "failed": "连接失败",
-    "enterAddress": "请输入服务器地址"
+    "enterAddress": "请输入服务器地址",
+    "scanToConnect": "扫码连接",
+    "scanning": "将二维码放入框内即可自动扫描",
+    "pairing": "配对中...",
+    "scanFailed": "配对失败",
+    "retry": "重试",
+    "cameraPermissionDenied": "需要相机权限才能扫码"
   },
   "error": {
     "ttsFailed": "语音播报失败",

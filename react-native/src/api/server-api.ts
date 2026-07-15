@@ -120,19 +120,25 @@ function httpGet(url: string): Promise<string> {
 /**
  * HTTP POST JSON，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
  *
- * 超时设为 120 秒：后端 chat 接口会阻塞到 AI 回复完成才返回，
+ * 默认超时 120 秒：后端 chat 接口会阻塞到 AI 回复完成才返回，
  * 桌面端不设超时，移动端保留一个较长的兜底值防止永久挂起。
+ * 配对等快速请求可通过 timeout 参数传入更短的超时。
  * @param url 完整请求地址
  * @param body 会被序列化为 JSON 的请求体
+ * @param timeout 超时毫秒数，默认 120000
  * @returns 响应体文本
  */
-function httpPost(url: string, body: Record<string, unknown>): Promise<string> {
+export function httpPost(
+  url: string,
+  body: Record<string, unknown>,
+  timeout?: number
+): Promise<string> {
   logger.info(
     `${TAG} POST ${url} body=${JSON.stringify(body).substring(0, 200)}`
   );
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.timeout = 120000;
+    xhr.timeout = timeout ?? 120000;
     xhr.open('POST', url, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = () => {

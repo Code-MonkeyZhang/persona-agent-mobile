@@ -22,5 +22,6 @@ export type RouteParamList = {
   };
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
-  Server: NonNullable<unknown>;
+  Server: { scannedUrl?: string } | undefined;
+  ScanQR: undefined;
 };

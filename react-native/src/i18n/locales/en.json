@@ -63,7 +63,13 @@
     "connecting": "Connecting...",
     "connected": "Connected",
     "failed": "Failed",
-    "enterAddress": "Please enter a server address"
+    "enterAddress": "Please enter a server address",
+    "scanToConnect": "Scan to Connect",
+    "scanning": "Align the QR code within the frame",
+    "pairing": "Pairing...",
+    "scanFailed": "Pairing failed",
+    "retry": "Retry",
+    "cameraPermissionDenied": "Camera permission is required to scan QR codes"
   },
   "error": {
     "ttsFailed": "TTS playback failed",
