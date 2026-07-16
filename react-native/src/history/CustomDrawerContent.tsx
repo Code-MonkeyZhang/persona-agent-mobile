@@ -2,7 +2,7 @@
  * @file CustomDrawerContent.tsx
  * @description 侧边栏（Drawer）内容组件，四段式垂直布局：
  *   Agent 卡片 → 常驻聊天入口 → 会话列表 → 底部(Server/Settings)。
- *   会话列表支持点击切换、长按删除，每项显示最新消息预览。常驻聊天会话(chat-*)不显示在列表中。
+ *   会话列表支持点击切换、左滑删除（见 SessionListItem），常驻聊天会话(chat-*)不显示在列表中。
  */
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -30,11 +30,11 @@ import {
   isChatSession,
 } from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
-import Dialog from 'react-native-dialog';
 import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { DrawerActions } from '@react-navigation/native';
+import SessionListItem from './SessionListItem.tsx';
 import {
   MessageCircle,
   MessagesSquare,
@@ -62,10 +62,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const sessionPreviews = useSessionStore((s) => s.sessionPreviews);
   /** 会话列表，直接传给 FlatList 渲染 */
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
-  /** 是否显示删除确认弹窗 */
-  const [showDialog, setShowDialog] = useState<boolean>(false);
-  /** 待删除的会话 ID，长按时暂存 */
-  const deleteIdRef = useRef<string>('');
+  /** 当前处于展开状态的会话 id，用于"同时只开一个"协调（左滑删除时） */
+  const [openId, setOpenId] = useState<string | null>(null);
   const drawerStatus = useDrawerStatus();
   /** 当前选中的会话 ID，用于高亮显示 */
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -180,23 +178,20 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   /**
    * 删除会话：先乐观更新 UI，再调服务器 API，失败时回滚。
    */
-  const handleDelete = () => {
-    const targetId = deleteIdRef.current;
-
-    setChatHistory((prev) => prev.filter((chat) => chat.id !== targetId));
-    sendEvent('deleteChat', { id: targetId });
+  const handleDelete = (id: string) => {
+    setChatHistory((prev) => prev.filter((chat) => chat.id !== id));
+    sendEvent('deleteChat', { id });
 
     const address = getServerAddress();
     const agentId = getServerAgentId();
     if (address && agentId) {
-      deleteSession(address, agentId, targetId).catch(() => {
+      deleteSession(address, agentId, id).catch(() => {
         logger.warn('[Drawer] deleteSession failed, reloading');
         handleUpdateHistory();
       });
     }
 
     trigger(HapticFeedbackTypes.soft);
-    deleteIdRef.current = '';
   };
 
   /** 新建对话：通知 ChatScreen 清空并创建新会话，然后关闭侧边栏 */
@@ -336,38 +331,25 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         data={chatHistory}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const isSelected = selectedId === item.id;
-          return (
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={() => {
-                setSelectedId(item.id);
-                setTimeout(() => {
-                  navigation.navigate('Bedrock', {
-                    sessionId: item.id,
-                    tapIndex: tapIndexRef.current,
-                  });
-                  tapIndexRef.current += 1;
-                }, 0);
-              }}
-              onLongPress={(gestureEvent) => {
-                trigger(HapticFeedbackTypes.notificationWarning);
-                gestureEvent.preventDefault();
-                setShowDialog(true);
-                deleteIdRef.current = item.id;
-              }}
-              style={[styles.touch, isSelected && styles.touchSelected]}
-            >
-              <Text
-                numberOfLines={1}
-                style={[styles.title, isSelected && styles.titleSelected]}
-              >
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item }) => (
+          <SessionListItem
+            item={item}
+            isSelected={selectedId === item.id}
+            openId={openId}
+            onPress={() => {
+              setSelectedId(item.id);
+              setTimeout(() => {
+                navigation.navigate('Bedrock', {
+                  sessionId: item.id,
+                  tapIndex: tapIndexRef.current,
+                });
+                tapIndexRef.current += 1;
+              }, 0);
+            }}
+            onOpen={setOpenId}
+            onDelete={handleDelete}
+          />
+        )}
       />
 
       {/* === 4. 底部入口：Server / Settings === */}
@@ -390,25 +372,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           <Text style={styles.footerText}>{t('drawer.settings')}</Text>
         </TouchableOpacity>
       </View>
-
-      {/* 删除会话确认弹窗 */}
-      <Dialog.Container visible={showDialog}>
-        <Dialog.Title>{t('drawer.deleteTitle')}</Dialog.Title>
-        <Dialog.Description>{t('drawer.deleteDesc')}</Dialog.Description>
-        <Dialog.Button
-          label={t('drawer.cancel')}
-          onPress={() => {
-            setShowDialog(false);
-          }}
-        />
-        <Dialog.Button
-          label={t('drawer.delete')}
-          onPress={() => {
-            handleDelete();
-            setShowDialog(false);
-          }}
-        />
-      </Dialog.Container>
     </SafeAreaView>
   );
 };
@@ -513,27 +476,6 @@ const createStyles = (colors: ColorScheme) =>
     /** 会话列表 */
     flatList: {
       flex: 1,
-    },
-    touch: {
-      paddingLeft: 28,
-      paddingRight: 16,
-      paddingVertical: 12,
-      marginHorizontal: 12,
-      marginVertical: 2,
-      borderRadius: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: 'transparent',
-    },
-    touchSelected: {
-      backgroundColor: colors.primarySelectedBackground,
-      borderLeftColor: colors.primary,
-    },
-    title: {
-      fontSize: 18,
-      color: colors.text,
-    },
-    titleSelected: {
-      color: colors.primary,
     },
     /** 底部 Server / Settings */
     footer: {

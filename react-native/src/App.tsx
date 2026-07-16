@@ -32,6 +32,14 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const minWidth = screenWidth > screenHeight ? screenHeight : screenWidth;
 const width = minWidth > 434 ? 300 : minWidth * 0.83;
 
+/**
+ * 抽屉 pan 手势的激活阈值（px）。
+ * 调高到 20，让会话列表项的 Swipeable（默认 10px 激活）在项上先激活、取消抽屉手势，
+ * 从而避免“左滑删除”被抽屉的“左滑收起”抢走；在非会话项区域左滑仍可收起抽屉。
+ * 觉得抽屉开合太钝/太灵时，只调这一个数字即可。
+ */
+const DRAWER_SWIPE_ACTIVATION = 20;
+
 // 创建Drawer导航器实例，RouteParamList提供类型安全的路由参数
 const Drawer = createDrawerNavigator<RouteParamList>();
 
@@ -67,6 +75,12 @@ const DrawerNavigator = () => {
           backgroundColor: colors.background,
         },
         drawerType: 'slide',
+        // 提高抽屉滑动手势的激活阈值，让会话项的左滑删除优先于抽屉的左滑收起
+        configureGestureHandler: (gesture) =>
+          gesture.activeOffsetX([
+            -DRAWER_SWIPE_ACTIVATION,
+            DRAWER_SWIPE_ACTIVATION,
+          ]),
       }}
       drawerContent={renderCustomDrawerContent}
     >
