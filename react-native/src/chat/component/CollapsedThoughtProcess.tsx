@@ -155,7 +155,7 @@ function CollapsedThoughtProcess({
   return (
     <View style={styles.wrapper}>
       <TouchableOpacity
-        style={[styles.collapsedBtn, { backgroundColor: colors.surface }]}
+        style={styles.collapsedBtn}
         activeOpacity={0.6}
         onPress={handleToggle}
       >
@@ -197,6 +197,7 @@ function CollapsedThoughtProcess({
 
 const styles = StyleSheet.create({
   wrapper: {
+    marginTop: 6,
     marginBottom: 6,
     marginLeft: 2,
   },

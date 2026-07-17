@@ -73,7 +73,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [copied, setCopied] = useState(false);
-  const [clickTitleCopied, setClickTitleCopied] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
@@ -92,14 +91,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   }, [currentMessage?.text]);
 
   const userName = currentMessage?.user?.name ?? 'AI';
-
-  const copyButton = useMemo(() => {
-    return clickTitleCopied ? (
-      <View style={styles.copy}>
-        <Check size={22} color={colors.text} />
-      </View>
-    ) : null;
-  }, [clickTitleCopied, colors.text, styles.copy]);
 
   const handleImagePress = useCallback((pressMode: PressMode, url: string) => {
     if (pressMode === PressMode.Click) {
@@ -149,17 +140,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       return () => clearTimeout(timer);
     }
   }, [copied]);
-
-  useEffect(() => {
-    if (clickTitleCopied) {
-      handleCopy();
-      const timer = setTimeout(() => {
-        setClickTitleCopied(false);
-      }, 2000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [handleCopy, clickTitleCopied]);
 
   const messageContent = useMemo(() => {
     if (!currentMessage) {
@@ -241,11 +221,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const showLoading = isLoading && !hasSteps;
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.header}
-        activeOpacity={1}
-        onPress={() => setClickTitleCopied(true)}
-      >
+      <View style={styles.header}>
         {!isUser.current && (
           <>
             <AgentAvatar
@@ -257,8 +233,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             <Text style={styles.name}>{userName}</Text>
           </>
         )}
-        {copyButton}
-      </TouchableOpacity>
+      </View>
       <View style={styles.marked_box}>
         {hasSteps && (
           <CollapsedThoughtProcess
@@ -317,10 +292,6 @@ const createStyles = (colors: ColorScheme) =>
     titleContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-    },
-    copy: {
-      marginRight: 20,
-      marginLeft: 'auto',
     },
     name: {
       flex: 1,
