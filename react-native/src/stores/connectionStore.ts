@@ -21,6 +21,8 @@ interface ConnectionStore {
   status: ConnectionStatus;
   serverAddress: string;
   error: string;
+  /** 扫码页写入、连接页消费的一次性中转地址；goBack 无法携带参数，故用此字段回传 */
+  pendingScannedUrl: string;
 
   /** pair + WS connect，ServerScreen 和 coldStart 调用 */
   connect: (url: string) => Promise<void>;
@@ -32,12 +34,15 @@ interface ConnectionStore {
   setStatus: (status: ConnectionStatus) => void;
   /** 更新服务器地址 */
   setAddress: (address: string) => void;
+  /** 扫码页写入扫到的地址，供连接页聚焦时消费 */
+  setPendingScannedUrl: (url: string) => void;
 }
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => ({
   status: 'idle',
   serverAddress: getServerAddress(),
   error: '',
+  pendingScannedUrl: '',
 
   connect: async (url) => {
     const address = url.trim().replace(/\/+$/, '');
@@ -87,4 +92,6 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
   },
 
   setAddress: (address) => set({ serverAddress: address }),
+
+  setPendingScannedUrl: (url) => set({ pendingScannedUrl: url }),
 }));

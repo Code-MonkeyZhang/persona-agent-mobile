@@ -16,6 +16,6 @@ export type RouteParamList = {
   Bedrock: undefined;
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
-  Server: { scannedUrl?: string } | undefined;
+  Server: undefined;
   ScanQR: undefined;
 };

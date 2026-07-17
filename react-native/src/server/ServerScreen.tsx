@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -11,11 +11,7 @@ import {
 } from 'react-native';
 import { Link as LinkIcon, Check, ScanLine } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import {
-  useNavigation,
-  useRoute,
-  type RouteProp,
-} from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
@@ -27,7 +23,6 @@ type ServerScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
   'Server'
 >;
-type ServerScreenRouteProp = RouteProp<RouteParamList, 'Server'>;
 
 /**
  * @file ServerScreen.tsx
@@ -38,7 +33,6 @@ const ServerScreen: React.FC = () => {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation<ServerScreenNavigationProp>();
-  const route = useRoute<ServerScreenRouteProp>();
 
   const status = useConnectionStore((s) => s.status);
   const error = useConnectionStore((s) => s.error);
@@ -65,16 +59,23 @@ const ServerScreen: React.FC = () => {
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
 
-  useEffect(() => {
-    const scannedUrl = route.params?.scannedUrl;
-    if (!scannedUrl) {
-      return;
-    }
-    logger.info(`[Server] Received scannedUrl: ${scannedUrl}`);
-    setUrl(scannedUrl);
-    handleSaveRef.current(scannedUrl);
-    navigation.setParams({ scannedUrl: undefined });
-  }, [route.params?.scannedUrl, navigation]);
+  /**
+   * 聚焦时消费扫码页写入的中转地址：回填输入框并发起连接。
+   * ScanQR 用 goBack 返回无法携带参数，故经 connectionStore.pendingScannedUrl 回传；
+   * 用完即清，避免下次聚焦重复触发。
+   */
+  useFocusEffect(
+    useCallback(() => {
+      const scannedUrl = useConnectionStore.getState().pendingScannedUrl;
+      if (!scannedUrl) {
+        return;
+      }
+      useConnectionStore.getState().setPendingScannedUrl('');
+      logger.info(`[Server] Received scannedUrl: ${scannedUrl}`);
+      setUrl(scannedUrl);
+      handleSaveRef.current(scannedUrl);
+    }, [])
+  );
 
   const statusText =
     status === 'connecting'
