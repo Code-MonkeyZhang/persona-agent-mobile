@@ -10,7 +10,6 @@ import CustomDrawerContent from './history/CustomDrawerContent.tsx';
 import { Dimensions, Keyboard, StatusBar, AppState } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
-import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
@@ -237,9 +236,7 @@ const App = () => {
   return (
     <>
       <ThemeProvider>
-        <AppProvider>
-          <AppWithTheme />
-        </AppProvider>
+        <AppWithTheme />
       </ThemeProvider>
       <Toast />
     </>

@@ -22,16 +22,6 @@ export enum ChatStatus {
   Complete = 'Complete',
 }
 
-export interface EventData {
-  id?: number | string;
-  url?: string;
-  script?: string;
-  data?: string;
-  error?: string;
-  code?: number;
-  title?: string;
-}
-
 export type Model = {
   modelId: string;
   modelName: string;

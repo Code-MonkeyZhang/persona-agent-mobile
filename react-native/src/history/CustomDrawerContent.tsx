@@ -5,7 +5,7 @@
  *   会话列表支持点击切换、左滑删除（见 SessionListItem），常驻聊天会话(chat-*)不显示在列表中。
  */
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FlatList,
   SafeAreaView,
@@ -30,7 +30,6 @@ import {
   isChatSession,
 } from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
-import { useAppContext } from './AppProvider.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { DrawerActions } from '@react-navigation/native';
@@ -61,33 +60,24 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const { t } = useTranslation();
   const sessionPreviews = useSessionStore((s) => s.sessionPreviews);
   const sessionTitles = useSessionStore((s) => s.sessionTitles);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const setActiveSessionId = useSessionStore((s) => s.setActiveSessionId);
+  const drawerRefreshVersion = useSessionStore((s) => s.drawerRefreshVersion);
+  /** 当前 Agent 的常驻聊天会话 ID，复用于高亮与预览查找 */
+  const currentChatSessionId = chatSessionIdFor(getServerAgentId());
   /** 会话列表，直接传给 FlatList 渲染 */
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
   /** 当前处于展开状态的会话 id，用于"同时只开一个"协调（左滑删除时） */
   const [openId, setOpenId] = useState<string | null>(null);
   const drawerStatus = useDrawerStatus();
-  /** 当前选中的会话 ID，用于高亮显示 */
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Stack 中当前激活的路由名，用于高亮对应的侧边栏入口 */
-  const [activeRoute, setActiveRoute] = useState<string | undefined>();
-  /** 点击计数器，每次跳转会话时递增，用作路由参数触发 useEffect */
-  const tapIndexRef = useRef<number>(1);
   /** Drawer 顶部展示的当前 Agent 信息（点击可进入详情页） */
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
-  const { event, sendEvent } = useAppContext();
 
-  /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、Agent 切换 */
+  /** 监听刷新触发器：重新拉取会话列表与 Agent 卡片 */
   useEffect(() => {
-    if (event?.event === 'updateHistory') {
-      handleUpdateHistory();
-    } else if (event?.event === 'updateHistorySelectedId') {
-      setSelectedId(event.params?.id != null ? String(event.params.id) : null);
-    } else if (event?.event === 'agentChanged') {
-      handleUpdateHistory();
-      loadAgentInfo();
-      setSelectedId(null);
-    }
-  }, [event]);
+    handleUpdateHistory();
+    loadAgentInfo();
+  }, [drawerRefreshVersion]);
 
   /**
    * 监听 Drawer 开合状态：打开时拉取最新会话列表并触感反馈。
@@ -103,28 +93,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       trigger(HapticFeedbackTypes.soft);
     }
   }, [drawerStatus, navigation]);
-
-  /**
-   * 监听父级 Stack 导航器的路由变化，实时更新 activeRoute。
-   * 用于高亮侧边栏中 Server / Settings 等入口。
-   */
-  useEffect(() => {
-    const parent = navigation.getParent();
-    if (!parent) {
-      return;
-    }
-    const updateActiveRoute = () => {
-      const parentState = parent.getState();
-      setActiveRoute(parentState.routes[parentState.index]?.name);
-    };
-    updateActiveRoute();
-    // navigation.getParent() 运行时包含 addListener，但 TS 类型 NavigationHelpers 未声明
-    return (
-      parent as unknown as {
-        addListener: (event: string, callback: () => void) => () => void;
-      }
-    ).addListener('state', updateActiveRoute);
-  }, [navigation]);
 
   /**
    * 从服务器拉取会话列表并更新 UI。
@@ -168,10 +136,14 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
 
   /**
    * 删除会话：先乐观更新 UI，再调服务器 API，失败时回滚。
+   * 删的是当前会话则回到该 Agent 的常驻聊天。
    */
   const handleDelete = (id: string) => {
+    logger.info(`[Drawer] delete session: ${id}`);
     setChatHistory((prev) => prev.filter((chat) => chat.id !== id));
-    sendEvent('deleteChat', { id });
+    if (id === activeSessionId) {
+      setActiveSessionId(currentChatSessionId);
+    }
 
     const address = getServerAddress();
     const agentId = getServerAgentId();
@@ -185,27 +157,21 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
     trigger(HapticFeedbackTypes.soft);
   };
 
-  /** 新建对话：通知 ChatScreen 清空并创建新会话，然后关闭侧边栏 */
+  /** 新建对话：切到空白新建态并关闭侧边栏 */
   const handleNewChat = () => {
     trigger(HapticFeedbackTypes.impactMedium);
     logger.info('[Drawer] new chat');
-    sendEvent('newChat');
+    setActiveSessionId('');
     navigation.dispatch(DrawerActions.closeDrawer());
   };
 
-  /** 导航到常驻聊天会话并关闭侧边栏 */
+  /** 打开当前 Agent 的常驻聊天会话并关闭侧边栏 */
   const navigateToChatSession = () => {
-    const agentId = getServerAgentId();
-    if (!agentId) {
+    if (!getServerAgentId()) {
       return;
     }
-    const chatSessionId = chatSessionIdFor(agentId);
-    logger.info(`[Drawer] open chat session: ${chatSessionId}`);
-    navigation.navigate('Bedrock', {
-      sessionId: chatSessionId,
-      tapIndex: tapIndexRef.current,
-    });
-    tapIndexRef.current += 1;
+    logger.info(`[Drawer] open chat session: ${currentChatSessionId}`);
+    setActiveSessionId(currentChatSessionId);
     navigation.dispatch(DrawerActions.closeDrawer());
   };
 
@@ -271,7 +237,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
       <TouchableOpacity
         style={[
           styles.chatCard,
-          activeRoute === 'Drawer' && !selectedId && styles.chatCardSelected,
+          activeSessionId === currentChatSessionId && styles.chatCardSelected,
         ]}
         activeOpacity={0.7}
         onPress={navigateToChatSession}
@@ -279,7 +245,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         <MessageCircle
           size={24}
           color={
-            activeRoute === 'Drawer' && !selectedId
+            activeSessionId === currentChatSessionId
               ? colors.primary
               : colors.textSecondary
           }
@@ -288,16 +254,14 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
           <Text
             style={[
               styles.chatCardText,
-              activeRoute === 'Drawer' &&
-                !selectedId &&
+              activeSessionId === currentChatSessionId &&
                 styles.chatCardTextSelected,
             ]}
           >
             {t('drawer.chat')}
           </Text>
           <Text style={styles.chatPreview} numberOfLines={1}>
-            {sessionPreviews[chatSessionIdFor(getServerAgentId())] ||
-              t('drawer.startChat')}
+            {sessionPreviews[currentChatSessionId] || t('drawer.startChat')}
           </Text>
         </View>
       </TouchableOpacity>
@@ -328,17 +292,11 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         renderItem={({ item }) => (
           <SessionListItem
             item={item}
-            isSelected={selectedId === item.id}
+            isSelected={activeSessionId === item.id}
             openId={openId}
             onPress={() => {
-              setSelectedId(item.id);
-              setTimeout(() => {
-                navigation.navigate('Bedrock', {
-                  sessionId: item.id,
-                  tapIndex: tapIndexRef.current,
-                });
-                tapIndexRef.current += 1;
-              }, 0);
+              setActiveSessionId(item.id);
+              navigation.dispatch(DrawerActions.closeDrawer());
             }}
             onOpen={setOpenId}
             onDelete={handleDelete}

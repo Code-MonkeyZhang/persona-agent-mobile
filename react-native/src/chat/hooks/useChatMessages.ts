@@ -86,10 +86,17 @@ export function useChatMessages(params: UseChatMessagesParams) {
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef('');
 
-  /** 统一更新会话 ID：同步到 ref 和 MMKV 持久化 */
+  /**
+   * 统一更新会话 ID：
+   * - 写入 ref 供本 hook 内部读取
+   * - 持久化到 MMKV，供冷启动恢复
+   * - 同步进 sessionStore.activeSessionId，作为侧边栏高亮与会话页加载的唯一来源
+   *   只写值、不动刷新触发器，避免引发额外加载
+   */
   const setSessionId = useCallback((id: string) => {
     sessionIdRef.current = id;
     saveLastSessionId(id);
+    useSessionStore.getState().setActiveSessionId(id);
   }, []);
 
   /**
