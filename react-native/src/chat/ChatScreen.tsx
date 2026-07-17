@@ -123,17 +123,12 @@ function ChatScreen(): React.JSX.Element {
     textInputViewRef,
     scroll.scrollToBottom
   );
-  const companion = useCompanionMode(
-    currentAgentId,
-    serverAddressRef,
-    stopSpeakingRef
-  );
+  const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const chat = useChatMessages({
     scrollToBottom: scroll.scrollToBottom,
     setUserScrolled: scroll.setUserScrolled,
     serverAddressRef,
     currentAgentNameRef,
-    companionOpenRef: companion.companionOpenRef,
     voiceEnabledRef,
     speakRef,
     selectedFilesRef,

@@ -30,9 +30,12 @@ class AudioPlayer {
    */
   async play(filePath: string): Promise<void> {
     await this.setupPromise;
-    logger.debug('[Audio] play:', filePath);
+    const uri = filePath.startsWith('file://')
+      ? filePath
+      : `file://${filePath}`;
+    logger.debug('[Audio] play:', uri);
     await this.stop();
-    await TrackPlayer.add({ url: filePath });
+    await TrackPlayer.add({ url: uri });
     await TrackPlayer.play();
     this.playing = true;
   }

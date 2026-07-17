@@ -45,7 +45,6 @@ interface UseChatMessagesParams {
   setUserScrolled: (v: boolean) => void;
   serverAddressRef: React.MutableRefObject<string>;
   currentAgentNameRef: React.MutableRefObject<string>;
-  companionOpenRef: React.MutableRefObject<boolean>;
   voiceEnabledRef: React.MutableRefObject<boolean>;
   speakRef: React.MutableRefObject<
     (data: {
@@ -69,7 +68,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
     setUserScrolled,
     serverAddressRef,
     currentAgentNameRef,
-    companionOpenRef,
     voiceEnabledRef,
     speakRef,
     selectedFilesRef,
@@ -208,6 +206,10 @@ export function useChatMessages(params: UseChatMessagesParams) {
         model: string;
         languageBoost?: string;
       }) => {
+        if (!voiceEnabledRef.current) {
+          logger.info('[ChatScreen] speak_ready ignored: voice disabled');
+          return;
+        }
         logger.info(
           `[ChatScreen] speak_ready, textLen=${data.speakText.length}`
         );
@@ -227,7 +229,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
     return () => {
       wsClient.unregisterHandler();
     };
-  }, [setCurrentPose, setPoseError, speakRef]);
+  }, [setCurrentPose, setPoseError, speakRef, voiceEnabledRef]);
 
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
   const onSend = useCallback(
@@ -298,7 +300,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
           sessionId,
           messageText,
           serverAddressRef.current!,
-          companionOpenRef.current && voiceEnabledRef.current
+          voiceEnabledRef.current
         );
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
@@ -313,7 +315,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
       selectedFilesRef,
       currentAgentNameRef,
       serverAddressRef,
-      companionOpenRef,
       voiceEnabledRef,
       onFilesConsumed,
     ]

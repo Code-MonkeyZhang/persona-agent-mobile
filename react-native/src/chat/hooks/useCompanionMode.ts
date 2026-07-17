@@ -2,7 +2,7 @@
  * @file hooks/useCompanionMode.ts
  * @description 陪伴面板状态管理：面板开关、pose 资源加载、姿态切换、错误标记。
  */
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Keyboard } from 'react-native';
 import { fetchPoses } from '../../api/server-api';
 import {
@@ -13,8 +13,7 @@ import { logger } from '../../lib/logger';
 
 export function useCompanionMode(
   agentId: string,
-  serverAddressRef: React.MutableRefObject<string>,
-  stopSpeakingRef: React.MutableRefObject<() => void>
+  serverAddressRef: React.MutableRefObject<string>
 ) {
   /** 陪伴面板是否展开（滑动容器右侧 pane），从 MMKV 恢复上次状态 */
   const [companionOpen, setCompanionOpen] = useState(getCompanionOpen);
@@ -26,9 +25,6 @@ export function useCompanionMode(
   const [bgError, setBgError] = useState(false);
   /** 立绘图加载失败标记 */
   const [poseError, setPoseError] = useState(false);
-
-  const companionOpenRef = useRef(companionOpen);
-  companionOpenRef.current = companionOpen;
 
   /** Agent 切换时请求 pose 列表，判断是否有陪伴资源 */
   useEffect(() => {
@@ -74,16 +70,8 @@ export function useCompanionMode(
     });
   }, []);
 
-  /** 关闭陪伴面板时停止语音播放 */
-  useEffect(() => {
-    if (!companionOpen) {
-      stopSpeakingRef.current();
-    }
-  }, [companionOpen, stopSpeakingRef]);
-
   return {
     companionOpen,
-    companionOpenRef,
     setCompanionOpen,
     hasAssets,
     currentPose,
