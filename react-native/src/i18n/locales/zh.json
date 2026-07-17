@@ -84,5 +84,9 @@
   },
   "common": {
     "back": "返回"
+  },
+  "connection": {
+    "addressInvalid": "服务器地址已变更，请重新连接",
+    "reconnecting": "正在重连..."
   }
 }

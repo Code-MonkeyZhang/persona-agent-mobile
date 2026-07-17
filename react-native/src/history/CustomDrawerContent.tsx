@@ -60,6 +60,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const sessionPreviews = useSessionStore((s) => s.sessionPreviews);
+  const sessionTitles = useSessionStore((s) => s.sessionTitles);
   /** 会话列表，直接传给 FlatList 渲染 */
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
   /** 当前处于展开状态的会话 id，用于"同时只开一个"协调（左滑删除时） */
@@ -75,22 +76,12 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const { event, sendEvent } = useAppContext();
 
-  /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、标题变更、Agent 切换 */
+  /** 监听 AppContext 跨组件事件：刷新历史、更新选中项、Agent 切换 */
   useEffect(() => {
     if (event?.event === 'updateHistory') {
       handleUpdateHistory();
     } else if (event?.event === 'updateHistorySelectedId') {
       setSelectedId(event.params?.id != null ? String(event.params.id) : null);
-    } else if (event?.event === 'titleUpdated') {
-      const { id, title } = event.params ?? {};
-      if (id != null && title) {
-        const idStr = String(id);
-        setChatHistory((prev) =>
-          prev.map((chat) =>
-            chat.id === idStr ? { ...chat, title: title as string } : chat
-          )
-        );
-      }
     } else if (event?.event === 'agentChanged') {
       handleUpdateHistory();
       loadAgentInfo();
@@ -328,7 +319,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         </TouchableOpacity>
       </View>
       <FlatList
-        data={chatHistory}
+        data={chatHistory.map((chat) => ({
+          ...chat,
+          title: sessionTitles[chat.id] ?? chat.title,
+        }))}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (

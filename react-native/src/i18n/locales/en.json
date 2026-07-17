@@ -84,5 +84,9 @@
   },
   "common": {
     "back": "Back"
+  },
+  "connection": {
+    "addressInvalid": "Server address has changed, please reconnect",
+    "reconnecting": "Reconnecting..."
   }
 }

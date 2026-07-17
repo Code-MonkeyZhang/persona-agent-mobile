@@ -31,7 +31,7 @@ export interface WsToolResult {
 }
 
 /** speak_error 事件的原因枚举（与服务端 chat-service 的四种失败对齐） */
-type SpeakErrorReason =
+export type SpeakErrorReason =
   | 'no_api_key'
   | 'no_voice_id'
   | 'no_content'
@@ -44,7 +44,7 @@ interface ModelConfig {
 }
 
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
-type ServerMessage =
+export type ServerMessage =
   | { type: 'connected'; clientId: string }
   | { type: 'subscribed'; sessionId: string }
   | {
@@ -204,312 +204,51 @@ function httpDelete(url: string): Promise<string> {
 }
 
 /**
- * Agent Server 客户端（HTTP + WebSocket）。
- *
- * 生命周期：connect → subscribe → sendChatMessage → 回调接收结果 → disconnect。
- * 断线自动重连，最多 5 次，线性退避。
+ * 在服务器上为指定 agent 创建新会话。
+ * @param agentId Agent ID
+ * @param serverAddress 服务器地址
+ * @returns 新创建的会话 UUID
  */
-export class ServerClient {
-  private ws: WebSocket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  /** 重连定时器 ID，disconnect 时需要清除 */
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private resolveConnect: (() => void) | null = null;
-  private rejectConnect: ((err: Error) => void) | null = null;
-  /** 当前订阅的会话 ID，WS 断线重连后自动重新订阅 */
-  private subscribedSessionId: string | null = null;
+export async function createSession(
+  agentId: string,
+  serverAddress: string
+): Promise<string> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions`;
+  const responseText = await httpPost(url, {});
+  const data = JSON.parse(responseText) as { session: { id: string } };
+  logger.info(`${TAG} createSession → sessionId=${data.session.id}`);
+  return data.session.id;
+}
 
-  /** 收到 step_complete 事件时触发，toolCalls 用于检测 show_pose 等工具调用 */
-  onStepComplete:
-    | ((
-        content: string | undefined,
-        thinking: string | undefined,
-        toolCalls?: ToolCall[],
-        toolResults?: WsToolResult[]
-      ) => void)
-    | null = null;
-
-  onComplete: (() => void) | null = null;
-
-  onError: ((message: string) => void) | null = null;
-
-  onTitleUpdated: ((sessionId: string, title: string) => void) | null = null;
-
-  /** 收到 speak_ready 事件时触发，携带 TTS 合成所需的完整参数 */
-  onSpeakReady:
-    | ((data: {
-        speakText: string;
-        voiceId: string;
-        apiKey: string;
-        model: string;
-        languageBoost?: string;
-      }) => void)
-    | null = null;
-
-  /** 收到 speak_error 事件时触发 */
-  onSpeakError: ((reason: SpeakErrorReason, message: string) => void) | null =
-    null;
-
-  /** 检查 WebSocket 是否处于 OPEN 状态 */
-  get isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
-  }
-
-  /**
-   * 连接到 Agent Server。
-   * 先断开旧连接，等待服务器发送 connected 消息后 resolve。
-   * @param serverAddress 服务器地址，如 `https://xxx.trycloudflare.com`
-   */
-  connect(serverAddress: string): Promise<void> {
-    logger.info(`${TAG} connect called, address=${serverAddress}`);
-    return new Promise((resolve, reject) => {
-      this.disconnect();
-      this.reconnectAttempts = 0;
-      this.resolveConnect = resolve;
-      this.rejectConnect = reject;
-      this.doConnect(serverAddress);
-    });
-  }
-
-  /**
-   * 创建 WebSocket 连接并绑定 onopen/onmessage/onclose/onerror 回调。
-   * 将 http(s) 地址转换为 ws(s) + /ws 路径。
-   * @param serverAddress 服务器 HTTP 地址
-   */
-  private doConnect(serverAddress: string) {
-    const wsUrl = serverAddress.replace(/^https?/, 'wss') + '/ws';
-    logger.info(`${TAG} WebSocket connecting to ${wsUrl}`);
-    this.ws = new WebSocket(wsUrl);
-
-    this.ws.onopen = () => {
-      logger.info(`${TAG} WebSocket onopen`);
-      this.reconnectAttempts = 0;
-      if (this.subscribedSessionId) {
-        logger.info(
-          `${TAG} WS re-subscribe on (re)connect sessionId=${this.subscribedSessionId}`
-        );
-        this.ws!.send(
-          JSON.stringify({
-            type: 'subscribe',
-            payload: { sessionId: this.subscribedSessionId },
-          })
-        );
-      }
-    };
-
-    this.ws.onmessage = (event: WebSocketMessageEvent) => {
-      try {
-        const raw = event.data as string;
-        const msg: ServerMessage = JSON.parse(raw);
-        logger.debug(
-          `${TAG} WS ← ${msg.type}${
-            msg.type === 'step_complete'
-              ? ` step=${(msg as { stepIndex: number }).stepIndex} content=${(
-                  (msg as { content?: string }).content || ''
-                ).substring(0, 80)}`
-              : ''
-          }${
-            msg.type === 'error'
-              ? ` message=${(msg as { message: string }).message}`
-              : ''
-          }${
-            msg.type === 'title_updated'
-              ? ` title=${(msg as { title: string }).title}`
-              : ''
-          }`
-        );
-        this.handleMessage(msg);
-      } catch {
-        logger.error(
-          `${TAG} WS ← parse error: ${(event.data as string).substring(0, 100)}`
-        );
-      }
-    };
-
-    this.ws.onclose = () => {
-      logger.warn(
-        `${TAG} WebSocket onclose, will attempt reconnect=${
-          this.reconnectAttempts < this.maxReconnectAttempts
-        }`
-      );
-      this.attemptReconnect(serverAddress);
-    };
-
-    this.ws.onerror = () => {
-      logger.error(`${TAG} WebSocket onerror`);
-    };
-  }
-
-  /**
-   * 根据消息类型分发到对应的外部回调。
-   * @param msg 服务器下发的消息对象
-   */
-  private handleMessage(msg: ServerMessage) {
-    switch (msg.type) {
-      case 'connected':
-        logger.info(`${TAG} WS connected, clientId=${msg.clientId}`);
-        if (this.resolveConnect) {
-          this.resolveConnect();
-          this.resolveConnect = null;
-          this.rejectConnect = null;
-        }
-        break;
-      case 'step_complete':
-        if (this.onStepComplete) {
-          this.onStepComplete(
-            msg.content,
-            msg.thinking,
-            msg.toolCalls,
-            msg.toolResults
-          );
-        }
-        break;
-      case 'complete':
-        logger.info(`${TAG} WS complete, sessionId=${msg.sessionId}`);
-        if (this.onComplete) {
-          this.onComplete();
-        }
-        break;
-      case 'error':
-        logger.error(`${TAG} WS error: ${msg.message}`);
-        if (this.onError) {
-          this.onError(msg.message);
-        }
-        break;
-      case 'title_updated':
-        if (this.onTitleUpdated) {
-          this.onTitleUpdated(msg.sessionId, msg.title);
-        }
-        break;
-      case 'speak_ready':
-        logger.info(
-          `${TAG} WS speak_ready, sessionId=${msg.sessionId} textLen=${msg.speakText.length}`
-        );
-        if (this.onSpeakReady) {
-          this.onSpeakReady(msg);
-        }
-        break;
-      case 'speak_error':
-        logger.error(
-          `${TAG} WS speak_error, reason=${msg.reason} message=${msg.message}`
-        );
-        if (this.onSpeakError) {
-          this.onSpeakError(msg.reason, msg.message);
-        }
-        break;
-    }
-  }
-
-  /**
-   * 线性退避重连：每次重连间隔递增 1 秒，超过最大次数则拒绝 connect Promise。
-   * @param serverAddress 服务器地址
-   */
-  private attemptReconnect(serverAddress: string) {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error(
-        `${TAG} reconnect exhausted (${this.maxReconnectAttempts} attempts)`
-      );
-      if (this.rejectConnect) {
-        this.rejectConnect(new Error('Connection failed after max retries'));
-        this.rejectConnect = null;
-        this.resolveConnect = null;
-      }
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = 1000 * this.reconnectAttempts;
-    logger.warn(
-      `${TAG} reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`
-    );
-
-    this.reconnectTimer = setTimeout(() => {
-      this.doConnect(serverAddress);
-    }, delay);
-  }
-
-  /**
-   * 断开 WebSocket 连接，清除重连定时器，置空所有回调防止内存泄漏。
-   */
-  disconnect() {
-    logger.info(`${TAG} disconnect`);
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    this.reconnectAttempts = this.maxReconnectAttempts;
-    if (this.ws) {
-      this.ws.onclose = null;
-      this.ws.close();
-      this.ws = null;
-    }
-    this.resolveConnect = null;
-    this.rejectConnect = null;
-    this.subscribedSessionId = null;
-  }
-
-  /**
-   * 订阅某个会话的 WebSocket 事件。
-   *
-   * 如果当前 WebSocket 未就绪，会先缓存 sessionId，
-   * 等连接建立或重连后在 onopen 中自动补发。
-   * @param sessionId 服务器端会话 UUID
-   */
-  subscribe(sessionId: string) {
-    this.subscribedSessionId = sessionId;
-    logger.info(`${TAG} WS → subscribe sessionId=${sessionId}`);
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        JSON.stringify({ type: 'subscribe', payload: { sessionId } })
-      );
-    } else {
-      logger.warn(
-        `${TAG} subscribe deferred, ws not open (state=${this.ws?.readyState})`
-      );
-    }
-  }
-
-  /**
-   * 在服务器上为指定 agent 创建新会话。
-   * @param agentId Agent ID
-   * @param serverAddress 服务器地址
-   * @returns 新创建的会话 UUID
-   */
-  async createSession(agentId: string, serverAddress: string): Promise<string> {
-    const url = `${serverAddress}/api/agents/${agentId}/sessions`;
-    const responseText = await httpPost(url, {});
-    const data = JSON.parse(responseText) as { session: { id: string } };
-    logger.info(`${TAG} createSession → sessionId=${data.session.id}`);
-    return data.session.id;
-  }
-
-  /**
-   * 通过 HTTP POST 发送用户消息。服务器立即返回 `{ success: true }`，
-   * AI 回复通过 WebSocket 的 step_complete / complete 事件异步到达。
-   * @param agentId Agent ID
-   * @param sessionId 服务器端会话 UUID
-   * @param content 用户消息文本
-   * @param serverAddress 服务器地址
-   * @param voiceEnabled 是否开启语音，服务端据此决定是否发送 speak_ready
-   */
-  async sendChatMessage(
-    agentId: string,
-    sessionId: string,
-    content: string,
-    serverAddress: string,
-    voiceEnabled: boolean
-  ): Promise<void> {
-    logger.info(
-      `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
-        0,
-        80
-      )}" voiceEnabled=${voiceEnabled}`
-    );
-    const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
-    await httpPost(url, { content, voiceEnabled });
-    logger.info(`${TAG} sendChatMessage sent ok`);
-  }
+/**
+ * 通过 HTTP POST 发送用户消息。服务器立即返回 `{ success: true }`，
+ * AI 回复通过 WebSocket 的 step_complete / complete 事件异步到达。
+ *
+ * WebSocket 连接和消息接收由 ws-client 单例管理，
+ * 调用方只需确保已通过 ws-client.subscribe 订阅了对应会话。
+ *
+ * @param agentId Agent ID
+ * @param sessionId 服务器端会话 UUID
+ * @param content 用户消息文本
+ * @param serverAddress 服务器地址
+ * @param voiceEnabled 是否开启语音，服务端据此决定是否发送 speak_ready
+ */
+export async function sendChatMessage(
+  agentId: string,
+  sessionId: string,
+  content: string,
+  serverAddress: string,
+  voiceEnabled: boolean
+): Promise<void> {
+  logger.info(
+    `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
+      0,
+      80
+    )}" voiceEnabled=${voiceEnabled}`
+  );
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
+  await httpPost(url, { content, voiceEnabled });
+  logger.info(`${TAG} sendChatMessage sent ok`);
 }
 
 export interface AgentInfo {

@@ -26,6 +26,8 @@ const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 const companionOpenKey = keyPrefix + 'companionOpen';
 const lastSessionIdKey = keyPrefix + 'lastSessionId';
+const deviceIdKey = keyPrefix + 'deviceId';
+const deviceNameKey = keyPrefix + 'deviceName';
 
 export function saveHapticEnabled(enabled: boolean) {
   storage.set(hapticEnabledKey, enabled);
@@ -87,4 +89,27 @@ export function saveLastSessionId(sessionId: string) {
 /** 获取上次活跃的会话 ID，未设置时返回空字符串 */
 export function getLastSessionId(): string {
   return storage.getString(lastSessionIdKey) ?? '';
+}
+
+/**
+ * 获取设备唯一标识，首次调用时自动生成 UUID v4 并持久化。
+ * deviceId 永久不变，用于服务端设备注册和在线检测。
+ */
+export function getDeviceId(): string {
+  let id = storage.getString(deviceIdKey);
+  if (!id) {
+    id = uuid.v4();
+    storage.set(deviceIdKey, id);
+  }
+  return id;
+}
+
+/** 保存设备名到 MMKV */
+export function saveDeviceName(name: string) {
+  storage.set(deviceNameKey, name);
+}
+
+/** 获取缓存的设备名，未设置时返回空字符串 */
+export function getSavedDeviceName(): string {
+  return storage.getString(deviceNameKey) ?? '';
 }

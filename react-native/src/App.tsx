@@ -19,6 +19,8 @@ import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid } from './utils/PlatformUtils.ts';
+import { refreshDeviceName } from './utils/DeviceUtils.ts';
+import { useConnectionStore } from './stores/connectionStore.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import TrackPlayer from 'react-native-track-player';
@@ -190,7 +192,11 @@ const App = () => {
         logger.error('[App] TrackPlayer setup failed:', e);
       });
 
-    // 监听 app 回前台：系统语言可能已变更，重新检测并同步
+    /** 刷新设备名缓存并启动冷连接 */
+    refreshDeviceName();
+    useConnectionStore.getState().coldStart();
+
+    /** 监听 app 回前台：重试连接并检测系统语言变更 */
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         const lang = detectLanguage();
@@ -198,12 +204,35 @@ const App = () => {
           logger.info(`[App] app resumed, language changed to: ${lang}`);
           i18n.changeLanguage(lang);
         }
+        const conn = useConnectionStore.getState();
+        if (conn.status !== 'connected' && conn.serverAddress) {
+          logger.info('[App] app resumed, retrying connection');
+          conn.coldStart();
+        }
       }
     });
     return () => {
       subscription.remove();
     };
   }, []);
+
+  /** 地址失效时弹出 toast 提醒用户重新连接 */
+  const connStatus = useConnectionStore((s) => s.status);
+  const prevStatusRef = React.useRef(connStatus);
+  React.useEffect(() => {
+    if (
+      connStatus === 'address_invalid' &&
+      prevStatusRef.current !== 'address_invalid'
+    ) {
+      Toast.show({
+        type: 'error',
+        text1: i18n.t('connection.addressInvalid'),
+        position: 'top',
+        visibilityTime: 5000,
+      });
+    }
+    prevStatusRef.current = connStatus;
+  }, [connStatus]);
 
   return (
     <>
