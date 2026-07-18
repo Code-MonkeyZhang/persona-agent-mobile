@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState, useRef, useCallback } from 'react';
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -24,10 +25,44 @@ type ServerScreenNavigationProp = NativeStackNavigationProp<
   'Server'
 >;
 
+/** 翻译函数类型，仅依赖 key，便于 mapConnectError 独立测试 */
+type TFunc = (key: string) => string;
+
+/**
+ * 将底层原始错误映射为面向用户的友好文案。
+ * - Network error / Request timeout / HTTP 状态码 按类归并
+ * - 其余未知内容截断到 60 字符兜底，避免超长错误铺满界面
+ */
+function mapConnectError(raw: string, t: TFunc): string {
+  const s = raw.trim();
+  if (!s) {
+    return '';
+  }
+  if (/^network error/i.test(s)) {
+    return t('server.errNetwork');
+  }
+  if (/^request timeout/i.test(s)) {
+    return t('server.errTimeout');
+  }
+  const m = s.match(/^HTTP\s+(\d{3})/i);
+  if (m) {
+    const code = Number(m[1]);
+    if (code === 404) {
+      return t('server.errHttp404');
+    }
+    if (code >= 500) {
+      return t('server.errHttp5xx');
+    }
+    return `HTTP ${code}`;
+  }
+  return s.length > 60 ? s.slice(0, 60) + '…' : s;
+}
+
 /**
  * @file ServerScreen.tsx
- * @description 服务器隧道连接页面。支持手动输入地址和扫码连接两种方式，
- *              通过 connectionStore 发送配对请求并建立 WebSocket 连接。
+ * @description 服务器隧道连接页面。扫码与手输地址合并在同一卡片，
+ *              通过 connectionStore 发起配对请求并建立 WebSocket 连接，
+ *              连接态由底部状态横幅统一反馈。
  */
 const ServerScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -39,10 +74,10 @@ const ServerScreen: React.FC = () => {
 
   const savedAddress = getServerAddress();
   const [url, setUrl] = useState(savedAddress);
-  const [saved, setSaved] = useState(false);
 
   const styles = createStyles(colors);
 
+  /** 提交连接：清洗地址后调用 store.connect，触发配对与 WS 建链 */
   const handleSave = async (overrideUrl?: string) => {
     const targetUrl = (overrideUrl ?? url).trim();
     if (!targetUrl) {
@@ -50,10 +85,6 @@ const ServerScreen: React.FC = () => {
     }
     logger.info(`[Server] handleSave: address="${targetUrl}"`);
     await useConnectionStore.getState().connect(targetUrl);
-    if (useConnectionStore.getState().status === 'connected') {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
   };
 
   const handleSaveRef = useRef(handleSave);
@@ -77,25 +108,30 @@ const ServerScreen: React.FC = () => {
     }, [])
   );
 
-  const statusText =
-    status === 'connecting'
-      ? t('server.connecting')
-      : status === 'connected'
-      ? t('server.connected')
-      : status === 'address_invalid'
-      ? `${t('server.failed')}${error ? ': ' + error : ''}`
-      : '';
+  const isConnecting = status === 'connecting';
+  const isConnected = status === 'connected';
+  const isFailed = status === 'address_invalid';
+
+  const failedText = isFailed
+    ? (() => {
+        const mapped = mapConnectError(error, t);
+        return mapped ? `${t('server.failed')}：${mapped}` : t('server.failed');
+      })()
+    : '';
+
+  const connectDisabled = isConnecting || !url.trim();
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
+        {/* 扫码 + 地址输入：同一个方块 */}
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.scanButton}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('ScanQR')}
           >
-            <ScanLine size={19} color={colors.primary} />
+            <ScanLine size={18} color={colors.primary} />
             <Text style={styles.scanButtonText}>
               {t('server.scanToConnect')}
             </Text>
@@ -103,7 +139,7 @@ const ServerScreen: React.FC = () => {
 
           <View style={styles.inputWrap}>
             <LinkIcon
-              size={19}
+              size={18}
               color={colors.textTertiary}
               style={styles.inputIcon}
             />
@@ -118,37 +154,52 @@ const ServerScreen: React.FC = () => {
               keyboardType="url"
             />
           </View>
-
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              saved && styles.saveButtonSaved,
-              !url.trim() && styles.saveButtonDisabled,
-            ]}
-            activeOpacity={0.7}
-            onPress={() => handleSave()}
-            disabled={status === 'connecting' || !url.trim()}
-          >
-            {saved ? (
-              <Check size={19} color={colors.primaryForeground} />
-            ) : (
-              <Text style={styles.saveButtonText}>{t('server.connect')}</Text>
-            )}
-          </TouchableOpacity>
-
-          {statusText ? (
-            <Text
-              style={[
-                styles.statusText,
-                status === 'connecting' && { color: colors.info },
-                status === 'connected' && { color: colors.success },
-                status === 'address_invalid' && { color: colors.error },
-              ]}
-            >
-              {statusText}
-            </Text>
-          ) : null}
         </View>
+
+        {/* 连接主按钮 */}
+        <TouchableOpacity
+          style={[
+            styles.connectButton,
+            connectDisabled && styles.connectButtonDisabled,
+          ]}
+          activeOpacity={0.7}
+          onPress={() => handleSave()}
+          disabled={connectDisabled}
+        >
+          {isConnecting ? (
+            <View style={styles.connectButtonContent}>
+              <ActivityIndicator
+                size="small"
+                color={colors.primaryForeground}
+              />
+              <Text style={styles.connectButtonText}>
+                {t('server.connecting')}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.connectButtonText}>{t('server.connect')}</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* 状态横幅：已连接 / 失败，连接中由按钮内转圈表达 */}
+        {isConnected && (
+          <View style={[styles.banner, styles.bannerConnected]}>
+            <Check size={18} color={colors.success} />
+            <Text style={[styles.bannerText, { color: colors.success }]}>
+              {t('server.connected')}
+            </Text>
+          </View>
+        )}
+        {isFailed && failedText ? (
+          <View style={[styles.banner, styles.bannerFailed]}>
+            <Text
+              style={[styles.bannerText, { color: colors.error }]}
+              numberOfLines={2}
+            >
+              {failedText}
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -169,8 +220,6 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 16,
       padding: 16,
       gap: 12,
-      borderWidth: 1,
-      borderColor: colors.borderLight,
     },
     scanButton: {
       flexDirection: 'row',
@@ -178,9 +227,10 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       gap: 8,
       paddingVertical: 12,
-      borderRadius: 12,
+      borderRadius: 10,
+      backgroundColor: colors.primarySelectedBackground,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: colors.primaryBorder,
     },
     scanButtonText: {
       color: colors.primary,
@@ -190,11 +240,9 @@ const createStyles = (colors: ColorScheme) =>
     inputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.inputBackground,
-      borderRadius: 12,
+      backgroundColor: colors.messageBackground,
+      borderRadius: 10,
       paddingLeft: 12,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
     },
     inputIcon: {
       position: 'absolute',
@@ -202,34 +250,53 @@ const createStyles = (colors: ColorScheme) =>
     },
     input: {
       flex: 1,
-      paddingVertical: 10,
+      paddingVertical: 12,
       paddingLeft: 32,
       paddingRight: 12,
-      fontSize: 17,
+      fontSize: 16,
       color: colors.text,
     },
-    saveButton: {
+    connectButton: {
       alignSelf: 'stretch',
       alignItems: 'center',
       justifyContent: 'center',
+      marginTop: 12,
       paddingVertical: 14,
       borderRadius: 12,
       backgroundColor: colors.primary,
     },
-    saveButtonSaved: {
-      backgroundColor: colors.success,
+    connectButtonDisabled: {
+      backgroundColor: colors.primaryDisabled,
     },
-    saveButtonDisabled: {
-      backgroundColor: colors.textTertiary,
+    connectButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
-    saveButtonText: {
+    connectButtonText: {
       color: colors.primaryForeground,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: '600',
     },
-    statusText: {
-      fontSize: 16,
-      marginTop: 4,
+    banner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+    },
+    bannerConnected: {
+      backgroundColor: colors.successBackground,
+    },
+    bannerFailed: {
+      backgroundColor: colors.errorBackground,
+    },
+    bannerText: {
+      flex: 1,
+      fontSize: 14,
+      lineHeight: 20,
     },
   });
 
