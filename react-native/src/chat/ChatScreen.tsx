@@ -135,7 +135,6 @@ function ChatScreen(): React.JSX.Element {
     setCurrentPose: companion.setCurrentPose,
     setPoseError: companion.setPoseError,
     onFilesConsumed: () => setSelectedFiles([]),
-    t,
   });
 
   // ==================== Ref 同步 ====================

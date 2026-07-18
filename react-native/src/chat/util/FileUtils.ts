@@ -4,7 +4,7 @@
  * - 保存用户选中的文件到 App 存储目录（自动处理重名避免覆盖）
  * - 读取文件内容转成文本格式，用于发送给 AI 分析
  * - 统一处理 iPhone 和 Android 的文件路径差异
- * - 限制附件数量（图片 ≤20、文档 ≤5），超出自动截断并提示
+ * - 限制附件数量（图片 ≤20、文档 ≤5），超出自动截断
  * - 检查视频是否压缩完毕，未完成则不允许发送
  * - 用户只发文件没打字时，自动生成描述如 "Summarize these 2 images and 1 doc"
  */
@@ -12,8 +12,6 @@ import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { FileInfo, FileType } from '../../types/Chat.ts';
 import { getTextModel } from '../../storage/StorageUtils.ts';
-import { showInfo } from './ToastUtils.ts';
-import i18n from '../../i18n/index.ts';
 import { logger } from '../../lib/logger';
 
 /**
@@ -142,12 +140,8 @@ export const checkFileNumberLimit = (
 
   let processedNewImages = newImages;
   let processedNewDocs = newDocs;
-  let showWarning = false;
 
   if (isNova()) {
-    if (prevFiles.length + newFiles.length > MAX_NOVA_FILES) {
-      showInfo(i18n.t('error.maxFiles', { count: MAX_NOVA_FILES }));
-    }
     if (prevFiles.length >= MAX_NOVA_FILES) {
       return prevFiles;
     }
@@ -155,10 +149,6 @@ export const checkFileNumberLimit = (
       (file) => file.type === FileType.video
     ).length;
     const newVideos = newFiles.filter((file) => file.type === FileType.video);
-
-    if (existingVideos + newVideos.length > MAX_NOVA_VIDEOS) {
-      showInfo(i18n.t('error.maxVideos', { count: MAX_NOVA_VIDEOS }));
-    }
 
     const filteredNewFiles =
       existingVideos >= MAX_NOVA_VIDEOS
@@ -175,23 +165,13 @@ export const checkFileNumberLimit = (
   if (totalImages > MAX_IMAGES) {
     const remainingSlots = Math.max(0, MAX_IMAGES - existingImages.length);
     processedNewImages = newImages.slice(0, remainingSlots);
-    showWarning = true;
   }
 
   if (totalDocs > MAX_DOCUMENTS) {
     const remainingSlots = Math.max(0, MAX_DOCUMENTS - existingDocs.length);
     processedNewDocs = newDocs.slice(0, remainingSlots);
-    showWarning = true;
   }
 
-  if (showWarning) {
-    if (totalImages > MAX_IMAGES) {
-      showInfo(i18n.t('error.maxImages', { count: MAX_IMAGES }));
-    }
-    if (totalDocs > MAX_DOCUMENTS) {
-      showInfo(i18n.t('error.maxDocuments', { count: MAX_DOCUMENTS }));
-    }
-  }
   return [...prevFiles, ...processedNewImages, ...processedNewDocs];
 };
 

@@ -14,7 +14,6 @@ import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
-import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid } from './utils/PlatformUtils.ts';
@@ -215,31 +214,10 @@ const App = () => {
     };
   }, []);
 
-  /** 地址失效时弹出 toast 提醒用户重新连接 */
-  const connStatus = useConnectionStore((s) => s.status);
-  const prevStatusRef = React.useRef(connStatus);
-  React.useEffect(() => {
-    if (
-      connStatus === 'address_invalid' &&
-      prevStatusRef.current !== 'address_invalid'
-    ) {
-      Toast.show({
-        type: 'error',
-        text1: i18n.t('connection.addressInvalid'),
-        position: 'top',
-        visibilityTime: 5000,
-      });
-    }
-    prevStatusRef.current = connStatus;
-  }, [connStatus]);
-
   return (
-    <>
-      <ThemeProvider>
-        <AppWithTheme />
-      </ThemeProvider>
-      <Toast />
-    </>
+    <ThemeProvider>
+      <AppWithTheme />
+    </ThemeProvider>
   );
 };
 

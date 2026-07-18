@@ -18,13 +18,11 @@ import {
 } from '../../storage/StorageUtils';
 import { getFileTypeSummary, isAllFileReady } from '../util/FileUtils';
 import { cycleToThoughts, stripLastTextThought } from '../util/thought-utils';
-import { showInfo } from '../util/ToastUtils';
 import { useSessionStore, extractPreview } from '../../stores/sessionStore';
 import { trigger } from '../util/HapticUtils';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import { logger } from '../../lib/logger';
 import i18n from '../../i18n/index';
-import Toast from 'react-native-toast-message';
 import type { ChatMessage, FileInfo } from '../../types/Chat';
 import { ChatStatus } from '../../types/Chat';
 
@@ -59,7 +57,6 @@ interface UseChatMessagesParams {
   setCurrentPose: (pose: string) => void;
   setPoseError: (v: boolean) => void;
   onFilesConsumed: () => void;
-  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 export function useChatMessages(params: UseChatMessagesParams) {
@@ -74,7 +71,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
     setCurrentPose,
     setPoseError,
     onFilesConsumed,
-    t,
   } = params;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -217,12 +213,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
       },
       onSpeakError: (_reason: string, message: string) => {
         logger.error(`[ChatScreen] speak_error: ${message}`);
-        Toast.show({
-          type: 'warning',
-          text1: message,
-          position: 'bottom',
-          visibilityTime: 3000,
-        });
       },
     });
 
@@ -237,7 +227,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
       setUserScrolled(false);
       const files = selectedFilesRef.current;
       if (!isAllFileReady(files)) {
-        showInfo(t('chat.waitVideoReady'));
         return;
       }
 
@@ -309,7 +298,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
     },
     [
       setSessionId,
-      t,
       scrollToBottom,
       setUserScrolled,
       selectedFilesRef,
