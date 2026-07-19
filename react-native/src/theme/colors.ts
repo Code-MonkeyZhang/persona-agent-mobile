@@ -36,8 +36,12 @@ export interface ColorScheme {
   // 品牌与状态
   primary: string;
   primarySelectedBackground: string;
+  primaryBorder: string;
+  primaryDisabled: string;
   error: string;
+  errorBackground: string;
   success: string;
+  successBackground: string;
   warning: string;
   warningBackground: string;
   info: string;
@@ -78,8 +82,12 @@ export const lightColors: ColorScheme = {
 
   primary: '#007AFF',
   primarySelectedBackground: 'rgba(0, 122, 255, 0.1)',
+  primaryBorder: 'rgba(0, 122, 255, 0.25)',
+  primaryDisabled: 'rgba(0, 122, 255, 0.4)',
   error: '#ff4444',
+  errorBackground: 'rgba(255, 68, 68, 0.1)',
   success: '#00C851',
+  successBackground: 'rgba(0, 200, 81, 0.1)',
   warning: '#ffbb33',
   warningBackground: 'rgba(245,158,11,0.15)',
   info: '#33b5e5',

@@ -4,7 +4,6 @@
     "startConversation": "Start a conversation",
     "thinking": "Thinking...",
     "error": "Error: {{message}}",
-    "waitVideoReady": "Please wait for all videos to be ready",
     "shareImageTitle": "AI Image"
   },
   "drawer": {
@@ -63,6 +62,11 @@
     "connecting": "Connecting...",
     "connected": "Connected",
     "failed": "Failed",
+    "errNetwork": "Network unavailable",
+    "errTimeout": "Timed out",
+    "errHttp404": "Service not found",
+    "errHttp5xx": "Server error",
+    "errUnknown": "Unknown error",
     "enterAddress": "Please enter a server address",
     "scanToConnect": "Scan to Connect",
     "scanning": "Align the QR code within the frame",
@@ -72,17 +76,12 @@
     "cameraPermissionDenied": "Camera permission is required to scan QR codes"
   },
   "error": {
-    "ttsFailed": "TTS playback failed",
-    "maxFiles": "Maximum {{count}} files allowed",
-    "maxVideos": "Maximum {{count}} video allowed",
-    "maxImages": "Image limit exceeded, maximum {{count}} images allowed",
-    "maxDocuments": "Document limit exceeded, maximum {{count}} files allowed",
-    "unsupportedFormat": "Unsupported file format: .{{format}}",
-    "fileTooLarge": "File size exceeds 4.5MB limit: {{name}}",
-    "videoTooLarge": "Video too large: {{size}}MB (max {{max}}MB)",
-    "videoProcessFailed": "Video process failed"
+    "ttsFailed": "TTS playback failed"
   },
   "common": {
     "back": "Back"
+  },
+  "connection": {
+    "reconnecting": "Reconnecting..."
   }
 }

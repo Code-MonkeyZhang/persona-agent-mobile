@@ -2,13 +2,10 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 /**
  * DrawerParamList - 侧边栏导航器的页面参数表
- *   Bedrock（聊天页）: 可传 sessionId（服务器 UUID）、tapIndex（消息定位）
+ *   Bedrock（聊天页）：会话切换已改由 sessionStore.activeSessionId 驱动，无需路由参数
  */
 export type DrawerParamList = {
-  Bedrock: {
-    sessionId?: string;
-    tapIndex?: number;
-  };
+  Bedrock: undefined;
 };
 
 /**
@@ -16,12 +13,9 @@ export type DrawerParamList = {
  */
 export type RouteParamList = {
   Drawer: NavigatorScreenParams<DrawerParamList>;
-  Bedrock: {
-    sessionId?: string;
-    tapIndex?: number;
-  };
+  Bedrock: undefined;
   Settings: NonNullable<unknown>;
   AgentDetail: { agentId: string };
-  Server: { scannedUrl?: string } | undefined;
+  Server: undefined;
   ScanQR: undefined;
 };

@@ -7,7 +7,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 import RNFS from 'react-native-fs';
-import Toast from 'react-native-toast-message';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
 import { logger } from '../lib/logger';
@@ -137,12 +136,6 @@ export const useVoiceStore = create<VoiceStore>()(
           const message =
             err instanceof Error ? err.message : i18n.t('error.ttsFailed');
           logger.error(`[TTS] speak failed: ${message}`);
-          Toast.show({
-            type: 'error',
-            text1: message,
-            position: 'bottom',
-            visibilityTime: 3000,
-          });
         }
       },
 

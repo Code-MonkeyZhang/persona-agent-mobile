@@ -15,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { logger } from '../lib/logger';
+import { useConnectionStore } from '../stores/connectionStore.ts';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 
 type ScanQRScreenNavigationProp = NativeStackNavigationProp<
@@ -56,7 +57,8 @@ const ScanQRScreen: React.FC = () => {
   }, []);
 
   /**
-   * 扫码回调：提取 URL → 立即返回 ServerScreen 并携带 scannedUrl。
+   * 扫码回调：提取 URL → 写入连接页的中转地址 → goBack 返回连接页。
+   * 用 goBack（pop 语义）而非 navigate，避免反复扫码时页面堆叠；
    * 连接/配对逻辑统一由 ServerScreen 处理，本页面只负责扫码。
    */
   const handleReadCode = (event: {
@@ -70,7 +72,8 @@ const ScanQRScreen: React.FC = () => {
     const url = event.nativeEvent.codeStringValue;
     logger.info(`[ScanQR] Scanned URL: ${url}`);
 
-    navigation.navigate('Server', { scannedUrl: url });
+    useConnectionStore.getState().setPendingScannedUrl(url);
+    navigation.goBack();
   };
 
   if (permissionDenied) {

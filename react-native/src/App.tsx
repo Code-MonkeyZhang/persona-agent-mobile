@@ -10,15 +10,15 @@ import CustomDrawerContent from './history/CustomDrawerContent.tsx';
 import { Dimensions, Keyboard, StatusBar, AppState } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
-import { AppProvider } from './history/AppProvider.tsx';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
-import Toast from 'react-native-toast-message';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid } from './utils/PlatformUtils.ts';
+import { refreshDeviceName } from './utils/DeviceUtils.ts';
+import { useConnectionStore } from './stores/connectionStore.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import TrackPlayer from 'react-native-track-player';
@@ -190,13 +190,22 @@ const App = () => {
         logger.error('[App] TrackPlayer setup failed:', e);
       });
 
-    // 监听 app 回前台：系统语言可能已变更，重新检测并同步
+    /** 刷新设备名缓存并启动冷连接 */
+    refreshDeviceName();
+    useConnectionStore.getState().coldStart();
+
+    /** 监听 app 回前台：重试连接并检测系统语言变更 */
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         const lang = detectLanguage();
         if (i18n.language !== lang) {
           logger.info(`[App] app resumed, language changed to: ${lang}`);
           i18n.changeLanguage(lang);
+        }
+        const conn = useConnectionStore.getState();
+        if (conn.status !== 'connected' && conn.serverAddress) {
+          logger.info('[App] app resumed, retrying connection');
+          conn.coldStart();
         }
       }
     });
@@ -206,14 +215,9 @@ const App = () => {
   }, []);
 
   return (
-    <>
-      <ThemeProvider>
-        <AppProvider>
-          <AppWithTheme />
-        </AppProvider>
-      </ThemeProvider>
-      <Toast />
-    </>
+    <ThemeProvider>
+      <AppWithTheme />
+    </ThemeProvider>
   );
 };
 

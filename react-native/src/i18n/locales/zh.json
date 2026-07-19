@@ -4,7 +4,6 @@
     "startConversation": "开始对话",
     "thinking": "思考中...",
     "error": "错误：{{message}}",
-    "waitVideoReady": "请等待所有视频处理完成",
     "shareImageTitle": "AI 图片"
   },
   "drawer": {
@@ -63,6 +62,11 @@
     "connecting": "连接中...",
     "connected": "已连接",
     "failed": "连接失败",
+    "errNetwork": "网络不可用",
+    "errTimeout": "连接超时",
+    "errHttp404": "服务未找到",
+    "errHttp5xx": "服务器错误",
+    "errUnknown": "未知错误",
     "enterAddress": "请输入服务器地址",
     "scanToConnect": "扫码连接",
     "scanning": "将二维码放入框内即可自动扫描",
@@ -72,17 +76,12 @@
     "cameraPermissionDenied": "需要相机权限才能扫码"
   },
   "error": {
-    "ttsFailed": "语音播报失败",
-    "maxFiles": "最多 {{count}} 个文件",
-    "maxVideos": "最多 {{count}} 个视频",
-    "maxImages": "图片超限，最多 {{count}} 张图片",
-    "maxDocuments": "文档超限，最多 {{count}} 个文件",
-    "unsupportedFormat": "不支持的文件格式：.{{format}}",
-    "fileTooLarge": "文件过大（超过 4.5MB）：{{name}}",
-    "videoTooLarge": "视频过大：{{size}}MB（最大 {{max}}MB）",
-    "videoProcessFailed": "视频处理失败"
+    "ttsFailed": "语音播报失败"
   },
   "common": {
     "back": "返回"
+  },
+  "connection": {
+    "reconnecting": "正在重连..."
   }
 }
