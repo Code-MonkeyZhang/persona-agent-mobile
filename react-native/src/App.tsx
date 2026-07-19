@@ -177,6 +177,7 @@ const AppWithTheme = () => {
 const App = () => {
   React.useEffect(() => {
     logger.info('[App] root mounted, initializing');
+    logger.init();
     configureErrorHandling();
     logger.debug('[App] error handling configured');
     const setupPromise = TrackPlayer.setupPlayer();
@@ -194,7 +195,11 @@ const App = () => {
     refreshDeviceName();
     useConnectionStore.getState().coldStart();
 
-    /** 监听 app 回前台：重试连接并检测系统语言变更 */
+    /**
+     * 监听 app 前后台切换：
+     * - 回前台：检测系统语言变更 + 若未连上则重试连接
+     * - 进后台：立即 flush 日志缓冲，防止 JS 冻结丢日志
+     */
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         const lang = detectLanguage();
@@ -207,6 +212,9 @@ const App = () => {
           logger.info('[App] app resumed, retrying connection');
           conn.coldStart();
         }
+      } else if (nextState === 'background' || nextState === 'inactive') {
+        logger.info('[App] app backgrounded, flushing logs');
+        logger.flush();
       }
     });
     return () => {
