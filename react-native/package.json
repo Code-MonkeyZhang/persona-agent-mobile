@@ -1,7 +1,7 @@
 {
   "name": "persona-mobile",
   "description": "Persona Mobile - React Native client for Persona Agent Server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
