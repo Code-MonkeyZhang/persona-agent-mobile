@@ -10,6 +10,8 @@ import {
   createSession,
   sendChatMessage,
   getAgentAvatarUrl,
+  fetchSessionMessages,
+  convertToChatMessages,
 } from '../../api/server-api';
 import type { ToolCall, WsToolResult } from '../../api/server-api';
 import {
@@ -81,6 +83,8 @@ export function useChatMessages(params: UseChatMessagesParams) {
   const sessionIdRef = useRef('');
   /** late-chunk 守卫：abort 后到达的 step_complete 一律丢弃 */
   const abortedRef = useRef(false);
+  /** isGenerating 恢复模式标记，complete/error/aborted 时据此判断是否需要磁盘刷新 */
+  const recoveringRef = useRef(false);
 
   /**
    * 统一更新会话 ID：
@@ -94,6 +98,36 @@ export function useChatMessages(params: UseChatMessagesParams) {
     saveLastSessionId(id);
     useSessionStore.getState().setActiveSessionId(id);
   }, []);
+
+  /**
+   * 从磁盘重新拉取当前 session 的消息列表。
+   * 用于 isGenerating 恢复场景：结束事件到达时本地没有完整内容，
+   * 从后端获取最终落盘的消息替换占位符。
+   */
+  const refreshMessagesFromDisk = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (!sid) {
+      return;
+    }
+    try {
+      const agentId = getServerAgentId();
+      const session = await fetchSessionMessages(
+        serverAddressRef.current,
+        agentId,
+        sid
+      );
+      const chatMessages = convertToChatMessages(
+        session.messages,
+        session.createdAt,
+        currentAgentNameRef.current,
+        getAgentAvatarUrl(agentId, serverAddressRef.current)
+      );
+      setMessages(chatMessages);
+      logger.info('[ChatScreen] messages refreshed from disk');
+    } catch (e) {
+      logger.error(`[ChatScreen] refresh from disk failed: ${e}`);
+    }
+  }, [serverAddressRef, currentAgentNameRef]);
 
   /**
    * 注册 ws-client 事件处理器。
@@ -170,6 +204,13 @@ export function useChatMessages(params: UseChatMessagesParams) {
         }
       },
       onComplete: () => {
+        if (recoveringRef.current) {
+          recoveringRef.current = false;
+          refreshMessagesFromDisk();
+          setChatStatus(ChatStatus.Complete);
+          logger.info('[ChatScreen] recovery complete, refreshed from disk');
+          return;
+        }
         trigger(HapticFeedbackTypes.notificationSuccess);
         setMessages((prevMessages) => {
           if (prevMessages.length === 0) {
@@ -189,6 +230,15 @@ export function useChatMessages(params: UseChatMessagesParams) {
         setChatStatus(ChatStatus.Complete);
       },
       onError: (message: string) => {
+        if (recoveringRef.current) {
+          recoveringRef.current = false;
+          refreshMessagesFromDisk();
+          setChatStatus(ChatStatus.Complete);
+          logger.info(
+            '[ChatScreen] recovery ended with error, refreshed from disk'
+          );
+          return;
+        }
         setMessages((prevMessages) => {
           if (prevMessages.length === 0) {
             return prevMessages;
@@ -203,6 +253,15 @@ export function useChatMessages(params: UseChatMessagesParams) {
         setChatStatus(ChatStatus.Complete);
       },
       onAborted: () => {
+        if (recoveringRef.current) {
+          recoveringRef.current = false;
+          refreshMessagesFromDisk();
+          setChatStatus(ChatStatus.Complete);
+          logger.info(
+            '[ChatScreen] recovery ended with abort, refreshed from disk'
+          );
+          return;
+        }
         abortedRef.current = true;
         setMessages((prevMessages) => {
           if (prevMessages.length === 0) {
@@ -244,12 +303,44 @@ export function useChatMessages(params: UseChatMessagesParams) {
       onSpeakError: (_reason: string, message: string) => {
         logger.error(`[ChatScreen] speak_error: ${message}`);
       },
+      onSubscribed: (isGenerating: boolean) => {
+        if (!isGenerating) {
+          return;
+        }
+        // 只增不减：已在 Running 则跳过，避免与 onSend 冲突
+        if (chatStatusRef.current === ChatStatus.Running) {
+          return;
+        }
+        recoveringRef.current = true;
+        setChatStatus(ChatStatus.Running);
+        const agentId = getServerAgentId();
+        setMessages((prevMessages) => [
+          createBotMessage(
+            currentAgentNameRef.current,
+            getAgentAvatarUrl(agentId, serverAddressRef.current)
+          ),
+          ...prevMessages,
+        ]);
+        scrollToBottom();
+        logger.info(
+          '[ChatScreen] session is generating, recovering loading state'
+        );
+      },
     });
 
     return () => {
       wsClient.unregisterHandler();
     };
-  }, [setCurrentPose, setPoseError, speakRef, voiceEnabledRef]);
+  }, [
+    setCurrentPose,
+    setPoseError,
+    speakRef,
+    voiceEnabledRef,
+    refreshMessagesFromDisk,
+    currentAgentNameRef,
+    scrollToBottom,
+    serverAddressRef,
+  ]);
 
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
   const onSend = useCallback(

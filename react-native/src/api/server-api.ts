@@ -46,7 +46,7 @@ interface ModelConfig {
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
   | { type: 'connected'; clientId: string }
-  | { type: 'subscribed'; sessionId: string }
+  | { type: 'subscribed'; sessionId: string; isGenerating?: boolean }
   | {
       type: 'step_complete';
       sessionId: string;

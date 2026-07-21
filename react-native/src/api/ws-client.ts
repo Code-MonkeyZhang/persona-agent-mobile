@@ -46,6 +46,8 @@ export interface WsEventHandler {
   onSpeakError(reason: SpeakErrorReason, message: string): void;
   /** 用户中止生成后服务端推送的确认事件 */
   onAborted(): void;
+  /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画 */
+  onSubscribed(isGenerating: boolean): void;
 }
 
 let ws: WebSocket | null = null;
@@ -233,6 +235,15 @@ function handleMessage(msg: ServerMessage): void {
     case 'connected':
       logger.info(`${TAG} connected, clientId=${msg.clientId}`);
       useConnectionStore.getState().setStatus('connected');
+      break;
+
+    case 'subscribed':
+      logger.info(
+        `${TAG} subscribed, sessionId=${msg.sessionId} isGenerating=${
+          msg.isGenerating ?? false
+        }`
+      );
+      currentHandler?.onSubscribed(msg.isGenerating ?? false);
       break;
 
     case 'pong':
