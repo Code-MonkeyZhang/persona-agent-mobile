@@ -20,6 +20,8 @@ interface FloatingInputBarProps {
   textInputRef: React.RefObject<TextInput>;
   /** 发送消息回调 */
   onSend: (text: string) => void;
+  /** 中止当前生成的回调，透传给 CustomSendComponent */
+  onStop?: () => void;
   /** 已选中的附件文件列表 */
   selectedFiles: FileInfo[];
   /** 当前聊天状态 */
@@ -33,6 +35,7 @@ interface FloatingInputBarProps {
 const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   textInputRef,
   onSend,
+  onStop,
   selectedFiles,
   chatStatus,
   onFileSelected,
@@ -81,6 +84,7 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
             selectedFiles={selectedFiles}
             chatStatus={chatStatus}
             onPress={handleSend}
+            onStop={onStop}
           />
         </View>
       </View>

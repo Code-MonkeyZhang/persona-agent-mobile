@@ -44,6 +44,8 @@ export interface WsEventHandler {
     languageBoost?: string;
   }): void;
   onSpeakError(reason: SpeakErrorReason, message: string): void;
+  /** 用户中止生成后服务端推送的确认事件 */
+  onAborted(): void;
 }
 
 let ws: WebSocket | null = null;
@@ -107,6 +109,19 @@ export function subscribe(sessionId: string): void {
     ws.send(JSON.stringify({ type: 'subscribe', payload: { sessionId } }));
   } else {
     logger.warn(`${TAG} subscribe deferred, ws not open`);
+  }
+}
+
+/**
+ * 请求服务端中止指定会话的当前生成。
+ * WS 未连上时直接放弃，生成不可能在跑，abort 无意义。
+ */
+export function abort(sessionId: string): void {
+  logger.info(`${TAG} → abort sessionId=${sessionId}`);
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'abort', payload: { sessionId } }));
+  } else {
+    logger.warn(`${TAG} abort skipped, ws not open`);
   }
 }
 
@@ -245,6 +260,11 @@ function handleMessage(msg: ServerMessage): void {
     case 'error':
       logger.error(`${TAG} error: ${msg.message}`);
       currentHandler?.onError(msg.message);
+      break;
+
+    case 'aborted':
+      logger.info(`${TAG} aborted, sessionId=${msg.sessionId}`);
+      currentHandler?.onAborted();
       break;
 
     case 'speak_ready':

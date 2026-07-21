@@ -559,6 +559,7 @@ function ChatScreen(): React.JSX.Element {
           <FloatingInputBar
             textInputRef={textInputViewRef}
             onSend={chat.onSend}
+            onStop={chat.onStop}
             selectedFiles={selectedFiles}
             chatStatus={chat.chatStatus}
             onFileSelected={handleNewFileSelected}

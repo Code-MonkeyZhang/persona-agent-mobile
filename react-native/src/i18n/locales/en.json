@@ -4,7 +4,8 @@
     "startConversation": "Start a conversation",
     "thinking": "Thinking...",
     "error": "Error: {{message}}",
-    "shareImageTitle": "AI Image"
+    "shareImageTitle": "AI Image",
+    "stop": "Stop generating"
   },
   "drawer": {
     "chat": "Chat",

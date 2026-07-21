@@ -79,6 +79,8 @@ export function useChatMessages(params: UseChatMessagesParams) {
   const chatStatusRef = useRef(chatStatus);
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef('');
+  /** late-chunk 守卫：abort 后到达的 step_complete 一律丢弃 */
+  const abortedRef = useRef(false);
 
   /**
    * 统一更新会话 ID：
@@ -106,6 +108,11 @@ export function useChatMessages(params: UseChatMessagesParams) {
         toolCalls?: ToolCall[],
         toolResults?: WsToolResult[]
       ) => {
+        // abort 后迟到的 chunk 直接丢弃，避免污染 messages[0]
+        if (abortedRef.current) {
+          logger.info('[ChatScreen] late step_complete ignored after abort');
+          return;
+        }
         setMessages((prevMessages) => {
           if (prevMessages.length === 0) {
             return prevMessages;
@@ -195,6 +202,29 @@ export function useChatMessages(params: UseChatMessagesParams) {
         });
         setChatStatus(ChatStatus.Complete);
       },
+      onAborted: () => {
+        abortedRef.current = true;
+        setMessages((prevMessages) => {
+          if (prevMessages.length === 0) {
+            return prevMessages;
+          }
+          const botMsg = prevMessages[0];
+          // 空占位（没收到过 step_complete，text 还是占位符、steps 为空）直接移除
+          const isEmptyPlaceholder =
+            (!botMsg.steps || botMsg.steps.length === 0) &&
+            botMsg.text === textPlaceholder;
+          if (isEmptyPlaceholder) {
+            logger.info('[ChatScreen] empty placeholder removed on abort');
+            return prevMessages.slice(1);
+          }
+          // 有内容的半成品打 aborted 标记保留
+          const newMessages = [...prevMessages];
+          newMessages[0] = { ...botMsg, aborted: true };
+          return newMessages;
+        });
+        setChatStatus(ChatStatus.Complete);
+        logger.info('[ChatScreen] turn aborted, partial kept');
+      },
       onSpeakReady: (data: {
         speakText: string;
         voiceId: string;
@@ -251,6 +281,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
       trigger(HapticFeedbackTypes.impactMedium);
       scrollToBottom();
 
+      abortedRef.current = false;
       setChatStatus(ChatStatus.Running);
       const agentId = getServerAgentId();
       setMessages((previousMessages) => [
@@ -308,6 +339,16 @@ export function useChatMessages(params: UseChatMessagesParams) {
     ]
   );
 
+  /** 请求服务端中止当前会话的生成 */
+  const onStop = useCallback(() => {
+    const sid = sessionIdRef.current;
+    if (!sid) {
+      return;
+    }
+    wsClient.abort(sid);
+    logger.info(`[ChatScreen] abort requested, sid=${sid}`);
+  }, []);
+
   return {
     messages,
     setMessages,
@@ -318,5 +359,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
     sessionIdRef,
     setSessionId,
     onSend,
+    onStop,
   };
 }

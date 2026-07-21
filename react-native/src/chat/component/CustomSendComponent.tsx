@@ -5,7 +5,7 @@
  */
 import React, { useMemo } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
-import { ArrowUp } from 'lucide-react-native';
+import { ArrowUp, Square } from 'lucide-react-native';
 import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 
@@ -19,6 +19,8 @@ interface CustomSendComponentProps {
   chatStatus: ChatStatus;
   /** 发送按钮回调 */
   onPress: () => void;
+  /** 中止当前生成的回调，仅在 chatStatus === Running 时触发 */
+  onStop?: () => void;
 }
 
 const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
@@ -26,6 +28,7 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   selectedFiles,
   chatStatus,
   onPress,
+  onStop,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -35,11 +38,22 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
 
   return (
     <TouchableOpacity
-      style={[styles.sendContainer, !isActive && styles.sendButtonDisabled]}
-      onPress={onPress}
-      disabled={!isActive}
+      style={[
+        styles.sendContainer,
+        !isActive && !isRunning && styles.sendButtonDisabled,
+      ]}
+      onPress={isRunning ? onStop : onPress}
+      disabled={isRunning ? false : !isActive}
     >
-      <ArrowUp size={24} color={colors.primaryForeground} />
+      {isRunning ? (
+        <Square
+          size={20}
+          color={colors.primaryForeground}
+          fill={colors.primaryForeground}
+        />
+      ) : (
+        <ArrowUp size={24} color={colors.primaryForeground} />
+      )}
     </TouchableOpacity>
   );
 };

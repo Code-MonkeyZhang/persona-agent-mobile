@@ -78,7 +78,8 @@ export type ServerMessage =
       reason: SpeakErrorReason;
       message: string;
     }
-  | { type: 'pong' };
+  | { type: 'pong' }
+  | { type: 'aborted'; sessionId: string; reason: string };
 
 /**
  * HTTP GET，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。

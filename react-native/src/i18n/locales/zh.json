@@ -4,7 +4,8 @@
     "startConversation": "开始对话",
     "thinking": "思考中...",
     "error": "错误：{{message}}",
-    "shareImageTitle": "AI 图片"
+    "shareImageTitle": "AI 图片",
+    "stop": "停止生成"
   },
   "drawer": {
     "chat": "聊天",
