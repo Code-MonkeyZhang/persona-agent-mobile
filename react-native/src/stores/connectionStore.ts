@@ -19,6 +19,8 @@ export type ConnectionStatus =
 
 interface ConnectionStore {
   status: ConnectionStatus;
+  /** 进入 connected 时递增，供上层监听做消息自愈 */
+  reconnectVersion: number;
   serverAddress: string;
   error: string;
   /** 扫码页写入、连接页消费的一次性中转地址；goBack 无法携带参数，故用此字段回传 */
@@ -30,7 +32,10 @@ interface ConnectionStore {
   disconnect: () => void;
   /** 读 MMKV 地址，有则 connect */
   coldStart: () => Promise<void>;
-  /** ws-client 内部回调用，更新连接状态 */
+  /**
+   * ws-client 内部回调用，更新连接状态。
+   * 进入 connected 时递增 reconnectVersion，供上层监听做消息自愈。
+   */
   setStatus: (status: ConnectionStatus) => void;
   /** 更新服务器地址 */
   setAddress: (address: string) => void;
@@ -40,6 +45,7 @@ interface ConnectionStore {
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => ({
   status: 'idle',
+  reconnectVersion: 0,
   serverAddress: getServerAddress(),
   error: '',
   pendingScannedUrl: '',
@@ -88,7 +94,13 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 
   setStatus: (status) => {
     logger.info(`[ConnectionStore] status → ${status}`);
-    set({ status });
+    set((state) => {
+      const justConnected =
+        status === 'connected' && state.status !== 'connected';
+      return justConnected
+        ? { status, reconnectVersion: state.reconnectVersion + 1 }
+        : { status };
+    });
   },
 
   setAddress: (address) => set({ serverAddress: address }),

@@ -16,7 +16,7 @@ import {
 import type { ToolCall, WsToolResult } from '../../api/server-api';
 import {
   getServerAgentId,
-  saveLastSessionId,
+  saveLastConversation,
 } from '../../storage/StorageUtils';
 import { getFileTypeSummary, isAllFileReady } from '../util/FileUtils';
 import { cycleToThoughts, stripLastTextThought } from '../util/thought-utils';
@@ -95,7 +95,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
    */
   const setSessionId = useCallback((id: string) => {
     sessionIdRef.current = id;
-    saveLastSessionId(id);
+    saveLastConversation(getServerAgentId(), id);
     useSessionStore.getState().setActiveSessionId(id);
   }, []);
 
@@ -451,5 +451,6 @@ export function useChatMessages(params: UseChatMessagesParams) {
     setSessionId,
     onSend,
     onStop,
+    refreshMessagesFromDisk,
   };
 }

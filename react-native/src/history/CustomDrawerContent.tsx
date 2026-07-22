@@ -42,7 +42,7 @@ import {
   Settings,
 } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../theme/index.ts';
-import { useSessionStore } from '../stores/sessionStore';
+import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 
 /**
@@ -161,7 +161,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const handleNewChat = () => {
     trigger(HapticFeedbackTypes.impactMedium);
     logger.info('[Drawer] new chat');
-    setActiveSessionId('');
+    setActiveSessionId(NEW_CHAT_SESSION);
     navigation.dispatch(DrawerActions.closeDrawer());
   };
 

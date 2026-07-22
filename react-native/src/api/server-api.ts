@@ -90,7 +90,7 @@ function httpGet(url: string): Promise<string> {
   logger.info(`${TAG} GET ${url}`);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.timeout = 10000;
+    xhr.timeout = 30000;
     xhr.open('GET', url, true);
     xhr.setRequestHeader('Accept', 'application/json');
     xhr.onload = () => {

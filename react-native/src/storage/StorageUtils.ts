@@ -25,7 +25,7 @@ const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 const companionOpenKey = keyPrefix + 'companionOpen';
-const lastSessionIdKey = keyPrefix + 'lastSessionId';
+const lastConversationKey = keyPrefix + 'lastConversation';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
 
@@ -81,14 +81,33 @@ export function getCompanionOpen(): boolean {
   return storage.getBoolean(companionOpenKey) ?? false;
 }
 
-/** 保存上次活跃的会话 ID */
-export function saveLastSessionId(sessionId: string) {
-  storage.set(lastSessionIdKey, sessionId);
+/** 上次打开的对话，Agent 与会话成对存储，用于冷启动恢复 */
+export interface LastConversation {
+  agentId: string;
+  sessionId: string;
 }
 
-/** 获取上次活跃的会话 ID，未设置时返回空字符串 */
-export function getLastSessionId(): string {
-  return storage.getString(lastSessionIdKey) ?? '';
+/**
+ * 保存上次的 Agent 与会话，两者成对写入，保证恢复时取到的是匹配的一对。
+ */
+export function saveLastConversation(agentId: string, sessionId: string) {
+  const value = JSON.stringify({ agentId, sessionId });
+  storage.set(lastConversationKey, value);
+}
+
+/**
+ * 读取上次的 Agent 与会话，未设置时返回 null。
+ */
+export function getLastConversation(): LastConversation | null {
+  const raw = storage.getString(lastConversationKey);
+  if (raw) {
+    try {
+      return JSON.parse(raw) as LastConversation;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**

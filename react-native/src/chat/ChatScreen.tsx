@@ -37,12 +37,15 @@ import {
   getServerAddress,
   getServerAgentId,
   saveServerAgentId,
+  saveLastConversation,
+  getLastConversation,
 } from '../storage/StorageUtils.ts';
 import {
   fetchAgents,
   fetchSessionMessages,
   convertToChatMessages,
   getAgentAvatarUrl,
+  chatSessionIdFor,
 } from '../api/server-api.ts';
 import type { AgentInfo } from '../api/server-api.ts';
 import * as wsClient from '../api/ws-client.ts';
@@ -54,7 +57,12 @@ import FloatingInputBar from './component/FloatingInputBar.tsx';
 import CompanionContent from './component/CompanionContent.tsx';
 import { checkFileNumberLimit } from './util/FileUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
-import { useSessionStore, extractPreview } from '../stores/sessionStore';
+import { useConnectionStore } from '../stores/connectionStore';
+import {
+  useSessionStore,
+  extractPreview,
+  NEW_CHAT_SESSION,
+} from '../stores/sessionStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
 import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
@@ -101,6 +109,8 @@ function ChatScreen(): React.JSX.Element {
   const chatStatusRef = useRef<ChatStatus>(ChatStatus.Init);
   const messagesRef = useRef<ChatMessage[]>([]);
   const currentAgentNameRef = useRef('AI');
+  /** 启动恢复只执行一次的守卫，避免每次聚焦都覆盖用户当前会话选择 */
+  const hasRestoredRef = useRef(false);
 
   // ==================== voiceStore ====================
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
@@ -116,6 +126,9 @@ function ChatScreen(): React.JSX.Element {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveSessionId = useSessionStore((s) => s.setActiveSessionId);
   const requestDrawerRefresh = useSessionStore((s) => s.requestDrawerRefresh);
+
+  // ==================== connectionStore ====================
+  const reconnectVersion = useConnectionStore((s) => s.reconnectVersion);
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
@@ -136,6 +149,7 @@ function ChatScreen(): React.JSX.Element {
     setPoseError: companion.setPoseError,
     onFilesConsumed: () => setSelectedFiles([]),
   });
+  const refreshMessages = chat.refreshMessagesFromDisk;
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
@@ -197,6 +211,28 @@ function ChatScreen(): React.JSX.Element {
           saveServerAgentId(agentId);
           setCurrentAgentId(agentId);
           logger.info(`[ChatScreen] using agentId=${agentId}`);
+
+          // 启动恢复：首次成功拉取 agents 后确定恢复到哪个会话
+          // 上次 Agent 还在且会话非空 → 恢复上次会话；否则兜底到常驻聊天
+          if (!hasRestoredRef.current) {
+            hasRestoredRef.current = true;
+            const lastConv = getLastConversation();
+            let targetSession: string;
+            if (
+              lastConv &&
+              lastConv.agentId === agentId &&
+              lastConv.sessionId !== NEW_CHAT_SESSION
+            ) {
+              targetSession = lastConv.sessionId;
+            } else {
+              targetSession = chatSessionIdFor(agentId);
+            }
+            setActiveSessionId(targetSession);
+            saveLastConversation(agentId, targetSession);
+            logger.info(
+              `[ChatScreen] restore session: agentId=${agentId} sessionId=${targetSession}`
+            );
+          }
         } catch (e) {
           logger.error(
             `[ChatScreen] init failed: ${e instanceof Error ? e.message : e}`
@@ -207,7 +243,7 @@ function ChatScreen(): React.JSX.Element {
       return () => {
         cancelled = true;
       };
-    }, [])
+    }, [setActiveSessionId])
   );
 
   // ==================== 新建聊天 & Agent 切换 ====================
@@ -215,7 +251,7 @@ function ChatScreen(): React.JSX.Element {
     useCallback(() => {
       trigger(HapticFeedbackTypes.impactMedium);
       logger.info('[ChatScreen] startNewChat');
-      chat.setSessionId('');
+      chat.setSessionId(NEW_CHAT_SESSION);
       chat.setMessages([]);
       companion.setCurrentPose('default');
       companion.setPoseError(false);
@@ -230,10 +266,11 @@ function ChatScreen(): React.JSX.Element {
       }
       logger.info(`[ChatScreen] agent switch → ${newAgentId}`);
       saveServerAgentId(newAgentId);
+      saveLastConversation(newAgentId, chatSessionIdFor(newAgentId));
       setCurrentAgentId(newAgentId);
       stopSpeakingRef.current();
       // 进入新 Agent 的常驻聊天会话，加载 effect 会据此清空并拉取
-      setActiveSessionId(`chat-${newAgentId}`);
+      setActiveSessionId(chatSessionIdFor(newAgentId));
       requestDrawerRefresh();
     },
     [currentAgentId, setActiveSessionId, requestDrawerRefresh]
@@ -295,6 +332,9 @@ function ChatScreen(): React.JSX.Element {
     // 守卫：正在显示的就是目标会话则跳过。
     // 覆盖新会话拿到真实 id 后回写 activeSessionId 的情形，避免重复加载与死循环
     if (chat.sessionIdRef.current === activeSessionId) {
+      logger.info(
+        `[ChatScreen] load skipped: sessionIdRef === activeSessionId=${activeSessionId}`
+      );
       return;
     }
     if (chatStatusRef.current === ChatStatus.Running) {
@@ -303,8 +343,8 @@ function ChatScreen(): React.JSX.Element {
     setSelectedFiles([]);
     chat.setChatStatus(ChatStatus.Init);
 
-    // 空串 / -1 表示新建聊天
-    if (activeSessionId === '' || activeSessionId === '-1') {
+    // NEW_CHAT_SESSION 表示新建聊天
+    if (activeSessionId === NEW_CHAT_SESSION) {
       startNewChat.current();
       return;
     }
@@ -332,7 +372,9 @@ function ChatScreen(): React.JSX.Element {
         const pose = session.currentPose ?? 'default';
         companion.setCurrentPose(pose);
         companion.setPoseError(false);
-        logger.debug(`[ChatScreen] session loaded, pose: ${pose}`);
+        logger.info(
+          `[ChatScreen] session loaded: ${chatMessages.length} messages, pose: ${pose}`
+        );
         if (chatMessages.length > 0 && chatMessages[0].text) {
           useSessionStore
             .getState()
@@ -343,13 +385,30 @@ function ChatScreen(): React.JSX.Element {
         }
         wsClient.subscribe(activeSessionId);
       } catch (e) {
-        logger.error(`[ChatScreen] loadSession failed: ${e}`);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        logger.error(
+          `[ChatScreen] loadSession failed: ${errMsg}, fallback to chat session`
+        );
+        const fallbackAgentId = getServerAgentId();
+        if (fallbackAgentId) {
+          setActiveSessionId(chatSessionIdFor(fallbackAgentId));
+        }
       } finally {
         setIsLoadingMessages(false);
         setTimeout(scroll.scrollToBottom, 200);
       }
     })();
-  }, [activeSessionId, chat, companion, scroll]);
+  }, [activeSessionId, chat, companion, scroll, setActiveSessionId]);
+
+  // ==================== 重连自愈 ====================
+  // reconnectVersion 从 0 开始，重连后递增；非 0 时补拉当前会话最新消息
+  useEffect(() => {
+    if (reconnectVersion === 0) {
+      return;
+    }
+    logger.info('[ChatScreen] reconnect detected, refreshing messages');
+    refreshMessages();
+  }, [reconnectVersion, refreshMessages]);
 
   // ==================== 键盘 & 屏幕 ====================
   useEffect(() => {
