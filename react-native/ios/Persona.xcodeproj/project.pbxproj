@@ -521,7 +521,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yufeng.persona-agent";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yufeng.persona";
 				PRODUCT_NAME = Persona;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -561,7 +561,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yufeng.persona-agent";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yufeng.persona";
 				PRODUCT_NAME = Persona;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
