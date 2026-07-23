@@ -50,8 +50,11 @@ jobs:
           PP_FILE=$RUNNER_TEMP/profile.mobileprovision
           echo -n "$PP_BASE64" | base64 --decode -o "$PP_FILE"
           UUID=$(security cms -D -i "$PP_FILE" | plutil -extract UUID raw -)
+          NAME=$(security cms -D -i "$PP_FILE" | plutil -extract Name raw -)
           cp "$PP_FILE" "$PP_DIR/$UUID.mobileprovision"
-          echo "Installed provisioning profile UUID: $UUID"
+          echo "PP_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "PP_UUID=$UUID" >> "$GITHUB_ENV"
+          echo "Installed provisioning profile: $NAME ($UUID)"
 
       - name: Build archive
         run: |
@@ -65,13 +68,39 @@ jobs:
             archive \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM=VPQQH7FP84
+            DEVELOPMENT_TEAM=VPQQH7FP84 \
+            PROVISIONING_PROFILE_SPECIFIER="${PP_NAME}"
 
       - name: Export IPA
         run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          <key>method</key>
+          <string>app-store</string>
+          <key>teamID</key>
+          <string>VPQQH7FP84</string>
+          <key>signingStyle</key>
+          <string>manual</string>
+          <key>provisioningProfiles</key>
+          <dict>
+          <key>com.yufeng.persona-agent</key>
+          <string>${PP_NAME}</string>
+          </dict>
+          <key>uploadBitcode</key>
+          <false/>
+          <key>compileBitcode</key>
+          <false/>
+          <key>uploadSymbols</key>
+          <true/>
+          </dict>
+          </plist>
+          EOF
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Persona.xcarchive" \
-            -exportOptionsPlist react-native/ios/ExportOptions.plist \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/ipa"
 
       - name: Upload to App Store Connect (TestFlight)
