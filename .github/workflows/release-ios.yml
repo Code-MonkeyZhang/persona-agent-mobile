@@ -1,54 +1,17 @@
 name: Release iOS
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Release Version (e.g. 1.0.3)'
-        required: true
-        type: string
-      release_code:
-        description: 'Build number / Version Code (e.g. 4, must increase on every upload)'
-        required: true
-        type: string
-
-env:
-  NEW_VERSION: ${{ github.event.inputs.release_tag }}
-  NEW_VERSION_CODE: ${{ github.event.inputs.release_code }}
+  push:
+    tags:
+      - 'v*.*.*-*'
 
 jobs:
   release-ios:
     runs-on: macos-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PROJECT_TOKEN }}
-
-      - name: Bump version
-        run: |
-          cd react-native
-          sed -i '' 's/"version": ".*"/"version": "'"${NEW_VERSION}"'"/' package.json
-          sed -i '' 's/MARKETING_VERSION = .*/MARKETING_VERSION = '"${NEW_VERSION}"';/' ios/Persona.xcodeproj/project.pbxproj
-          sed -i '' 's/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = '"${NEW_VERSION_CODE}"';/' ios/Persona.xcodeproj/project.pbxproj
-          sed -i '' 's/versionCode .*/versionCode '"${NEW_VERSION_CODE}"'/' android/app/build.gradle
-          sed -i '' 's/versionName ".*"/versionName "'"${NEW_VERSION}"'"/' android/app/build.gradle
-
-      - name: Commit and tag
-        run: |
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No version changes, skipping commit"
-          else
-            git config user.name "${{ vars.USER_NAME || github.actor }}"
-            git config user.email "${{ vars.USER_EMAIL || format('{0}@users.noreply.github.com', github.actor) }}"
-            git commit -m "release: Persona v${NEW_VERSION} (iOS)"
-            git push
-          fi
-          git tag "${NEW_VERSION}" 2>/dev/null || true
-          git push origin "${NEW_VERSION}" 2>/dev/null || true
 
       - uses: actions/setup-node@v4
         with:
