@@ -29,8 +29,13 @@ import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomC
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import AgentSelector from './component/AgentSelector.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
+import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
 import { CompanionReplyBubble } from './component/CompanionReplyBubble.tsx';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  DrawerActions,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -58,6 +63,7 @@ import CompanionContent from './component/CompanionContent.tsx';
 import { checkFileNumberLimit } from './util/FileUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConnectionStore } from '../stores/connectionStore';
+import { useAppPanelStore } from '../stores/appPanelStore';
 import {
   useSessionStore,
   extractPreview,
@@ -269,6 +275,8 @@ function ChatScreen(): React.JSX.Element {
       saveLastConversation(newAgentId, chatSessionIdFor(newAgentId));
       setCurrentAgentId(newAgentId);
       stopSpeakingRef.current();
+      // Agent 切换后不再恢复上一个 Agent 打开过的 App
+      useAppPanelStore.getState().setCurrentAppId(null);
       // 进入新 Agent 的常驻聊天会话，加载 effect 会据此清空并拉取
       setActiveSessionId(chatSessionIdFor(newAgentId));
       requestDrawerRefresh();
@@ -291,6 +299,20 @@ function ChatScreen(): React.JSX.Element {
     toggleVoice();
   }, [toggleVoice]);
 
+  /**
+   * 打开 Agent App 工作区。
+   * 有 currentAppId → 恢复上次 App；空 → 进应用网格（与形态与交互的导航模型一致）。
+   */
+  const handleOpenAgentApp = useCallback(() => {
+    const current = useAppPanelStore.getState().currentAppId;
+    logger.info(`[ChatScreen] open agent app, currentAppId=${current}`);
+    if (current) {
+      navigation.navigate('AppSurface');
+    } else {
+      navigation.navigate('AppLauncher');
+    }
+  }, [navigation]);
+
   // ==================== Header 配置 ====================
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -303,13 +325,23 @@ function ChatScreen(): React.JSX.Element {
         />
       ),
       // eslint-disable-next-line react/no-unstable-nested-components
-      headerRight: () => (
-        <HeaderRightButtons
+      headerLeft: () => (
+        <HeaderLeftButtons
           voiceEnabled={voiceEnabled}
           isSpeaking={isSpeaking}
-          companionOpen={companion.companionOpen}
           onToggleVoice={handleToggleVoice}
+          onToggleDrawer={() =>
+            navigation.dispatch(DrawerActions.toggleDrawer())
+          }
+          colors={colors}
+        />
+      ),
+      // eslint-disable-next-line react/no-unstable-nested-components
+      headerRight: () => (
+        <HeaderRightButtons
+          companionOpen={companion.companionOpen}
           onToggleCompanion={companion.handleToggleCompanion}
+          onOpenAgentApp={handleOpenAgentApp}
           colors={colors}
         />
       ),
@@ -325,6 +357,7 @@ function ChatScreen(): React.JSX.Element {
     isSpeaking,
     colors,
     handleToggleVoice,
+    handleOpenAgentApp,
   ]);
 
   // ==================== 会话切换 & 消息加载 ====================

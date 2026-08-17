@@ -1,10 +1,10 @@
 /**
  * @file component/HeaderRightButtons.tsx
- * @description 头部右侧按钮组：语音开关 + 陪伴面板开关。
+ * @description 头部右侧按钮组：陪伴面板开关 + Agent App 工作区入口。
  */
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { UserRound, Mic, MicOff } from 'lucide-react-native';
+import { UserRound, LayoutGrid } from 'lucide-react-native';
 import { ColorScheme } from '../../theme/index';
 import { CustomHeaderRightButton } from './CustomHeaderRightButton';
 
@@ -13,36 +13,28 @@ const headerRightContainerStyle = StyleSheet.create({
 });
 
 interface HeaderRightButtonsProps {
-  voiceEnabled: boolean;
-  isSpeaking: boolean;
   companionOpen: boolean;
-  onToggleVoice: () => void;
   onToggleCompanion: () => void;
+  onOpenAgentApp: () => void;
   colors: ColorScheme;
 }
 
 export function HeaderRightButtons({
-  voiceEnabled,
-  isSpeaking,
   companionOpen,
-  onToggleVoice,
   onToggleCompanion,
+  onOpenAgentApp,
   colors,
 }: HeaderRightButtonsProps) {
   return (
     <View style={headerRightContainerStyle.root}>
-      <CustomHeaderRightButton onPress={onToggleVoice}>
-        {voiceEnabled ? (
-          <Mic size={24} color={isSpeaking ? colors.primary : colors.text} />
-        ) : (
-          <MicOff size={24} color={colors.text} />
-        )}
-      </CustomHeaderRightButton>
       <CustomHeaderRightButton onPress={onToggleCompanion}>
         <UserRound
           size={26}
           color={companionOpen ? colors.primary : colors.text}
         />
+      </CustomHeaderRightButton>
+      <CustomHeaderRightButton onPress={onOpenAgentApp}>
+        <LayoutGrid size={24} color={colors.text} />
       </CustomHeaderRightButton>
     </View>
   );

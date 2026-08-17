@@ -57,6 +57,11 @@
     "noAssetTitle": "This agent has no companion avatar",
     "noAssetHint": "Add expression images in assets/pose/ to enable"
   },
+  "appPanel": {
+    "title": "Agent Apps",
+    "empty": "No apps available",
+    "error": "Failed to load, tap to retry"
+  },
   "server": {
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "Connect",

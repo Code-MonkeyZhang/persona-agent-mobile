@@ -14,6 +14,8 @@ import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
+import AppLauncher from './chat/component/AppLauncher.tsx';
+import AppSurface from './chat/component/AppSurface.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { isAndroid } from './utils/PlatformUtils.ts';
@@ -138,6 +140,17 @@ const AppNavigator = () => {
         name="Settings"
         component={SettingsScreen}
         options={{ ...stackScreenOptions, title: t('drawer.settings') }}
+      />
+      {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠 */}
+      <Stack.Screen
+        name="AppLauncher"
+        component={AppLauncher}
+        options={{ ...stackScreenOptions, title: t('appPanel.title') }}
+      />
+      <Stack.Screen
+        name="AppSurface"
+        component={AppSurface}
+        options={{ ...stackScreenOptions, title: '' }}
       />
     </Stack.Navigator>
   );

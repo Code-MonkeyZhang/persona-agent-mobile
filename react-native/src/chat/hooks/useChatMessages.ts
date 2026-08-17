@@ -79,6 +79,10 @@ export function useChatMessages(params: UseChatMessagesParams) {
   const [chatStatus, setChatStatus] = useState<ChatStatus>(ChatStatus.Init);
   const messagesRef = useRef(messages);
   const chatStatusRef = useRef(chatStatus);
+  /** 同步 chatStatus 到 ref，供 WS 回调内的守卫读取最新状态 */
+  useEffect(() => {
+    chatStatusRef.current = chatStatus;
+  }, [chatStatus]);
   /** 服务器会话 UUID，空字符串表示尚未创建 */
   const sessionIdRef = useRef('');
   /** late-chunk 守卫：abort 后到达的 step_complete 一律丢弃 */
@@ -128,6 +132,24 @@ export function useChatMessages(params: UseChatMessagesParams) {
       logger.error(`[ChatScreen] refresh from disk failed: ${e}`);
     }
   }, [serverAddressRef, currentAgentNameRef]);
+
+  /**
+   * 放 AI 占位气泡 + 切生成状态 + 滚到底部。
+   * 一轮对话的公共准备步骤，谁发起谁调用：
+   * onSubscribed（中途加入生成中的会话）与 onAppNotification（App 通知触发）。
+   */
+  const prependBotPlaceholder = useCallback(() => {
+    setChatStatus(ChatStatus.Running);
+    const agentId = getServerAgentId();
+    setMessages((prevMessages) => [
+      createBotMessage(
+        currentAgentNameRef.current,
+        getAgentAvatarUrl(agentId, serverAddressRef.current)
+      ),
+      ...prevMessages,
+    ]);
+    scrollToBottom();
+  }, [currentAgentNameRef, serverAddressRef, scrollToBottom]);
 
   /**
    * 注册 ws-client 事件处理器。
@@ -312,18 +334,37 @@ export function useChatMessages(params: UseChatMessagesParams) {
           return;
         }
         recoveringRef.current = true;
-        setChatStatus(ChatStatus.Running);
-        const agentId = getServerAgentId();
-        setMessages((prevMessages) => [
-          createBotMessage(
-            currentAgentNameRef.current,
-            getAgentAvatarUrl(agentId, serverAddressRef.current)
-          ),
-          ...prevMessages,
-        ]);
-        scrollToBottom();
+        prependBotPlaceholder();
         logger.info(
           '[ChatScreen] session is generating, recovering loading state'
+        );
+      },
+      onAppNotification: (
+        sessionId: string,
+        source: string,
+        content: string
+      ) => {
+        // 会话匹配：只响应当前订阅会话的回合开始信号
+        if (sessionId !== sessionIdRef.current) {
+          logger.info(
+            `[ChatScreen] app_notification ignored, session mismatch: ${sessionId}`
+          );
+          return;
+        }
+        // 双重占位防御：已在 Running 说明占位气泡已存在（onSend / onSubscribed 先到）
+        if (chatStatusRef.current === ChatStatus.Running) {
+          logger.info(
+            '[ChatScreen] app_notification ignored, already running'
+          );
+          return;
+        }
+        abortedRef.current = false;
+        prependBotPlaceholder();
+        logger.info(
+          `[ChatScreen] app_notification turn started, source=${source} content=${content.substring(
+            0,
+            60
+          )}`
         );
       },
     });

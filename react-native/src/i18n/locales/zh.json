@@ -57,6 +57,11 @@
     "noAssetTitle": "该 Agent 还未配置陪伴形象",
     "noAssetHint": "在 assets/pose/ 目录下添加表情图片即可启用"
   },
+  "appPanel": {
+    "title": "Agent 应用",
+    "empty": "暂无可用应用",
+    "error": "加载失败，点按重试"
+  },
   "server": {
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "连接",

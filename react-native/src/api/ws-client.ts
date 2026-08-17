@@ -6,7 +6,7 @@
  *
  * 消息路由规则：
  *   - 状态型消息（title_updated）直接写 sessionStore，不经 handler
- *   - 事件型消息（step_complete / complete / error / speak_ready / speak_error）转给注册的 handler
+ *   - 事件型消息（step_complete / complete / error / speak_ready / speak_error / app_notification）转给注册的 handler
  *   - connected / pong 在模块内部处理
  */
 import type {
@@ -48,6 +48,8 @@ export interface WsEventHandler {
   onAborted(): void;
   /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画 */
   onSubscribed(isGenerating: boolean): void;
+  /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
+  onAppNotification(sessionId: string, source: string, content: string): void;
 }
 
 let ws: WebSocket | null = null;
@@ -276,6 +278,17 @@ function handleMessage(msg: ServerMessage): void {
     case 'aborted':
       logger.info(`${TAG} aborted, sessionId=${msg.sessionId}`);
       currentHandler?.onAborted();
+      break;
+
+    case 'app_notification':
+      logger.info(
+        `${TAG} app_notification, sessionId=${msg.sessionId} source=${msg.source}`
+      );
+      currentHandler?.onAppNotification(
+        msg.sessionId,
+        msg.source,
+        msg.content
+      );
       break;
 
     case 'speak_ready':

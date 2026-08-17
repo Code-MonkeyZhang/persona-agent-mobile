@@ -18,4 +18,6 @@ export type RouteParamList = {
   AgentDetail: { agentId: string };
   Server: undefined;
   ScanQR: undefined;
+  AppLauncher: undefined;
+  AppSurface: undefined;
 };

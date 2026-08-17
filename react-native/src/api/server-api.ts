@@ -79,7 +79,14 @@ export type ServerMessage =
       message: string;
     }
   | { type: 'pong' }
-  | { type: 'aborted'; sessionId: string; reason: string };
+  | { type: 'aborted'; sessionId: string; reason: string }
+  | {
+      /** App 通知触发的回合开始信号，客户端据此创建 AI 占位气泡并切入生成状态 */
+      type: 'app_notification';
+      sessionId: string;
+      source: string;
+      content: string;
+    };
 
 /**
  * HTTP GET，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
@@ -273,6 +280,9 @@ export interface AgentInfo {
   updatedAt: number;
 }
 
+/** Agent App 支持的 UI 变体（与 @persona/shared 的 SupportedUI 对齐） */
+export type SupportedUI = 'desktop' | 'mobile';
+
 /** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
 export interface McpServerInfo {
   name: string;
@@ -280,6 +290,15 @@ export interface McpServerInfo {
   toolCount: number;
   error?: string;
   oauthUrl?: string;
+  /** 是否为 Agent App（server 侧恒返回布尔，未声明即 false） */
+  agentApp?: boolean;
+  /** 声明支持的 UI 变体；未声明时字段缺席，按仅 desktop 对待 */
+  supportedUI?: SupportedUI[];
+}
+
+/** Agent App 信息（移动端只关心名字，界面与图标走 /apps/:name 反代路径） */
+export interface AppInfo {
+  name: string;
 }
 
 /** Skill 信息（对应 GET /api/skills 返回的单个 skill） */
@@ -401,6 +420,28 @@ export async function fetchMcpServers(
 }
 
 /**
+ * 获取支持手机端的 Agent App 列表。
+ * 复用 GET /api/mcp，客户端过滤 agentApp 且 supportedUI 含 mobile（与桌面端同源）。
+ * supportedUI 未声明时字段缺席，按仅 desktop 对待、不展示。
+ */
+export async function fetchAgentApps(
+  serverAddress: string
+): Promise<AppInfo[]> {
+  const servers = await fetchMcpServers(serverAddress);
+  const apps = servers
+    .filter(
+      (s) => s.agentApp === true && (s.supportedUI ?? []).includes('mobile')
+    )
+    .map((s) => ({ name: s.name }));
+  logger.info(
+    `${TAG} fetchAgentApps → ${apps.length} apps: ${apps
+      .map((a) => a.name)
+      .join(', ')}`
+  );
+  return apps;
+}
+
+/**
  * 获取服务器上所有技能列表（名称 + 描述）。
  */
 export async function fetchSkills(serverAddress: string): Promise<SkillInfo[]> {
@@ -445,7 +486,7 @@ interface ServerToolCall {
 
 interface ServerChatMessage {
   /** @persona/shared Message 联合的简化投影，保留 role/content/thinking/tool_calls */
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'app_notification';
   content?: string;
   thinking?: string;
   tool_calls?: ServerToolCall[];
@@ -534,7 +575,9 @@ export function convertToChatMessages(
   for (let i = 0; i < serverMessages.length; i++) {
     const msg = serverMessages[i];
 
-    if (msg.role === 'system') {
+    // system 与 app_notification 不渲染为气泡：前者是服务端内部消息，
+    // 后者的卡片渲染留后续（实时推送已由 onAppNotification 单独处理）
+    if (msg.role === 'system' || msg.role === 'app_notification') {
       continue;
     }
 
