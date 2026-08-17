@@ -115,6 +115,34 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
     []
   );
 
+  /**
+   * 处理 image-picker 响应：权限被拒时弹提示引导，其余错误记日志。
+   * - 避免 iPad 兼容模式等场景下静默失败，用户无任何反馈
+   */
+  const handlePickerResponse = useCallback(
+    async (res: ImagePickerResponse, resource: string) => {
+      if (res.errorCode) {
+        if (res.errorCode === 'permission') {
+          Alert.alert(
+            'Permission Required',
+            `Persona needs access to your ${resource} to continue. Please enable it in Settings.`
+          );
+        } else {
+          logger.error(
+            `[FilePicker] ${res.errorCode}:`,
+            res.errorMessage ?? ''
+          );
+        }
+        return;
+      }
+      const files = await getFiles(res);
+      if (files.length > 0) {
+        onFileSelected(files);
+      }
+    },
+    [onFileSelected]
+  );
+
   /** 拍照选文件 */
   const handleCamera = () => {
     launchCamera({
@@ -125,12 +153,11 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       includeBase64: false,
       includeExtra: true,
       presentationStyle: 'fullScreen',
-    }).then(async (res) => {
-      const files = await getFiles(res);
-      if (files.length > 0) {
-        onFileSelected(files);
-      }
-    });
+    })
+      .then((res) => handlePickerResponse(res, 'camera'))
+      .catch((err: unknown) => {
+        logger.error('[FilePicker] camera failed:', err);
+      });
   };
 
   /** 从相册选文件 */
@@ -141,12 +168,12 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       includeBase64: false,
       includeExtra: true,
       assetRepresentationMode: 'current',
-    }).then(async (res) => {
-      const files = await getFiles(res);
-      if (files.length > 0) {
-        onFileSelected(files);
-      }
-    });
+      presentationStyle: 'fullScreen',
+    })
+      .then((res) => handlePickerResponse(res, 'photo library'))
+      .catch((err: unknown) => {
+        logger.error('[FilePicker] photo library failed:', err);
+      });
   };
 
   /** 从文件系统选文件 */

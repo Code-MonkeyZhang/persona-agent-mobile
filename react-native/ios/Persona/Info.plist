@@ -36,11 +36,11 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Support take photos and summarize it</string>
+	<string>Persona Agent uses the camera to take photos and videos to attach to your conversation, so the AI assistant can analyze and summarize them for you.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Support record videos, voice chat, and summarize content</string>
+	<string>Persona Agent uses the microphone to record audio when you capture videos, so the AI assistant can review both the video and its sound.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Support choose pictures and summarize it</string>
+	<string>Persona Agent uses your photo library so you can attach existing photos and videos to your conversation for the AI assistant to analyze and summarize.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
