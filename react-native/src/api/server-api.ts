@@ -486,7 +486,7 @@ interface ServerToolCall {
 
 interface ServerChatMessage {
   /** @persona/shared Message 联合的简化投影，保留 role/content/thinking/tool_calls */
-  role: 'user' | 'assistant' | 'system' | 'app_notification';
+  role: 'user' | 'assistant' | 'system' | 'app_notification' | 'context';
   content?: string;
   thinking?: string;
   tool_calls?: ServerToolCall[];
@@ -575,9 +575,14 @@ export function convertToChatMessages(
   for (let i = 0; i < serverMessages.length; i++) {
     const msg = serverMessages[i];
 
-    // system 与 app_notification 不渲染为气泡：前者是服务端内部消息，
-    // 后者的卡片渲染留后续（实时推送已由 onAppNotification 单独处理）
-    if (msg.role === 'system' || msg.role === 'app_notification') {
+    // system / app_notification / context 不渲染为气泡：system 是服务端内部消息，
+    // app_notification 的卡片渲染留后续（实时推送已由 onAppNotification 单独处理），
+    // context 是运行时上下文注入消息，仅供模型消费
+    if (
+      msg.role === 'system' ||
+      msg.role === 'app_notification' ||
+      msg.role === 'context'
+    ) {
       continue;
     }
 
