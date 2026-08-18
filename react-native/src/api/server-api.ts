@@ -463,6 +463,8 @@ interface SessionMeta {
   summarizedUpTo?: number;
   /** 当前立绘表情名称；undefined 时前端 fallback 到 'default' */
   currentPose?: string;
+  /** 最后一条真实消息的预览，服务端仅对常驻聊天会话计算 */
+  lastMessage?: string;
 }
 
 interface Session extends SessionMeta {

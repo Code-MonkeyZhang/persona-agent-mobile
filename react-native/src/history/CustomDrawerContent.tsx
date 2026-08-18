@@ -67,6 +67,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
   const currentChatSessionId = chatSessionIdFor(getServerAgentId());
   /** 会话列表，直接传给 FlatList 渲染 */
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
+  /** 服务端返回的常驻聊天会话预览，拉取列表时更新 */
+  const [chatLastMessage, setChatLastMessage] = useState<string | undefined>(
+    undefined
+  );
   /** 当前处于展开状态的会话 id，用于"同时只开一个"协调（左滑删除时） */
   const [openId, setOpenId] = useState<string | null>(null);
   const drawerStatus = useDrawerStatus();
@@ -114,6 +118,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
         createdAt: s.createdAt,
       }));
       setChatHistory(chatList);
+      // 常驻聊天会话不进列表，仅取其服务端预览供聊天入口兜底
+      setChatLastMessage(
+        sessions.find((s) => isChatSession(s.id))?.lastMessage
+      );
     } catch (e) {
       logger.error(`[Drawer] fetchSessions failed: ${e}`);
     }
@@ -261,7 +269,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = ({
             {t('drawer.chat')}
           </Text>
           <Text style={styles.chatPreview} numberOfLines={1}>
-            {sessionPreviews[currentChatSessionId] || t('drawer.startChat')}
+            {/* 本地实时补丁优先，服务端 lastMessage 兜底，均无时显示占位文案 */}
+            {sessionPreviews[currentChatSessionId] ||
+              chatLastMessage ||
+              t('drawer.startChat')}
           </Text>
         </View>
       </TouchableOpacity>

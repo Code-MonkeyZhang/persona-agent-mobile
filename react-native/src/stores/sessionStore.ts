@@ -1,7 +1,7 @@
 /**
  * @file stores/sessionStore.ts
  * @description 会话状态管理。
- *   - sessionPreviews/sessionTitles：内存态的预览文本与标题，不持久化，随会话加载/收发消息/标题更新逐步填充
+ *   - sessionPreviews/sessionTitles：内存态的预览文本与标题，作为两次列表刷新之间的本地补丁，不持久化
  *   - activeSessionId：当前会话身份与列表高亮依据，侧边栏与会话页共同读写的唯一协作来源
  *   - drawerRefreshVersion：侧边栏重新拉取列表与 Agent 卡片的触发器
  *   activeSessionId 初始值取上次对话的会话，使冷启动能恢复上次会话。
@@ -14,7 +14,7 @@ import { getLastConversation } from '../storage/StorageUtils';
 export const NEW_CHAT_SESSION = '';
 
 interface SessionStore {
-  /** sessionId → 预览文本 */
+  /** sessionId → 预览文本，作为两次列表刷新之间的本地实时补丁 */
   sessionPreviews: Record<string, string>;
   updateSessionPreview: (sessionId: string, preview: string) => void;
 

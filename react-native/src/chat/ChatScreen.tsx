@@ -64,11 +64,7 @@ import { checkFileNumberLimit } from './util/FileUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useAppPanelStore } from '../stores/appPanelStore';
-import {
-  useSessionStore,
-  extractPreview,
-  NEW_CHAT_SESSION,
-} from '../stores/sessionStore';
+import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
 import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
@@ -408,14 +404,6 @@ function ChatScreen(): React.JSX.Element {
         logger.info(
           `[ChatScreen] session loaded: ${chatMessages.length} messages, pose: ${pose}`
         );
-        if (chatMessages.length > 0 && chatMessages[0].text) {
-          useSessionStore
-            .getState()
-            .updateSessionPreview(
-              activeSessionId,
-              extractPreview(chatMessages[0].text)
-            );
-        }
         wsClient.subscribe(activeSessionId);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
