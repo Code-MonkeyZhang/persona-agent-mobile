@@ -27,17 +27,11 @@ import AgentAvatar from './AgentAvatar';
 
 /** 下拉菜单 Props */
 interface AgentSelectionModalProps {
-  /** 是否显示菜单 */
   visible: boolean;
-  /** 关闭菜单的回调 */
   onClose: () => void;
-  /** 菜单左上角的屏幕坐标，由 AgentSelector 通过 measure() 计算得出 */
   iconPosition: { x: number; y: number };
-  /** 可选 Agent 列表 */
   agents: AgentInfo[];
-  /** 当前选中的 Agent ID */
   currentAgentId: string;
-  /** 切换 Agent 时的回调 */
   onSelectAgent: (agentId: string) => void;
 }
 

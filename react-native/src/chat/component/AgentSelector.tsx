@@ -22,11 +22,8 @@ import { logger } from '../../lib/logger';
 
 /** Agent 选择器 Props */
 interface AgentSelectorProps {
-  /** 从服务器获取的可用 Agent 列表 */
   agents: AgentInfo[];
-  /** 当前选中的 Agent ID */
   currentAgentId: string;
-  /** 切换 Agent 时的回调，参数为新选中的 Agent ID */
   onSelectAgent: (agentId: string) => void;
 }
 

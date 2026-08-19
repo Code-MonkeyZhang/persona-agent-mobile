@@ -37,7 +37,6 @@ export interface CodeHighlighterProps extends SyntaxHighlighterProps {
    * @deprecated Use scrollViewProps.contentContainerStyle instead
    */
   containerStyle?: StyleProp<ViewStyle>;
-  /** Whether the content streaming is completed */
   isCompleted?: boolean;
 }
 

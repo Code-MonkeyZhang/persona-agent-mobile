@@ -70,7 +70,6 @@ export interface ChatMessage extends IMessage {
   user: ChatUser;
   metrics?: Metrics;
   citations?: Citation[];
-  /** 用户中断生成后的半成品标记 */
   aborted?: boolean;
 }
 

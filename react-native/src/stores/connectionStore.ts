@@ -23,23 +23,13 @@ interface ConnectionStore {
   reconnectVersion: number;
   serverAddress: string;
   error: string;
-  /** 扫码页写入、连接页消费的一次性中转地址；goBack 无法携带参数，故用此字段回传 */
   pendingScannedUrl: string;
 
-  /** pair + WS connect，ServerScreen 和 coldStart 调用 */
   connect: (url: string) => Promise<void>;
-  /** 主动断开 */
   disconnect: () => void;
-  /** 读 MMKV 地址，有则 connect */
   coldStart: () => Promise<void>;
-  /**
-   * ws-client 内部回调用，更新连接状态。
-   * 进入 connected 时递增 reconnectVersion，供上层监听做消息自愈。
-   */
   setStatus: (status: ConnectionStatus) => void;
-  /** 更新服务器地址 */
   setAddress: (address: string) => void;
-  /** 扫码页写入扫到的地址，供连接页聚焦时消费 */
   setPendingScannedUrl: (url: string) => void;
 }
 

@@ -10,7 +10,6 @@ import {
  */
 interface HeaderRightButtonProps {
   onPress: (event: GestureResponderEvent) => void;
-  /** 自定义图标节点 */
   children?: React.ReactNode;
 }
 

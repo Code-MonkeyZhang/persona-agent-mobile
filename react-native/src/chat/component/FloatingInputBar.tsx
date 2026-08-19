@@ -16,19 +16,12 @@ import { CustomChatFooter } from './CustomChatFooter.tsx';
 
 /** 浮动输入框 Props */
 interface FloatingInputBarProps {
-  /** ChatScreen 转发的 TextInput ref，用于 focus/clear 控制 */
   textInputRef: React.RefObject<TextInput>;
-  /** 发送消息回调 */
   onSend: (text: string) => void;
-  /** 中止当前生成的回调，透传给 CustomSendComponent */
   onStop?: () => void;
-  /** 已选中的附件文件列表 */
   selectedFiles: FileInfo[];
-  /** 当前聊天状态 */
   chatStatus: ChatStatus;
-  /** 新文件选择回调，由 CustomAddFileComponent 触发 */
   onFileSelected: (files: FileInfo[]) => void;
-  /** 文件删除/压缩更新回调，由 CustomChatFooter 触发 */
   onFileUpdated: (files: FileInfo[], isUpdate?: boolean) => void;
 }
 

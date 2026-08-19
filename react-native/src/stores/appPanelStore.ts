@@ -10,14 +10,10 @@ import { logger } from '../lib/logger';
 import { fetchAgentApps, type AppInfo } from '../api/server-api';
 
 interface AppPanelStore {
-  /** 支持手机端的 Agent App 列表 */
   apps: AppInfo[];
-  /** 当前指向的 App，null 表示未选（下次进工作区开网格） */
   currentAppId: string | null;
 
-  /** 从服务器拉取 App 列表并写入 store */
   loadApps: (serverAddress: string) => Promise<void>;
-  /** 设置当前 App（null = 清空，用于从网格退出时重置恢复态） */
   setCurrentAppId: (id: string | null) => void;
 }
 

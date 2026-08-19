@@ -25,13 +25,9 @@ import { logger } from '../../lib/logger';
 import { FileText, Play } from 'lucide-react-native';
 
 interface CustomFileProps {
-  /** 当前选中的文件列表 */
   files: FileInfo[];
-  /** 文件列表变化时的回调（新增或删除文件时触发） */
   onFileUpdated?: (files: FileInfo[], isUpdate?: boolean) => void;
-  /** 显示模式：Edit 显示删除按钮和添加按钮，Display 只展示缩略图 */
   mode?: DisplayMode;
-  /** 为 true 时隐藏文件列表（但仍占位接收粘贴事件） */
   isHideFileList?: boolean;
 }
 

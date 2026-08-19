@@ -24,7 +24,6 @@ import { useTheme, type ColorScheme } from '../../theme';
 
 interface CollapsedThoughtProcessProps {
   steps: Thought[];
-  /** 整体展开/收起时的滚动补偿回调 */
   onToggle?: (expanded: boolean, height: number, animated: boolean) => void;
 }
 

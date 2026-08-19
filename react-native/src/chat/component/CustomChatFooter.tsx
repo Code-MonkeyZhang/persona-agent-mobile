@@ -15,13 +15,9 @@ import {
 
 /** 聊天底部区域 Props */
 interface CustomComposerProps {
-  /** 当前已选中的附件文件列表 */
   files: FileInfo[];
-  /** 文件更新回调（删除、添加、压缩完成等场景触发） */
   onFileUpdated: (files: FileInfo[], isUpdate?: boolean) => void;
-  /** 输入框是否有文本，有文本时隐藏文件列表 */
   hasInputText?: boolean;
-  /** 当前聊天状态 */
   chatStatus?: ChatStatus;
 }
 

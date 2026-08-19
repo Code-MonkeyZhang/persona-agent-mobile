@@ -11,15 +11,10 @@ import { useTheme, ColorScheme } from '../../theme/index.ts';
 
 /** 自定义发送按钮 Props */
 interface CustomSendComponentProps {
-  /** 当前输入文本 */
   text: string;
-  /** 已选中的附件文件列表 */
   selectedFiles: FileInfo[];
-  /** 当前聊天状态（空闲/回复中/完成） */
   chatStatus: ChatStatus;
-  /** 发送按钮回调 */
   onPress: () => void;
-  /** 中止当前生成的回调，仅在 chatStatus === Running 时触发 */
   onStop?: () => void;
 }
 

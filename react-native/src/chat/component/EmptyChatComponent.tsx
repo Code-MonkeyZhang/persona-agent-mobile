@@ -15,7 +15,6 @@ const isAndroid = Platform.OS === 'android';
 
 /** 空聊天页面 Props */
 interface EmptyChatComponentProps {
-  /** 是否正在加载历史消息 */
   isLoadingMessages?: boolean;
 }
 

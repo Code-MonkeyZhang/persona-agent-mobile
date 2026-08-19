@@ -14,19 +14,15 @@ import { getLastConversation } from '../storage/StorageUtils';
 export const NEW_CHAT_SESSION = '';
 
 interface SessionStore {
-  /** sessionId → 预览文本，作为两次列表刷新之间的本地实时补丁 */
   sessionPreviews: Record<string, string>;
   updateSessionPreview: (sessionId: string, preview: string) => void;
 
-  /** sessionId → 标题，由 WS title_updated 事件实时更新 */
   sessionTitles: Record<string, string>;
   updateSessionTitle: (sessionId: string, title: string) => void;
 
-  /** 当前会话身份与高亮依据，NEW_CHAT_SESSION 表示新建聊天/无会话 */
   activeSessionId: string;
   setActiveSessionId: (id: string) => void;
 
-  /** 侧边栏刷新触发器，加一即触发一次列表与 Agent 卡片重拉 */
   drawerRefreshVersion: number;
   requestDrawerRefresh: () => void;
 }

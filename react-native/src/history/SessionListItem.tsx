@@ -33,7 +33,6 @@ const FULL_SWIPE_REMAINING = 80;
 interface SessionListItemProps {
   item: Chat;
   isSelected: boolean;
-  /** 当前展开的会话 id（由父组件协调“同时只开一个”）；非本项时自动收起 */
   openId: string | null;
   onPress: () => void;
   onOpen: (id: string) => void;

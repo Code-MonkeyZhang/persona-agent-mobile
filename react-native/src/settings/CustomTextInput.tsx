@@ -20,17 +20,11 @@ import { useTheme, ColorScheme } from '../theme';
 
 /** 文本输入框 Props */
 interface CustomTextInputProps {
-  /** 浮动标签文字 */
   label: string;
-  /** 输入框当前值 */
   value: string;
-  /** 文本变化回调 */
   onChangeText: (text: string) => void;
-  /** 无输入时的占位提示文字 */
   placeholder: string;
-  /** 是否为密码输入框（显示眼睛图标切换明文/密文） */
   secureTextEntry?: boolean;
-  /** 输入框行数，>1 时启用多行模式 */
   numberOfLines?: number;
 }
 

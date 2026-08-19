@@ -53,9 +53,7 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
   ) => void;
   messageIndex?: number;
   flatListRef?: RefObject<FlatList<ChatMessage>>;
-  /** 当前 Agent ID，用于渲染头像 */
   agentId: string;
-  /** 服务器地址，用于渲染头像 */
   serverAddress: string;
 }
 

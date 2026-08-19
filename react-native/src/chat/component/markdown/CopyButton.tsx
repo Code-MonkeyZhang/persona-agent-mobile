@@ -5,7 +5,6 @@ import { Check, Copy } from 'lucide-react-native';
 import { useTheme } from '../../../theme';
 
 interface CopyButtonProps {
-  /** Function that returns the content to copy, or direct content string */
   content: string | (() => string);
 }
 

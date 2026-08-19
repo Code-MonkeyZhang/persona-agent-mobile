@@ -12,17 +12,11 @@ import { useTheme } from '../../theme';
 
 /** Agent 头像组件 Props */
 export interface AgentAvatarProps {
-  /** Agent ID，用于拼接头像 URL */
   agentId: string;
-  /** 服务器地址，用于拼接头像 URL */
   serverAddress: string;
-  /** 头像直径，width = height = size，borderRadius = size / 2 */
   size: number;
-  /** 回退状态下 User 图标的尺寸，默认为 size * 0.55 */
   fallbackIconSize?: number;
-  /** 回退背景色，未指定时使用 surface */
   fallbackBackgroundColor?: string;
-  /** 右侧间距，用于行布局中头像与文字之间的分隔 */
   marginRight?: number;
 }
 

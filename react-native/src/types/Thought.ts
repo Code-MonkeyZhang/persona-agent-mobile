@@ -5,7 +5,6 @@ export type ThoughtType = 'thinking' | 'text' | 'tool_use' | 'error';
 export interface Thought {
   id: string;
   type: ThoughtType;
-  /** thinking 文本 或 中间回复文本 */
   content?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;

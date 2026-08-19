@@ -16,13 +16,9 @@ import { useTheme, type ColorScheme } from '../../theme';
 interface CompanionContentProps {
   agentId: string;
   serverAddr: string;
-  /** Agent 是否拥有陪伴资源（null=加载中, true=有, false=无） */
   hasAssets: boolean | null;
-  /** 当前姿态名称 */
   currentPose: string;
-  /** 背景图加载失败标记 */
   bgError: boolean;
-  /** 立绘图加载失败标记 */
   poseError: boolean;
   onBgError: () => void;
   onPoseError: () => void;
