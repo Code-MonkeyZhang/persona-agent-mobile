@@ -284,11 +284,7 @@ function handleMessage(msg: ServerMessage): void {
       logger.info(
         `${TAG} app_notification, sessionId=${msg.sessionId} source=${msg.source}`
       );
-      currentHandler?.onAppNotification(
-        msg.sessionId,
-        msg.source,
-        msg.content
-      );
+      currentHandler?.onAppNotification(msg.sessionId, msg.source, msg.content);
       break;
 
     case 'speak_ready':
