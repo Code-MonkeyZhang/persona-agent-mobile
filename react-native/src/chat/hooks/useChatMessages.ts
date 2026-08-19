@@ -353,9 +353,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
         }
         // 双重占位防御：已在 Running 说明占位气泡已存在（onSend / onSubscribed 先到）
         if (chatStatusRef.current === ChatStatus.Running) {
-          logger.info(
-            '[ChatScreen] app_notification ignored, already running'
-          );
+          logger.info('[ChatScreen] app_notification ignored, already running');
           return;
         }
         abortedRef.current = false;
@@ -381,6 +379,7 @@ export function useChatMessages(params: UseChatMessagesParams) {
     currentAgentNameRef,
     scrollToBottom,
     serverAddressRef,
+    prependBotPlaceholder,
   ]);
 
   /** 发送消息：构造用户消息，附带文件，插入 AI 占位消息以触发流式回复 */
