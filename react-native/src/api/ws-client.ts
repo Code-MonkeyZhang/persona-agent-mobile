@@ -6,7 +6,7 @@
  *
  * 消息路由规则：
  *   - 状态型消息（title_updated）直接写 sessionStore，不经 handler
- *   - 事件型消息（step_complete / complete / error / speak_ready / speak_error / app_notification）转给注册的 handler
+ *   - 事件型消息（step_complete / turn_complete / error / speak_ready / speak_error / app_notification）转给注册的 handler
  *   - connected / pong 在模块内部处理
  */
 import type {
@@ -265,8 +265,8 @@ function handleMessage(msg: ServerMessage): void {
       );
       break;
 
-    case 'complete':
-      logger.info(`${TAG} complete, sessionId=${msg.sessionId}`);
+    case 'turn_complete':
+      logger.info(`${TAG} turn_complete, sessionId=${msg.sessionId}`);
       currentHandler?.onComplete();
       break;
 
