@@ -58,7 +58,7 @@ export type ServerMessage =
       /** 工具执行结果列表，可用于展示工具是否成功 */
       toolResults?: WsToolResult[];
     }
-  | { type: 'turn_complete'; sessionId: string }
+  | { type: 'round_complete'; sessionId: string }
   | { type: 'error'; sessionId: string; message: string }
   | { type: 'title_updated'; sessionId: string; title: string }
   | {
@@ -230,7 +230,7 @@ export async function createSession(
 
 /**
  * 通过 HTTP POST 发送用户消息。服务器立即返回 `{ success: true }`，
- * AI 回复通过 WebSocket 的 step_complete / turn_complete 事件异步到达。
+ * AI 回复通过 WebSocket 的 step_complete / round_complete 事件异步到达。
  *
  * WebSocket 连接和消息接收由 ws-client 单例管理，
  * 调用方只需确保已通过 ws-client.subscribe 订阅了对应会话。
