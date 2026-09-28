@@ -71,6 +71,10 @@ export interface ChatMessage extends IMessage {
   metrics?: Metrics;
   citations?: Citation[];
   aborted?: boolean;
+  /** 待注入插话标记，服务端缓冲取空后清除 */
+  queued?: boolean;
+  /** 关联服务端待注入缓冲条目的 id */
+  pendingId?: string;
 }
 
 interface ChatUser extends User {}

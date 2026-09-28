@@ -1,6 +1,7 @@
 /**
  * @file hooks/useCompanionMode.ts
- * @description 陪伴面板状态管理：面板开关、pose 资源加载、姿态切换、错误标记。
+ * @description 陪伴面板状态管理：面板开关、pose 资源加载、背景错误标记。
+ *   当前姿态与立绘加载错误保存在 chatStore 会话分片中，随会话切换恢复。
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Keyboard } from 'react-native';
@@ -19,12 +20,8 @@ export function useCompanionMode(
   const [companionOpen, setCompanionOpen] = useState(getCompanionOpen);
   /** Agent 是否拥有陪伴资源：null=加载中, true=有, false=无 */
   const [hasAssets, setHasAssets] = useState<boolean | null>(null);
-  /** 当前展示的姿态名称，由 show_pose 指令切换 */
-  const [currentPose, setCurrentPose] = useState('default');
   /** 背景图加载失败标记 */
   const [bgError, setBgError] = useState(false);
-  /** 立绘图加载失败标记 */
-  const [poseError, setPoseError] = useState(false);
 
   /** Agent 切换时请求 pose 列表，判断是否有陪伴资源 */
   useEffect(() => {
@@ -34,7 +31,6 @@ export function useCompanionMode(
     let cancelled = false;
     setHasAssets(null);
     setBgError(false);
-    setPoseError(false);
     logger.info(`[Companion] fetchPoses agentId=${agentId}`);
     fetchPoses(agentId, serverAddressRef.current)
       .then((poses) => {
@@ -54,11 +50,6 @@ export function useCompanionMode(
     };
   }, [agentId, serverAddressRef]);
 
-  /** currentPose 变化时清除立绘加载错误 */
-  useEffect(() => {
-    setPoseError(false);
-  }, [currentPose]);
-
   /** 切换陪伴面板：先收键盘再 toggle，持久化到 MMKV */
   const handleToggleCompanion = useCallback(() => {
     Keyboard.dismiss();
@@ -72,14 +63,9 @@ export function useCompanionMode(
 
   return {
     companionOpen,
-    setCompanionOpen,
     hasAssets,
-    currentPose,
-    setCurrentPose,
     bgError,
     setBgError,
-    poseError,
-    setPoseError,
     handleToggleCompanion,
   };
 }

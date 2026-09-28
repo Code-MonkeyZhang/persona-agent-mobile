@@ -1,10 +1,19 @@
 /**
  * @file ChatScreen.tsx
- * @description 聊天页面主组件，组合 useChatMessages / useChatScroll / useCompanionMode / useKeyboardLayout，
+ * @description 聊天页，从会话主页压栈进入的普通页面，返回即卸载。
+ *   组合 useChatScroll / useCompanionMode / useKeyboardLayout，
  *   以及 GiftedChat、FloatingInputBar、CompanionContent 等子组件。
- *   本文件负责：agent 数据初始化、会话切换、事件监听、header 配置、slide 动画、渲染编排。
+ *   本文件负责：会话切换、header 配置、slide 动画、渲染编排。
+ *   消息与生成状态订阅自 chatStore，本组件不持有消息数据，
+ *   agent 拉取与启动恢复由会话主页完成。
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { GiftedChat } from 'react-native-gifted-chat';
 import {
   Dimensions,
@@ -27,52 +36,34 @@ import { ColorScheme, useTheme } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
-import AgentSelector from './component/AgentSelector.tsx';
+import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
 import { CompanionReplyBubble } from './component/CompanionReplyBubble.tsx';
-import {
-  useFocusEffect,
-  useNavigation,
-  DrawerActions,
-} from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
-import {
-  getServerAddress,
-  getServerAgentId,
-  saveServerAgentId,
-  saveLastConversation,
-  getLastConversation,
-} from '../storage/StorageUtils.ts';
-import {
-  fetchAgents,
-  fetchSessionMessages,
-  convertToChatMessages,
-  getAgentAvatarUrl,
-  chatSessionIdFor,
-} from '../api/server-api.ts';
-import type { AgentInfo } from '../api/server-api.ts';
-import * as wsClient from '../api/ws-client.ts';
+import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
+import { getAgentAvatarUrl } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
-import { ChatStatus, FileInfo, ChatMessage } from '../types/Chat.ts';
+import { ChatStatus, FileInfo } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
 import CompanionContent from './component/CompanionContent.tsx';
-import { checkFileNumberLimit } from './util/FileUtils.ts';
+import {
+  checkFileNumberLimit,
+  getFileTypeSummary,
+  isAllFileReady,
+} from './util/FileUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
-import { useConnectionStore } from '../stores/connectionStore';
 import { useAppPanelStore } from '../stores/appPanelStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
+import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
 import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
-import {
-  useChatMessages,
-  BOT_ID,
-  textPlaceholder,
-} from './hooks/useChatMessages.ts';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -83,25 +74,25 @@ import { useTranslation } from 'react-i18next';
 
 type ChatScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
-  'Bedrock'
+  'Chat'
 >;
+
+type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ChatScreenNavigationProp>();
+  const route = useRoute<ChatScreenRouteProp>();
 
   // ==================== 本地状态 ====================
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [currentAgentId, setCurrentAgentId] = useState(
-    getServerAgentId() || ''
-  );
+  /** 当前 agent，进页时从 MMKV 读一次，本页存续期间不会变化 */
+  const [currentAgentId] = useState(getServerAgentId() || '');
   const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [fibWrapperHeight, setFibWrapperHeight] = useState(130);
 
   // ==================== Refs ====================
@@ -109,28 +100,26 @@ function ChatScreen(): React.JSX.Element {
   const serverAddressRef = useRef(getServerAddress());
   const selectedFilesRef = useRef(selectedFiles);
   const chatStatusRef = useRef<ChatStatus>(ChatStatus.Init);
-  const messagesRef = useRef<ChatMessage[]>([]);
-  const currentAgentNameRef = useRef('AI');
-  /** 启动恢复只执行一次的守卫，避免每次聚焦都覆盖用户当前会话选择 */
-  const hasRestoredRef = useRef(false);
+  /** 上一帧消息数量，用于生成期间消息增长时自动滚底 */
+  const prevMessageCountRef = useRef(0);
 
   // ==================== voiceStore ====================
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
   const isSpeaking = useVoiceStore((s) => s.isSpeaking);
   const toggleVoice = useVoiceStore((s) => s.toggleVoice);
-  const speak = useVoiceStore((s) => s.speak);
-  const stopSpeaking = useVoiceStore((s) => s.stopSpeaking);
-  const voiceEnabledRef = useRef(voiceEnabled);
-  const speakRef = useRef(speak);
-  const stopSpeakingRef = useRef(stopSpeaking);
 
   // ==================== sessionStore ====================
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const setActiveSessionId = useSessionStore((s) => s.setActiveSessionId);
-  const requestDrawerRefresh = useSessionStore((s) => s.requestDrawerRefresh);
+  const sessionTitles = useSessionStore((s) => s.sessionTitles);
 
-  // ==================== connectionStore ====================
-  const reconnectVersion = useConnectionStore((s) => s.reconnectVersion);
+  // ==================== chatStore ====================
+  const displayedSessionId = useChatStore((s) => s.displayedSessionId);
+  const sessionSlice = useChatStore((s) => s.sessions[s.displayedSessionId]);
+  const isLoadingMessages = useChatStore((s) => s.isLoading);
+  const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
+  const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
+  const currentPose = sessionSlice?.pose ?? 'default';
+  const poseError = sessionSlice?.poseError ?? false;
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
@@ -139,38 +128,11 @@ function ChatScreen(): React.JSX.Element {
     scroll.scrollToBottom
   );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
-  const chat = useChatMessages({
-    scrollToBottom: scroll.scrollToBottom,
-    setUserScrolled: scroll.setUserScrolled,
-    serverAddressRef,
-    currentAgentNameRef,
-    voiceEnabledRef,
-    speakRef,
-    selectedFilesRef,
-    setCurrentPose: companion.setCurrentPose,
-    setPoseError: companion.setPoseError,
-    onFilesConsumed: () => setSelectedFiles([]),
-  });
-  const refreshMessages = chat.refreshMessagesFromDisk;
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
-    messagesRef.current = chat.messages;
-    chatStatusRef.current = chat.chatStatus;
-    voiceEnabledRef.current = voiceEnabled;
-    speakRef.current = speak;
-    stopSpeakingRef.current = stopSpeaking;
-    currentAgentNameRef.current =
-      agents.find((a) => a.id === currentAgentId)?.name ?? 'AI';
-  }, [
-    chat.messages,
-    chat.chatStatus,
-    voiceEnabled,
-    speak,
-    stopSpeaking,
-    agents,
-    currentAgentId,
-  ]);
+    chatStatusRef.current = chatStatus;
+  }, [chatStatus]);
 
   useEffect(() => {
     selectedFilesRef.current = selectedFiles;
@@ -178,7 +140,7 @@ function ChatScreen(): React.JSX.Element {
 
   /** AI 流式输出期间保持屏幕常亮 */
   useEffect(() => {
-    if (chat.chatStatus === ChatStatus.Running) {
+    if (chatStatus === ChatStatus.Running) {
       activateKeepAwake();
     } else {
       deactivateKeepAwake();
@@ -186,99 +148,16 @@ function ChatScreen(): React.JSX.Element {
     return () => {
       deactivateKeepAwake();
     };
-  }, [chat.chatStatus]);
+  }, [chatStatus]);
 
-  // ==================== 数据初始化 ====================
-  useFocusEffect(
-    React.useCallback(() => {
-      const address = getServerAddress();
-      if (!address) {
-        return;
-      }
-      serverAddressRef.current = address;
-
-      let cancelled = false;
-      (async () => {
-        try {
-          const fetchedAgents = await fetchAgents(address);
-          if (cancelled || fetchedAgents.length === 0) {
-            return;
-          }
-          setAgents(fetchedAgents);
-
-          let agentId = getServerAgentId();
-          if (!agentId || !fetchedAgents.some((a) => a.id === agentId)) {
-            agentId = fetchedAgents[0].id;
-          }
-          saveServerAgentId(agentId);
-          setCurrentAgentId(agentId);
-          logger.info(`[ChatScreen] using agentId=${agentId}`);
-
-          // 启动恢复：首次成功拉取 agents 后确定恢复到哪个会话
-          // 上次 Agent 还在且会话非空 → 恢复上次会话；否则兜底到常驻聊天
-          if (!hasRestoredRef.current) {
-            hasRestoredRef.current = true;
-            const lastConv = getLastConversation();
-            let targetSession: string;
-            if (
-              lastConv &&
-              lastConv.agentId === agentId &&
-              lastConv.sessionId !== NEW_CHAT_SESSION
-            ) {
-              targetSession = lastConv.sessionId;
-            } else {
-              targetSession = chatSessionIdFor(agentId);
-            }
-            setActiveSessionId(targetSession);
-            saveLastConversation(agentId, targetSession);
-            logger.info(
-              `[ChatScreen] restore session: agentId=${agentId} sessionId=${targetSession}`
-            );
-          }
-        } catch (e) {
-          logger.error(
-            `[ChatScreen] init failed: ${e instanceof Error ? e.message : e}`
-          );
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-      };
-    }, [setActiveSessionId])
-  );
-
-  // ==================== 新建聊天 & Agent 切换 ====================
-  const startNewChat = useRef(
-    useCallback(() => {
-      trigger(HapticFeedbackTypes.impactMedium);
-      logger.info('[ChatScreen] startNewChat');
-      chat.setSessionId(NEW_CHAT_SESSION);
-      chat.setMessages([]);
-      companion.setCurrentPose('default');
-      companion.setPoseError(false);
-      showKeyboard();
-    }, [chat, companion, showKeyboard])
-  );
-
-  const handleSelectAgent = useCallback(
-    (newAgentId: string) => {
-      if (newAgentId === currentAgentId) {
-        return;
-      }
-      logger.info(`[ChatScreen] agent switch → ${newAgentId}`);
-      saveServerAgentId(newAgentId);
-      saveLastConversation(newAgentId, chatSessionIdFor(newAgentId));
-      setCurrentAgentId(newAgentId);
-      stopSpeakingRef.current();
-      // Agent 切换后不再恢复上一个 Agent 打开过的 App
-      useAppPanelStore.getState().setCurrentAppId(null);
-      // 进入新 Agent 的常驻聊天会话，加载 effect 会据此清空并拉取
-      setActiveSessionId(chatSessionIdFor(newAgentId));
-      requestDrawerRefresh();
-    },
-    [currentAgentId, setActiveSessionId, requestDrawerRefresh]
-  );
+  // ==================== 会话标题 ====================
+  // 新建态取新对话文案，其余会话取热更新补丁优先、进页快照兜底
+  const chatTitle = useMemo(() => {
+    if (activeSessionId === NEW_CHAT_SESSION) {
+      return t('home.newChat');
+    }
+    return sessionTitles[activeSessionId] ?? route.params?.title ?? '';
+  }, [activeSessionId, sessionTitles, route.params?.title, t]);
 
   /** 预加载 Agent 头像 */
   useEffect(() => {
@@ -314,10 +193,9 @@ function ChatScreen(): React.JSX.Element {
     navigation.setOptions({
       // eslint-disable-next-line react/no-unstable-nested-components
       headerTitle: () => (
-        <AgentSelector
-          agents={agents}
-          currentAgentId={currentAgentId}
-          onSelectAgent={handleSelectAgent}
+        <ChatHeaderTitle
+          title={chatTitle}
+          running={chatStatus === ChatStatus.Running}
         />
       ),
       // eslint-disable-next-line react/no-unstable-nested-components
@@ -326,9 +204,7 @@ function ChatScreen(): React.JSX.Element {
           voiceEnabled={voiceEnabled}
           isSpeaking={isSpeaking}
           onToggleVoice={handleToggleVoice}
-          onToggleDrawer={() =>
-            navigation.dispatch(DrawerActions.toggleDrawer())
-          }
+          onBack={() => navigation.goBack()}
           colors={colors}
         />
       ),
@@ -344,9 +220,8 @@ function ChatScreen(): React.JSX.Element {
     });
   }, [
     navigation,
-    agents,
-    currentAgentId,
-    handleSelectAgent,
+    chatTitle,
+    chatStatus,
     companion.companionOpen,
     companion.handleToggleCompanion,
     voiceEnabled,
@@ -358,78 +233,35 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== 会话切换 & 消息加载 ====================
   useEffect(() => {
-    // 守卫：正在显示的就是目标会话则跳过。
+    // 守卫：正在展示的就是目标会话则跳过。
     // 覆盖新会话拿到真实 id 后回写 activeSessionId 的情形，避免重复加载与死循环
-    if (chat.sessionIdRef.current === activeSessionId) {
-      logger.info(
-        `[ChatScreen] load skipped: sessionIdRef === activeSessionId=${activeSessionId}`
-      );
+    if (useChatStore.getState().displayedSessionId === activeSessionId) {
       return;
     }
-    if (chatStatusRef.current === ChatStatus.Running) {
-      chatStatusRef.current = ChatStatus.Init;
-    }
     setSelectedFiles([]);
-    chat.setChatStatus(ChatStatus.Init);
 
     // NEW_CHAT_SESSION 表示新建聊天
     if (activeSessionId === NEW_CHAT_SESSION) {
-      startNewChat.current();
+      trigger(HapticFeedbackTypes.impactMedium);
+      logger.info('[ChatScreen] startNewChat');
+      useChatStore.getState().activateSession(NEW_CHAT_SESSION);
+      showKeyboard();
       return;
     }
 
-    logger.info(`[ChatScreen] load session: ${activeSessionId}`);
-    chat.setMessages([]);
-    setIsLoadingMessages(true);
-    chat.setSessionId(activeSessionId);
-
-    (async () => {
-      try {
-        const agentId = getServerAgentId();
-        const session = await fetchSessionMessages(
-          serverAddressRef.current,
-          agentId,
-          activeSessionId
-        );
-        const chatMessages = convertToChatMessages(
-          session.messages,
-          session.createdAt,
-          currentAgentNameRef.current,
-          getAgentAvatarUrl(agentId, serverAddressRef.current)
-        );
-        chat.setMessages(chatMessages);
-        const pose = session.currentPose ?? 'default';
-        companion.setCurrentPose(pose);
-        companion.setPoseError(false);
-        logger.info(
-          `[ChatScreen] session loaded: ${chatMessages.length} messages, pose: ${pose}`
-        );
-        wsClient.subscribe(activeSessionId);
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        logger.error(
-          `[ChatScreen] loadSession failed: ${errMsg}, fallback to chat session`
-        );
-        const fallbackAgentId = getServerAgentId();
-        if (fallbackAgentId) {
-          setActiveSessionId(chatSessionIdFor(fallbackAgentId));
+    let cancelled = false;
+    useChatStore
+      .getState()
+      .activateSession(activeSessionId)
+      .finally(() => {
+        if (!cancelled) {
+          setTimeout(scroll.scrollToBottom, 200);
         }
-      } finally {
-        setIsLoadingMessages(false);
-        setTimeout(scroll.scrollToBottom, 200);
-      }
-    })();
-  }, [activeSessionId, chat, companion, scroll, setActiveSessionId]);
-
-  // ==================== 重连自愈 ====================
-  // reconnectVersion 从 0 开始，重连后递增；非 0 时补拉当前会话最新消息
-  useEffect(() => {
-    if (reconnectVersion === 0) {
-      return;
-    }
-    logger.info('[ChatScreen] reconnect detected, refreshing messages');
-    refreshMessages();
-  }, [reconnectVersion, refreshMessages]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, scroll, showKeyboard]);
 
   // ==================== 键盘 & 屏幕 ====================
   useEffect(() => {
@@ -449,17 +281,44 @@ function ChatScreen(): React.JSX.Element {
     };
   }, []);
 
-  // ==================== 消息完成 ====================
+  // ==================== 生成期自动滚底 ====================
+  // 生成期间消息数量增长（发送与占位气泡插入）时滚到底部，与用户主动上滑互不干扰
   useEffect(() => {
-    if (chat.chatStatus === ChatStatus.Complete) {
-      if (messagesRef.current.length <= 1) {
+    if (
+      chatStatus === ChatStatus.Running &&
+      messages.length > prevMessageCountRef.current
+    ) {
+      scroll.scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages, chatStatus, scroll]);
+
+  // ==================== 消息发送 ====================
+  const handleSend = useCallback(
+    (text: string) => {
+      const files = selectedFilesRef.current;
+      if (!isAllFileReady(files)) {
         return;
       }
-      logger.debug('[ChatScreen] reply complete, refresh drawer');
-      requestDrawerRefresh();
-      chat.setChatStatus(ChatStatus.Init);
-    }
-  }, [chat, requestDrawerRefresh]);
+      const messageText =
+        text || (files.length > 0 ? getFileTypeSummary(files) : '');
+      if (!messageText && files.length === 0) {
+        return;
+      }
+      scroll.setUserScrolled(false);
+      trigger(HapticFeedbackTypes.impactMedium);
+      scroll.scrollToBottom();
+      if (files.length > 0) {
+        setSelectedFiles([]);
+      }
+      useChatStore.getState().sendMessage(messageText, files);
+    },
+    [scroll]
+  );
+
+  const handleStop = useCallback(() => {
+    useChatStore.getState().stopGeneration();
+  }, []);
 
   // ==================== 文件处理 ====================
   const handleNewFileSelected = useCallback((newFiles: FileInfo[]) => {
@@ -511,11 +370,9 @@ function ChatScreen(): React.JSX.Element {
     },
   });
 
-  const lastAgentMessage =
-    chat.messages.length > 0 && chat.messages[0].user._id === BOT_ID
-      ? chat.messages[0]
-      : null;
-  const isThinking = lastAgentMessage?.text === textPlaceholder;
+  // 最新 AI 消息用于陪伴气泡与操作按钮判定，生成期间无占位气泡，运行态直接由 chatStatus 表达
+  const lastAgentMessage = messages.find((m) => m.user._id === BOT_ID) ?? null;
+  const isThinking = chatStatus === ChatStatus.Running;
 
   return (
     <View style={styles.container}>
@@ -526,7 +383,7 @@ function ChatScreen(): React.JSX.Element {
             <GiftedChat
               messageContainerRef={scroll.flatListRef}
               keyboardShouldPersistTaps="never"
-              messages={chat.messages}
+              messages={messages}
               user={{ _id: 1 }}
               alignTop={false}
               inverted={true}
@@ -541,16 +398,16 @@ function ChatScreen(): React.JSX.Element {
               )}
               renderInputToolbar={() => null}
               renderMessage={(props) => {
-                const messageIndex = chat.messages.findIndex(
+                const messageIndex = messages.findIndex(
                   (msg) => msg._id === props.currentMessage?._id
                 );
                 const isLastAIMessage =
-                  props.currentMessage?._id === chat.messages[0]?._id &&
+                  props.currentMessage?._id === lastAgentMessage?._id &&
                   props.currentMessage?.user._id !== 1;
                 return (
                   <CustomMessageComponent
                     {...props}
-                    chatStatus={chat.chatStatus}
+                    chatStatus={chatStatus}
                     isLastAIMessage={isLastAIMessage}
                     onReasoningToggle={scroll.handleReasoningToggle}
                     messageIndex={messageIndex}
@@ -574,7 +431,7 @@ function ChatScreen(): React.JSX.Element {
                 onScrollBeginDrag: scroll.handleUserScroll,
                 onMomentumScrollEnd: scroll.handleMomentumScrollEnd,
                 ...(scroll.userScrolled &&
-                chat.chatStatus === ChatStatus.Running &&
+                chatStatus === ChatStatus.Running &&
                 scroll.contentHeightRef.current >
                   scroll.containerHeightRef.current
                   ? {
@@ -596,11 +453,13 @@ function ChatScreen(): React.JSX.Element {
               agentId={currentAgentId}
               serverAddr={serverAddressRef.current}
               hasAssets={companion.hasAssets}
-              currentPose={companion.currentPose}
+              currentPose={currentPose}
               bgError={companion.bgError}
-              poseError={companion.poseError}
+              poseError={poseError}
               onBgError={() => companion.setBgError(true)}
-              onPoseError={() => companion.setPoseError(true)}
+              onPoseError={() =>
+                useChatStore.getState().setPoseError(displayedSessionId, true)
+              }
             />
           </Pressable>
         </Animated.View>
@@ -638,10 +497,10 @@ function ChatScreen(): React.JSX.Element {
         >
           <FloatingInputBar
             textInputRef={textInputViewRef}
-            onSend={chat.onSend}
-            onStop={chat.onStop}
+            onSend={handleSend}
+            onStop={handleStop}
             selectedFiles={selectedFiles}
-            chatStatus={chat.chatStatus}
+            chatStatus={chatStatus}
             onFileSelected={handleNewFileSelected}
             onFileUpdated={handleFileUpdated}
           />

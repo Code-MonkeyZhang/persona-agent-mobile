@@ -43,6 +43,14 @@ interface ModelConfig {
   model: string;
 }
 
+/** 服务端待注入缓冲条目，忙时插话与 App 通知共用 */
+export interface PendingInput {
+  id: string;
+  source: 'user' | 'app';
+  sourceName?: string;
+  content: string;
+}
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
   | { type: 'connected'; clientId: string }
@@ -59,6 +67,7 @@ export type ServerMessage =
       toolResults?: WsToolResult[];
     }
   | { type: 'round_complete'; sessionId: string }
+  | { type: 'turn_complete'; sessionId: string }
   | { type: 'error'; sessionId: string; message: string }
   | { type: 'title_updated'; sessionId: string; title: string }
   | {
@@ -86,6 +95,12 @@ export type ServerMessage =
       sessionId: string;
       source: string;
       content: string;
+    }
+  | {
+      /** 待注入缓冲全量同步，忙时插话的灰气泡据此渲染，取空即注入完成 */
+      type: 'pending_input_changed';
+      sessionId: string;
+      pending: PendingInput[];
     };
 
 /**
@@ -241,13 +256,20 @@ export async function createSession(
  * @param serverAddress 服务器地址
  * @param voiceEnabled 是否开启语音，服务端据此决定是否发送 speak_ready
  */
+/** chat 端点返回体，忙时插话携带 pendingId，空闲发送不携带 */
+export interface SendChatResult {
+  success: boolean;
+  pendingId?: string;
+  error?: string;
+}
+
 export async function sendChatMessage(
   agentId: string,
   sessionId: string,
   content: string,
   serverAddress: string,
   voiceEnabled: boolean
-): Promise<void> {
+): Promise<SendChatResult> {
   logger.info(
     `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
       0,
@@ -255,8 +277,12 @@ export async function sendChatMessage(
     )}" voiceEnabled=${voiceEnabled}`
   );
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
-  await httpPost(url, { content, voiceEnabled });
-  logger.info(`${TAG} sendChatMessage sent ok`);
+  const body = await httpPost(url, { content, voiceEnabled });
+  const result = JSON.parse(body) as SendChatResult;
+  logger.info(
+    `${TAG} sendChatMessage ok, pendingId=${result.pendingId ?? 'none'}`
+  );
+  return result;
 }
 
 export interface AgentInfo {
@@ -488,10 +514,18 @@ interface ServerToolCall {
 
 interface ServerChatMessage {
   /** @persona/shared Message 联合的简化投影，保留 role/content/thinking/tool_calls */
-  role: 'user' | 'assistant' | 'system' | 'app_notification' | 'context';
+  role:
+    | 'user'
+    | 'assistant'
+    | 'system'
+    | 'app_notification'
+    | 'context'
+    | 'error';
   content?: string;
   thinking?: string;
   tool_calls?: ServerToolCall[];
+  /** 轮次边界标志，接口层把落盘的 turn_end 标记行映射成此形状的 system 条目 */
+  turnEnd?: boolean;
 }
 
 /**
@@ -539,10 +573,13 @@ export async function deleteSession(
 }
 
 /**
- * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 ChatMessage[]。
- *
- * 合并连续的 assistant 消息为一个 ChatMessage，从 thinking/tool_calls/content 重建
- * 结构化 Thought[] 时间线，再经 stripLastTextThought 去重。最终反转为倒序。
+ * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 ChatMessage[]，双信号单规则。
+ * 每条 assistant 消息是一个步骤的落盘产物，同一轮次的连续 assistant 消息合并为一个气泡：
+ * - 从 thinking/tool_calls/content 重建结构化 Thought[] 时间线，经 stripLastTextThought 去重
+ * - 用户消息原地显示从不结组，插话因此排在整轮回复之前
+ * - 收尾信号取双信号，遇到边界条目或不带 tool_calls 的助手消息即结组
+ * - error 角色结组并单独成泡，app_notification 与 context 跳过不渲染
+ * - 扫描结束强制结一次，兜底崩溃留下的半截内容
  * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条间隔 1 秒近似处理。
  */
 export function convertToChatMessages(
@@ -577,14 +614,17 @@ export function convertToChatMessages(
   for (let i = 0; i < serverMessages.length; i++) {
     const msg = serverMessages[i];
 
-    // system / app_notification / context 不渲染为气泡：system 是服务端内部消息，
-    // app_notification 的卡片渲染留后续（实时推送已由 onAppNotification 单独处理），
-    // context 是运行时上下文注入消息，仅供模型消费
-    if (
-      msg.role === 'system' ||
-      msg.role === 'app_notification' ||
-      msg.role === 'context'
-    ) {
+    // 边界条目结组，普通 system 消息照旧跳过
+    if (msg.role === 'system') {
+      if (msg.turnEnd) {
+        flushPending();
+      }
+      continue;
+    }
+
+    // app_notification 与 context 不渲染为气泡：app_notification 的卡片渲染留后续，
+    // 实时推送已由 onAppNotification 单独处理，context 是运行时上下文注入消息仅供模型消费
+    if (msg.role === 'app_notification' || msg.role === 'context') {
       continue;
     }
 
@@ -621,8 +661,23 @@ export function convertToChatMessages(
           content: msg.content,
         });
       }
-    } else {
+
+      // 形状信号：不带 tool_calls 的助手消息是收尾步，整轮打包
+      if (!msg.tool_calls || msg.tool_calls.length === 0) {
+        flushPending();
+      }
+    } else if (msg.role === 'error') {
+      // error 结组，错误截断的半截组不与下一轮合并
       flushPending();
+      const text = typeof msg.content === 'string' ? msg.content : '';
+      result.push({
+        _id: uuid.v4(),
+        text,
+        createdAt: new Date(sessionCreatedAt + result.length * 1000),
+        user: { _id: BOT_ID, name: agentName, avatar },
+      });
+    } else {
+      // 用户消息原地显示从不结组，插话因此排在整轮回复之前
       const text = typeof msg.content === 'string' ? msg.content : '';
       result.push({
         _id: uuid.v4(),

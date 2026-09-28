@@ -6,7 +6,7 @@
  *
  * 消息路由规则：
  *   - 状态型消息（title_updated）直接写 sessionStore，不经 handler
- *   - 事件型消息（step_complete / round_complete / error / speak_ready / speak_error / app_notification）转给注册的 handler
+ *   - 事件型消息（step_complete / turn_complete / round_complete / error / speak_ready / speak_error / app_notification / pending_input_changed）携带 sessionId 转给注册的 handler
  *   - connected / pong 在模块内部处理
  */
 import type {
@@ -14,6 +14,7 @@ import type {
   ToolCall,
   WsToolResult,
   SpeakErrorReason,
+  PendingInput,
 } from './server-api.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
@@ -26,30 +27,42 @@ const HEARTBEAT_INTERVAL = 30_000;
 const RECONNECT_BASE_DELAY = 3_000;
 const RECONNECT_MAX_DELAY = 300_000;
 
-/** 事件型消息处理器接口，由 ChatScreen 注册 */
+/** 事件型消息处理器接口，由 chatStore 注册，事件按所属 sessionId 路由到对应会话分片 */
 export interface WsEventHandler {
   onStepComplete(
+    sessionId: string,
     content?: string,
     thinking?: string,
     toolCalls?: ToolCall[],
     toolResults?: WsToolResult[]
   ): void;
-  onComplete(): void;
-  onError(message: string): void;
-  onSpeakReady(data: {
-    speakText: string;
-    voiceId: string;
-    apiKey: string;
-    model: string;
-    languageBoost?: string;
-  }): void;
-  onSpeakError(reason: SpeakErrorReason, message: string): void;
+  /** 轮次边界信号，客户端据此把轮次缓冲组装成整轮气泡，生成状态保持 */
+  onTurnComplete(sessionId: string): void;
+  onComplete(sessionId: string): void;
+  onError(sessionId: string, message: string): void;
+  onSpeakReady(
+    sessionId: string,
+    data: {
+      speakText: string;
+      voiceId: string;
+      apiKey: string;
+      model: string;
+      languageBoost?: string;
+    }
+  ): void;
+  onSpeakError(
+    sessionId: string,
+    reason: SpeakErrorReason,
+    message: string
+  ): void;
   /** 用户中止生成后服务端推送的确认事件 */
-  onAborted(): void;
+  onAborted(sessionId: string): void;
   /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画 */
-  onSubscribed(isGenerating: boolean): void;
+  onSubscribed(sessionId: string, isGenerating: boolean): void;
   /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
   onAppNotification(sessionId: string, source: string, content: string): void;
+  /** 待注入缓冲全量同步，忙时插话的灰气泡据此渲染 */
+  onPendingChanged(sessionId: string, pending: PendingInput[]): void;
 }
 
 let ws: WebSocket | null = null;
@@ -133,16 +146,10 @@ export function isConnected(): boolean {
   return ws?.readyState === WebSocket.OPEN;
 }
 
-/** 注册事件型消息处理器 */
+/** 注册事件型消息处理器，chatStore 模块加载时调用一次 */
 export function registerHandler(handler: WsEventHandler): void {
   currentHandler = handler;
   logger.info(`${TAG} handler registered`);
-}
-
-/** 注销事件型消息处理器 */
-export function unregisterHandler(): void {
-  currentHandler = null;
-  logger.info(`${TAG} handler unregistered`);
 }
 
 /**
@@ -245,7 +252,7 @@ function handleMessage(msg: ServerMessage): void {
           msg.isGenerating ?? false
         }`
       );
-      currentHandler?.onSubscribed(msg.isGenerating ?? false);
+      currentHandler?.onSubscribed(msg.sessionId, msg.isGenerating ?? false);
       break;
 
     case 'pong':
@@ -258,6 +265,7 @@ function handleMessage(msg: ServerMessage): void {
 
     case 'step_complete':
       currentHandler?.onStepComplete(
+        msg.sessionId,
         msg.content,
         msg.thinking,
         msg.toolCalls,
@@ -267,17 +275,22 @@ function handleMessage(msg: ServerMessage): void {
 
     case 'round_complete':
       logger.info(`${TAG} round_complete, sessionId=${msg.sessionId}`);
-      currentHandler?.onComplete();
+      currentHandler?.onComplete(msg.sessionId);
+      break;
+
+    case 'turn_complete':
+      logger.info(`${TAG} turn_complete, sessionId=${msg.sessionId}`);
+      currentHandler?.onTurnComplete(msg.sessionId);
       break;
 
     case 'error':
       logger.error(`${TAG} error: ${msg.message}`);
-      currentHandler?.onError(msg.message);
+      currentHandler?.onError(msg.sessionId, msg.message);
       break;
 
     case 'aborted':
       logger.info(`${TAG} aborted, sessionId=${msg.sessionId}`);
-      currentHandler?.onAborted();
+      currentHandler?.onAborted(msg.sessionId);
       break;
 
     case 'app_notification':
@@ -287,18 +300,25 @@ function handleMessage(msg: ServerMessage): void {
       currentHandler?.onAppNotification(msg.sessionId, msg.source, msg.content);
       break;
 
+    case 'pending_input_changed':
+      logger.info(
+        `${TAG} pending_input_changed, sessionId=${msg.sessionId} count=${msg.pending.length}`
+      );
+      currentHandler?.onPendingChanged(msg.sessionId, msg.pending);
+      break;
+
     case 'speak_ready':
       logger.info(
         `${TAG} speak_ready, sessionId=${msg.sessionId} textLen=${msg.speakText.length}`
       );
-      currentHandler?.onSpeakReady(msg);
+      currentHandler?.onSpeakReady(msg.sessionId, msg);
       break;
 
     case 'speak_error':
       logger.error(
         `${TAG} speak_error, reason=${msg.reason} message=${msg.message}`
       );
-      currentHandler?.onSpeakError(msg.reason, msg.message);
+      currentHandler?.onSpeakError(msg.sessionId, msg.reason, msg.message);
       break;
   }
 }

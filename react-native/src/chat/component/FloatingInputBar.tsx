@@ -2,7 +2,7 @@
  * @file FloatingInputBar.tsx
  * @description 聊天页底部的浮动输入框组件。
  * 白底圆角卡片，纵向排列文件标签区、TextInput 和按钮行。
- * 按钮行左侧为加号按钮、右侧为发送按钮。
+ * 按钮行左侧为加号按钮、右侧运行中为停止加发送双按钮，其余时间为单个发送按钮。
  * 组件内部持有文本 state，通过 onSend 回调通知 ChatScreen 发送消息。
  */
 import React, { useCallback, useMemo, useState } from 'react';
@@ -39,17 +39,15 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
 
+  /** 发送点击。运行中同样放行，忙时插话语义由 chatStore 分流 */
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (trimmed.length === 0 && selectedFiles.length === 0) {
       return;
     }
-    if (chatStatus === ChatStatus.Running) {
-      return;
-    }
     onSend(trimmed);
     setText('');
-  }, [text, selectedFiles, chatStatus, onSend]);
+  }, [text, selectedFiles.length, onSend]);
 
   return (
     <View style={styles.wrapper}>

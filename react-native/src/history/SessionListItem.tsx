@@ -4,7 +4,7 @@
  *   基于 RNGH 的 ReanimatedSwipeable（Reanimated 3 worklet 驱动）：
  *   - 轻滑：露出一个红色 X，点击即删。
  *   - 满滑：基于行宽相对判定（剩余可见宽度 ≤ 阈值即触发），判定跑在 UI 线程，比固定像素阈值更准。
- *   - 同一时间只允许一项展开：由父组件通过 openId 协调（见 CustomDrawerContent）。
+ *   - 同一时间只允许一项展开：由父组件 HomeScreen 通过 openId 协调。
  */
 import * as React from 'react';
 import { useCallback, useEffect } from 'react';
@@ -77,7 +77,7 @@ const DeleteAction: React.FC<{
       <TouchableOpacity
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={t('drawer.delete')}
+        accessibilityLabel={t('home.delete')}
         onPress={fireOnce}
         style={styles.deleteButton}
       >

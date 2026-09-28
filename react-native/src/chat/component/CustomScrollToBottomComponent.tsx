@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 import { useTheme } from '../../theme/index.ts';
 
-export const CustomScrollToBottomComponent = (): React.ReactNode => {
+export const CustomScrollToBottomComponent = (): React.JSX.Element => {
   const { colors } = useTheme();
   return (
     <View style={styles.scrollToBottomContainer}>

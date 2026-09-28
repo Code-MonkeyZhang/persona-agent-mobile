@@ -3,6 +3,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   GestureResponderEvent,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 
 /**
@@ -11,14 +13,16 @@ import {
 interface HeaderRightButtonProps {
   onPress: (event: GestureResponderEvent) => void;
   children?: React.ReactNode;
+  /** 覆盖默认内边距的样式，传入时叠在默认值之后生效 */
+  style?: StyleProp<ViewStyle>;
 }
 
 /**
  * 通用 Header 右侧按钮。
  */
 export const CustomHeaderRightButton: React.FC<HeaderRightButtonProps> =
-  React.memo(({ onPress, children }) => (
-    <TouchableOpacity onPress={onPress} style={styles.touchStyle}>
+  React.memo(({ onPress, children, style }) => (
+    <TouchableOpacity onPress={onPress} style={[styles.touchStyle, style]}>
       {children}
     </TouchableOpacity>
   ));

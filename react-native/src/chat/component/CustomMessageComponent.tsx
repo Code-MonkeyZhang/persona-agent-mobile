@@ -34,7 +34,6 @@ import FileViewer from 'react-native-file-viewer';
 import { logger } from '../../lib/logger';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
-import LoadingSpinner from './LoadingSpinner.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
 import { Check, Copy } from 'lucide-react-native';
@@ -74,10 +73,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
-
-  const isLoading =
-    chatStatus === ChatStatus.Running &&
-    (currentMessage?.text === '...' || currentMessage?.text === '');
 
   const toggleButtons = useCallback(() => {
     setForceShowButtons((prev) => !prev);
@@ -124,10 +119,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const customTokenizer = useMemo(() => new CustomTokenizer(), []);
 
   const handleShowButton = useCallback(() => {
-    if (!isLoading) {
-      toggleButtons();
-    }
-  }, [isLoading, toggleButtons]);
+    toggleButtons();
+  }, [toggleButtons]);
 
   useEffect(() => {
     if (copied) {
@@ -158,12 +151,19 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 
     return (
       <View
-        style={{
-          ...styles.questionContainer,
-          maxWidth: (screenWidth * 3) / 4,
-        }}
+        style={[
+          styles.questionContainer,
+          currentMessage.queued && styles.questionContainerQueued,
+          { maxWidth: (screenWidth * 3) / 4 },
+        ]}
       >
-        <Text style={styles.questionText} selectable>
+        <Text
+          style={[
+            styles.questionText,
+            currentMessage.queued && styles.questionTextQueued,
+          ]}
+          selectable
+        >
           {currentMessage.text}
         </Text>
       </View>
@@ -173,7 +173,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     customMarkdownRenderer,
     customTokenizer,
     styles.questionContainer,
+    styles.questionContainerQueued,
     styles.questionText,
+    styles.questionTextQueued,
   ]);
 
   const messageActionButtons = useMemo(() => {
@@ -216,7 +218,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     return null;
   }
   const hasSteps = (currentMessage?.steps?.length ?? 0) > 0;
-  const showLoading = isLoading && !hasSteps;
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -239,23 +240,16 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             onToggle={onReasoningToggle}
           />
         )}
-        {showLoading && (
-          <View style={styles.loadingContainer}>
-            <LoadingSpinner visible={true} size={22} />
-          </View>
-        )}
-        {!isLoading && (
-          <TapGestureHandler
-            numberOfTaps={2}
-            onHandlerStateChange={({ nativeEvent }) => {
-              if (nativeEvent.state === State.ACTIVE) {
-                handleShowButton();
-              }
-            }}
-          >
-            <View>{messageContent}</View>
-          </TapGestureHandler>
-        )}
+        <TapGestureHandler
+          numberOfTaps={2}
+          onHandlerStateChange={({ nativeEvent }) => {
+            if (nativeEvent.state === State.ACTIVE) {
+              handleShowButton();
+            }
+          }}
+        >
+          <View>{messageContent}</View>
+        </TapGestureHandler>
         {!isUser.current &&
           chatStatus !== ChatStatus.Running &&
           (isLastAIMessage || forceShowButtons) &&
@@ -306,16 +300,18 @@ const createStyles = (colors: ColorScheme) =>
       paddingHorizontal: 16,
       paddingVertical: 10,
     },
+    /** 待注入插话的灰色草稿态气泡 */
+    questionContainerQueued: {
+      backgroundColor: colors.surfaceSecondary,
+    },
     questionText: {
       lineHeight: 29,
       fontSize: 19,
       color: colors.text,
     },
-    loadingContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 12,
-      marginBottom: 10,
+    /** 待注入插话的弱化文字 */
+    questionTextQueued: {
+      color: colors.textSecondary,
     },
     actionButtonsContainer: {
       flexDirection: 'row',

@@ -13,7 +13,6 @@ export interface ColorScheme {
   selectedBackground: string;
   messageBackground: string;
   labelBackground: string;
-  drawerBackground: string;
   fileListBackground: string;
   // 输入相关
   input: string;
@@ -59,7 +58,6 @@ export const lightColors: ColorScheme = {
   selectedBackground: '#F5F5F5',
   messageBackground: '#f2f2f2',
   labelBackground: '#ffffff',
-  drawerBackground: 'transparent',
   fileListBackground: '#ffffff',
 
   input: '#f8f8f8',

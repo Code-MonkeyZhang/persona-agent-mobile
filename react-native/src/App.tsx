@@ -1,14 +1,11 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import {
-  createDrawerNavigator,
-  DrawerContentComponentProps,
-} from '@react-navigation/drawer';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
-import CustomDrawerContent from './history/CustomDrawerContent.tsx';
-import { Dimensions, Keyboard, StatusBar, AppState } from 'react-native';
+import { Keyboard, StatusBar, AppState, StyleSheet } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
+import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
@@ -18,7 +15,6 @@ import AppLauncher from './chat/component/AppLauncher.tsx';
 import AppSurface from './chat/component/AppSurface.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { isAndroid } from './utils/PlatformUtils.ts';
 import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
@@ -30,76 +26,19 @@ import { logger } from './lib/logger';
 import './i18n/index.ts';
 import i18n, { detectLanguage } from './i18n/index.ts';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const minWidth = screenWidth > screenHeight ? screenHeight : screenWidth;
-const width = minWidth > 434 ? 300 : minWidth * 0.83;
-
-/**
- * 抽屉 pan 手势的激活阈值（px）。
- * 调高到 20，让会话列表项的 Swipeable（默认 10px 激活）在项上先激活、取消抽屉手势，
- * 从而避免“左滑删除”被抽屉的“左滑收起”抢走；在非会话项区域左滑仍可收起抽屉。
- * 觉得抽屉开合太钝/太灵时，只调这一个数字即可。
- */
-const DRAWER_SWIPE_ACTIVATION = 20;
-
-// 创建Drawer导航器实例，RouteParamList提供类型安全的路由参数
-const Drawer = createDrawerNavigator<RouteParamList>();
-
 // 创建Stack导航器实例，用于全屏页面之间的跳转
 const Stack = createNativeStackNavigator<RouteParamList>();
 
-// 渲染自定义抽屉内容的包装器
-// CustomDrawerContent 定义了侧边栏的布局：快捷入口(Chat/Image) + 聊天历史列表 + Settings
-// 将props透传给CustomDrawerContent组件
-const renderCustomDrawerContent = (
-  props: React.JSX.IntrinsicAttributes & DrawerContentComponentProps
-) => <CustomDrawerContent {...props} />;
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+});
 
-/**
- * 抽屉导航器 - 侧边滑出的导航菜单
- * - drawerContent: 使用自定义的CustomDrawerContent渲染侧边栏内容
- */
-const DrawerNavigator = () => {
-  const { colors } = useTheme();
-  return (
-    <Drawer.Navigator
-      initialRouteName="Bedrock"
-      screenOptions={{
-        headerTintColor: colors.text,
-        headerTitleAlign: 'center',
-        drawerStyle: {
-          width: width,
-          backgroundColor: colors.background,
-          borderRightWidth: isAndroid ? 0.3 : 0,
-          borderRightColor: colors.border,
-        },
-        headerStyle: {
-          backgroundColor: colors.background,
-        },
-        drawerType: 'slide',
-        // 提高抽屉滑动手势的激活阈值，让会话项的左滑删除优先于抽屉的左滑收起
-        configureGestureHandler: (gesture) =>
-          gesture.activeOffsetX([
-            -DRAWER_SWIPE_ACTIVATION,
-            DRAWER_SWIPE_ACTIVATION,
-          ]),
-      }}
-      drawerContent={renderCustomDrawerContent}
-    >
-      <Drawer.Screen name="Bedrock" component={ChatScreen} />
-    </Drawer.Navigator>
-  );
-};
 /**
  * Stack导航器 - 全屏页面栈管理
  * 包含页面：
- * - Drawer: 抽屉导航器(默认首页)
- * - AgentDetail: Agent 详情页
- * - Server: 服务器/隧道连接页
- * - Settings: 设置页
- *
- * 从侧边栏入口进入的页面统一使用 slide_from_bottom 动画，
- * 返回时侧边栏保持开启状态。
+ * - Home: 会话主页(默认首屏)
+ * - Chat: 聊天页(压栈进入，返回即卸载，头部由 ChatScreen 自配置)
+ * - AgentDetail / Server / ScanQR / Settings / AppLauncher / AppSurface
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -112,11 +51,16 @@ const AppNavigator = () => {
     animation: 'default' as const,
   };
   return (
-    <Stack.Navigator initialRouteName="Drawer" screenOptions={{}}>
+    <Stack.Navigator initialRouteName="Home" screenOptions={{}}>
       <Stack.Screen
-        name="Drawer"
-        component={DrawerNavigator}
+        name="Home"
+        component={HomeScreen}
         options={{ headerShown: false, headerLargeTitleShadowVisible: false }}
+      />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={stackScreenOptions}
       />
       <Stack.Screen
         name="AgentDetail"
@@ -129,7 +73,7 @@ const AppNavigator = () => {
       <Stack.Screen
         name="Server"
         component={ServerScreen}
-        options={{ ...stackScreenOptions, title: t('drawer.server') }}
+        options={{ ...stackScreenOptions, title: t('home.server') }}
       />
       <Stack.Screen
         name="ScanQR"
@@ -139,7 +83,7 @@ const AppNavigator = () => {
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ ...stackScreenOptions, title: t('drawer.settings') }}
+        options={{ ...stackScreenOptions, title: t('home.settings') }}
       />
       {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠 */}
       <Stack.Screen
@@ -172,14 +116,17 @@ const AppWithTheme = () => {
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
-      <NavigationContainer
-        onStateChange={(_) => {
-          Keyboard.dismiss();
-        }}
-      >
-        <AppNavigator />
-      </NavigationContainer>
+      {/* 手势根视图：左滑删除等 RNGH 手势组件依赖此包装，原抽屉导航器自带的隐式包装已随抽屉移除 */}
+      <GestureHandlerRootView style={styles.flex}>
+        {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
+        <NavigationContainer
+          onStateChange={(_) => {
+            Keyboard.dismiss();
+          }}
+        >
+          <AppNavigator />
+        </NavigationContainer>
+      </GestureHandlerRootView>
     </>
   );
 };

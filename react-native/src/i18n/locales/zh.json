@@ -5,18 +5,8 @@
     "thinking": "思考中...",
     "error": "错误：{{message}}",
     "shareImageTitle": "AI 图片",
-    "stop": "停止生成"
-  },
-  "drawer": {
-    "chat": "聊天",
-    "sessions": "会话",
-    "server": "服务器",
-    "settings": "设置",
-    "deleteTitle": "删除会话",
-    "deleteDesc": "此操作不可撤销。",
-    "cancel": "取消",
-    "delete": "删除",
-    "startChat": "开始聊天"
+    "stop": "停止生成",
+    "generating": "正在生成"
   },
   "settings": {
     "vibration": "震动",
@@ -89,5 +79,17 @@
   },
   "connection": {
     "reconnecting": "正在重连..."
+  },
+  "home": {
+    "newChat": "新对话",
+    "connFailed": "连接已断开",
+    "tapReconnect": "点按重连",
+    "connInvalid": "连接失败，点按检查服务器地址",
+    "chat": "聊天",
+    "sessions": "会话",
+    "server": "服务器",
+    "settings": "设置",
+    "delete": "删除",
+    "startChat": "开始聊天"
   }
 }

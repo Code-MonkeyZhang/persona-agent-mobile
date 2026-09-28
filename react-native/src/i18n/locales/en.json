@@ -5,18 +5,8 @@
     "thinking": "Thinking...",
     "error": "Error: {{message}}",
     "shareImageTitle": "AI Image",
-    "stop": "Stop generating"
-  },
-  "drawer": {
-    "chat": "Chat",
-    "sessions": "Sessions",
-    "server": "Server",
-    "settings": "Settings",
-    "deleteTitle": "Delete Session",
-    "deleteDesc": "You cannot undo this action.",
-    "cancel": "Cancel",
-    "delete": "Delete",
-    "startChat": "Start chatting"
+    "stop": "Stop generating",
+    "generating": "Generating"
   },
   "settings": {
     "vibration": "Vibration",
@@ -89,5 +79,17 @@
   },
   "connection": {
     "reconnecting": "Reconnecting..."
+  },
+  "home": {
+    "newChat": "New Chat",
+    "connFailed": "Disconnected",
+    "tapReconnect": "Tap to reconnect",
+    "connInvalid": "Connection failed, tap to check server address",
+    "chat": "Chat",
+    "sessions": "Sessions",
+    "server": "Server",
+    "settings": "Settings",
+    "delete": "Delete",
+    "startChat": "Start chatting"
   }
 }

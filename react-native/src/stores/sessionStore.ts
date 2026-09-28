@@ -3,7 +3,7 @@
  * @description 会话状态管理。
  *   - sessionPreviews/sessionTitles：内存态的预览文本与标题，作为两次列表刷新之间的本地补丁，不持久化
  *   - activeSessionId：当前会话身份与列表高亮依据，侧边栏与会话页共同读写的唯一协作来源
- *   - drawerRefreshVersion：侧边栏重新拉取列表与 Agent 卡片的触发器
+ *   - homeRefreshVersion：主页重新拉取列表与 Agent 卡片的触发器
  *   activeSessionId 初始值取上次对话的会话，使冷启动能恢复上次会话。
  */
 import { create } from 'zustand';
@@ -23,8 +23,8 @@ interface SessionStore {
   activeSessionId: string;
   setActiveSessionId: (id: string) => void;
 
-  drawerRefreshVersion: number;
-  requestDrawerRefresh: () => void;
+  homeRefreshVersion: number;
+  requestHomeRefresh: () => void;
 }
 
 const initialConversation = getLastConversation();
@@ -76,11 +76,11 @@ export const useSessionStore = create<SessionStore>((set) => ({
     set({ activeSessionId: id });
   },
 
-  drawerRefreshVersion: 0,
+  homeRefreshVersion: 0,
 
-  requestDrawerRefresh: () =>
+  requestHomeRefresh: () =>
     set((state) => ({
-      drawerRefreshVersion: state.drawerRefreshVersion + 1,
+      homeRefreshVersion: state.homeRefreshVersion + 1,
     })),
 }));
 
