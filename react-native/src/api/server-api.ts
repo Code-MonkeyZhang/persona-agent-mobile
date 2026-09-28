@@ -38,7 +38,7 @@ export type SpeakErrorReason =
   | 'voice_not_found';
 
 /** 模型配置（对齐 @persona/shared 的 ModelConfig） */
-interface ModelConfig {
+export interface ModelConfig {
   provider: string;
   model: string;
 }
@@ -104,20 +104,35 @@ export type ServerMessage =
     };
 
 /**
- * HTTP GET，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
+ * HTTP 请求统一底层，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
+ * @param method HTTP 方法
  * @param url 完整请求地址
+ * @param options.body 请求体对象，传入即按 JSON 发送
+ * @param options.timeout 超时毫秒数，默认 30000
  * @returns 响应体文本
  */
-function httpGet(url: string): Promise<string> {
-  logger.info(`${TAG} GET ${url}`);
+function httpRequest(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  url: string,
+  options: { body?: object; timeout?: number } = {}
+): Promise<string> {
+  const { body, timeout } = options;
+  logger.info(
+    `${TAG} ${method} ${url}${
+      body ? ` body=${JSON.stringify(body).substring(0, 200)}` : ''
+    }`
+  );
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.timeout = 30000;
-    xhr.open('GET', url, true);
+    xhr.timeout = timeout ?? 30000;
+    xhr.open(method, url, true);
     xhr.setRequestHeader('Accept', 'application/json');
+    if (body !== undefined) {
+      xhr.setRequestHeader('Content-Type', 'application/json');
+    }
     xhr.onload = () => {
       logger.info(
-        `${TAG} GET ${url} → ${xhr.status} ${xhr.responseText.substring(
+        `${TAG} ${method} ${url} → ${xhr.status} ${xhr.responseText.substring(
           0,
           200
         )}`
@@ -129,21 +144,26 @@ function httpGet(url: string): Promise<string> {
       }
     };
     xhr.onerror = () => {
-      logger.error(`${TAG} GET ${url} → network error`);
+      logger.error(`${TAG} ${method} ${url} → network error`);
       reject(new Error('Network error'));
     };
     xhr.ontimeout = () => {
-      logger.error(`${TAG} GET ${url} → timeout`);
+      logger.error(`${TAG} ${method} ${url} → timeout`);
       reject(new Error('Request timeout'));
     };
-    xhr.send();
+    xhr.send(body !== undefined ? JSON.stringify(body) : undefined);
   });
 }
 
+/** HTTP GET，默认 30 秒超时。 */
+function httpGet(url: string): Promise<string> {
+  return httpRequest('GET', url, { timeout: 30000 });
+}
+
 /**
- * HTTP POST JSON，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
+ * HTTP POST JSON，默认超时 120 秒。
  *
- * 默认超时 120 秒：后端 chat 接口会阻塞到 AI 回复完成才返回，
+ * 后端 chat 接口会阻塞到 AI 回复完成才返回，
  * 桌面端不设超时，移动端保留一个较长的兜底值防止永久挂起。
  * 配对等快速请求可通过 timeout 参数传入更短的超时。
  * @param url 完整请求地址
@@ -156,74 +176,17 @@ export function httpPost(
   body: Record<string, unknown>,
   timeout?: number
 ): Promise<string> {
-  logger.info(
-    `${TAG} POST ${url} body=${JSON.stringify(body).substring(0, 200)}`
-  );
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.timeout = timeout ?? 120000;
-    xhr.open('POST', url, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onload = () => {
-      logger.info(
-        `${TAG} POST ${url} → ${xhr.status} ${xhr.responseText.substring(
-          0,
-          200
-        )}`
-      );
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(xhr.responseText);
-      } else {
-        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
-      }
-    };
-    xhr.onerror = () => {
-      logger.error(`${TAG} POST ${url} → network error`);
-      reject(new Error('Network error'));
-    };
-    xhr.ontimeout = () => {
-      logger.error(`${TAG} POST ${url} → timeout`);
-      reject(new Error('Request timeout'));
-    };
-    xhr.send(JSON.stringify(body));
-  });
+  return httpRequest('POST', url, { body, timeout: timeout ?? 120000 });
 }
 
-/**
- * HTTP DELETE，用 XMLHttpRequest 绕过 RN fetch polyfill 的 json() bug。
- * @param url 完整请求地址
- * @returns 响应体文本
- */
+/** HTTP PUT JSON，默认 30 秒超时。 */
+function httpPut(url: string, body: object): Promise<string> {
+  return httpRequest('PUT', url, { body, timeout: 30000 });
+}
+
+/** HTTP DELETE，默认 10 秒超时。 */
 function httpDelete(url: string): Promise<string> {
-  logger.info(`${TAG} DELETE ${url}`);
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.timeout = 10000;
-    xhr.open('DELETE', url, true);
-    xhr.setRequestHeader('Accept', 'application/json');
-    xhr.onload = () => {
-      logger.info(
-        `${TAG} DELETE ${url} → ${xhr.status} ${xhr.responseText.substring(
-          0,
-          200
-        )}`
-      );
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(xhr.responseText);
-      } else {
-        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
-      }
-    };
-    xhr.onerror = () => {
-      logger.error(`${TAG} DELETE ${url} → network error`);
-      reject(new Error('Network error'));
-    };
-    xhr.ontimeout = () => {
-      logger.error(`${TAG} DELETE ${url} → timeout`);
-      reject(new Error('Request timeout'));
-    };
-    xhr.send();
-  });
+  return httpRequest('DELETE', url, { timeout: 10000 });
 }
 
 /**
@@ -306,20 +269,73 @@ export interface AgentInfo {
   updatedAt: number;
 }
 
+/** PUT /api/agents/:id 的局部更新字段，全部可选，只传需要修改的项 */
+export interface AgentUpdateInput {
+  name?: string;
+  description?: string;
+  systemPrompt?: string;
+  defaultModel?: ModelConfig;
+  maxSteps?: number;
+  compressionThreshold?: number;
+  dreamIntervalMinutes?: number;
+  voiceId?: string;
+  voiceLanguage?: string;
+  skillNames?: string[];
+  mcpNames?: string[];
+}
+
 /** Agent App 支持的 UI 变体（与 @persona/shared 的 SupportedUI 对齐） */
 export type SupportedUI = 'desktop' | 'mobile';
 
-/** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server） */
+/** MCP 服务器连接状态（对齐 @persona/shared 的 McpServerStatus） */
+export type McpServerStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'needs_auth';
+
+/** MCP 工具元数据（对齐 @persona/shared 的 McpToolInfo） */
+export interface McpToolInfo {
+  name: string;
+  description?: string;
+}
+
+/** MCP 连接类型（对齐 @persona/shared 的 McpConnectionType），oauth 表示远程服务且需要授权 */
+export type McpConnectionType = 'stdio' | 'http' | 'oauth';
+
+/** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server，字段对齐 @persona/shared 全投影） */
 export interface McpServerInfo {
   name: string;
-  status: 'disconnected' | 'connecting' | 'connected' | 'needs_auth';
+  /** 安装时落盘的显示名，手动添加的服务缺省，前端回退机器键 */
+  displayName?: string;
+  /** 简介，优先取安装 meta，回退 mcp.json 里的声明 */
+  description?: string;
+  /** 安装时落盘的作者 */
+  author?: string;
+  /** 安装时拼好的 logo 地址，前端远程加载 */
+  logoUrl?: string;
+  status: McpServerStatus;
   toolCount: number;
-  error?: string;
-  oauthUrl?: string;
+  /** 工具明细，握手成功后可用 */
+  tools?: McpToolInfo[];
+  /** 握手时服务端声明的使用文档，只有连接成功才有 */
+  instructions?: string;
+  /** 远程服务的地址，stdio 服务缺省 */
+  url?: string;
+  /** 由状态与配置推导的连接类型 */
+  connectionType?: McpConnectionType;
   /** 是否为 Agent App（server 侧恒返回布尔，未声明即 false） */
   agentApp?: boolean;
   /** 声明支持的 UI 变体；未声明时字段缺席，按仅 desktop 对待 */
   supportedUI?: SupportedUI[];
+  error?: string;
+  oauthUrl?: string;
+}
+
+/** MCP 服务器详情（对应 GET /api/mcp/:name 的返回），tools 与 connectionType 必返 */
+export interface McpServerDetail extends McpServerInfo {
+  tools: McpToolInfo[];
+  connectionType: McpConnectionType;
 }
 
 /** Agent App 信息（移动端只关心名字，界面与图标走 /apps/:name 反代路径） */
@@ -327,10 +343,40 @@ export interface AppInfo {
   name: string;
 }
 
-/** Skill 信息（对应 GET /api/skills 返回的单个 skill） */
+/** Skill 信息（对应 GET /api/skills 返回的单个 skill，字段对齐 @persona/shared） */
 export interface SkillInfo {
   name: string;
   description: string;
+  /** 安装时落盘的显示名，手动创建的技能缺省 */
+  displayName?: string;
+  /** 安装时落盘的作者 */
+  author?: string;
+  /** 安装时落盘的卡片图标地址 */
+  logoUrl?: string;
+  /** 技能目录的绝对路径 */
+  location: string;
+}
+
+/** Skill 详情（对应 GET /api/skills/:name 的返回），正文按需单查 */
+export interface SkillDetail extends SkillInfo {
+  content: string;
+}
+
+/** 模型供应商信息（对应 GET /api/providers 返回的单个 provider，桌面端 ModelSelector 同源消费） */
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  models: string[];
+  hasAuth: boolean;
+  docUrl: string;
+}
+
+/** 音色条目（对应 GET /api/voices 的返回，预置与克隆一起返回） */
+export interface VoiceOption {
+  id: string;
+  name: string;
+  gender: 'male' | 'female' | 'neutral';
+  group: 'preset' | 'cloned';
 }
 
 /**
@@ -434,6 +480,30 @@ export async function fetchAgentDetail(
 }
 
 /**
+ * 更新指定 agent 的部分字段（对应 PUT /api/agents/:id）。
+ * 只传需要修改的字段，服务端按部分更新语义合并。
+ * @param serverAddress 服务器地址
+ * @param agentId Agent ID
+ * @param input 局部更新字段
+ * @returns 更新后的 AgentInfo
+ */
+export async function updateAgent(
+  serverAddress: string,
+  agentId: string,
+  input: AgentUpdateInput
+): Promise<AgentInfo> {
+  const url = `${serverAddress}/api/agents/${agentId}`;
+  const responseText = await httpPut(url, input);
+  const data = JSON.parse(responseText) as { agent: AgentInfo };
+  logger.info(
+    `${TAG} updateAgent → agentId=${agentId} fields=${Object.keys(input).join(
+      ','
+    )}`
+  );
+  return data.agent;
+}
+
+/**
  * 获取服务器上所有 MCP 服务器列表（含连接状态和工具信息）。
  */
 export async function fetchMcpServers(
@@ -443,6 +513,24 @@ export async function fetchMcpServers(
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { servers: McpServerInfo[] };
   return data.servers;
+}
+
+/**
+ * 获取单个 MCP 服务器的详情（对应 GET /api/mcp/:name）。
+ * 含逐 tool 名称与描述、instructions 与 connectionType，
+ * instructions 只有连接成功才有，needsAuth 状态拿不到。
+ */
+export async function getMcpServer(
+  serverAddress: string,
+  name: string
+): Promise<McpServerDetail> {
+  const url = `${serverAddress}/api/mcp/${encodeURIComponent(name)}`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { server: McpServerDetail };
+  logger.info(
+    `${TAG} getMcpServer → ${name} status=${data.server.status} tools=${data.server.toolCount}`
+  );
+  return data.server;
 }
 
 /**
@@ -475,6 +563,52 @@ export async function fetchSkills(serverAddress: string): Promise<SkillInfo[]> {
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { skills: SkillInfo[] };
   return data.skills;
+}
+
+/**
+ * 获取单个技能的详情（对应 GET /api/skills/:name），正文 content 全文按需单查。
+ */
+export async function getSkill(
+  serverAddress: string,
+  name: string
+): Promise<SkillDetail> {
+  const url = `${serverAddress}/api/skills/${encodeURIComponent(name)}`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { skill: SkillDetail };
+  logger.info(
+    `${TAG} getSkill → ${name} contentLength=${data.skill.content.length}`
+  );
+  return data.skill;
+}
+
+/**
+ * 获取全部模型供应商与各自的候选模型（对应 GET /api/providers）。
+ */
+export async function listProviders(
+  serverAddress: string
+): Promise<ProviderStatus[]> {
+  const url = `${serverAddress}/api/providers`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { providers: ProviderStatus[] };
+  logger.info(
+    `${TAG} listProviders → ${data.providers.length} providers: ${data.providers
+      .map((p) => p.id)
+      .join(', ')}`
+  );
+  return data.providers;
+}
+
+/**
+ * 获取音色目录（对应 GET /api/voices），克隆音色在前预置在后。
+ */
+export async function listVoices(
+  serverAddress: string
+): Promise<VoiceOption[]> {
+  const url = `${serverAddress}/api/voices`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { voices: VoiceOption[] };
+  logger.info(`${TAG} listVoices → ${data.voices.length} voices`);
+  return data.voices;
 }
 
 interface SessionMeta {
