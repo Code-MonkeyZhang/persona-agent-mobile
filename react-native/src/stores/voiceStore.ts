@@ -50,9 +50,10 @@ async function ensureCleanCacheDir(): Promise<string> {
 }
 
 /**
- * 将 ArrayBuffer 音频数据写入临时文件，返回文件路径
+ * 将 ArrayBuffer 音频数据写入临时文件，返回文件路径。
+ * 聊天语音与详情页试听共用，写前清空缓存目录保证不留旧文件。
  */
-async function writeAudioFile(audio: ArrayBuffer): Promise<string> {
+export async function writeAudioFile(audio: ArrayBuffer): Promise<string> {
   const cacheDir = await ensureCleanCacheDir();
   const filePath = `${cacheDir}/tts_${Date.now()}.mp3`;
   const base64 = arrayBufferToBase64(audio);

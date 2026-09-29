@@ -611,6 +611,21 @@ export async function listVoices(
   return data.voices;
 }
 
+/**
+ * 获取 TTS 配置（对应 GET /api/tts/config），详情页试听只取 apiKey。
+ */
+export async function fetchTtsConfig(
+  serverAddress: string
+): Promise<{ apiKey: string }> {
+  const url = `${serverAddress}/api/tts/config`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { config: { apiKey: string } };
+  logger.info(
+    `${TAG} fetchTtsConfig → apiKey=${data.config.apiKey ? 'present' : 'empty'}`
+  );
+  return data.config;
+}
+
 interface SessionMeta {
   id: string;
   agentId: string;
