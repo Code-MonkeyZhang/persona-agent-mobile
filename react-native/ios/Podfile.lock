@@ -959,7 +959,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-compressor (1.10.1):
+  - react-native-compressor (1.19.4):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1684,7 +1684,7 @@ SPEC CHECKSUMS:
   React-logger: 7e7403a2b14c97f847d90763af76b84b152b6fce
   React-Mapbuffer: 11029dcd47c5c9e057a4092ab9c2a8d10a496a33
   react-native-blur: 30d91a67da86a4d4d924b0c7c36f6e01479a246b
-  react-native-compressor: 2ae9013718fb351264fcfcdf232eccbbf3d280a2
+  react-native-compressor: 3c762b0afee7790cdc93aafd3827ec0bb646542c
   react-native-document-picker: c4f197741c327270453aa9840932098e0064fd52
   react-native-get-random-values: 21325b2244dfa6b58878f51f9aa42821e7ba3d06
   react-native-image-picker: fb0c2b3adc3eff6caa3cd6a507a34b9dcc9238dd
@@ -1734,4 +1734,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: b24b6e59f888c7cca730599b28e9cff984e226f0
 
-COCOAPODS: 1.14.3
+COCOAPODS: 1.16.2
