@@ -32,7 +32,6 @@ const FULL_SWIPE_REMAINING = 80;
 
 interface SessionListItemProps {
   item: Chat;
-  isSelected: boolean;
   openId: string | null;
   onPress: () => void;
   onOpen: (id: string) => void;
@@ -89,7 +88,6 @@ const DeleteAction: React.FC<{
 
 const SessionListItem: React.FC<SessionListItemProps> = ({
   item,
-  isSelected,
   openId,
   onPress,
   onOpen,
@@ -128,17 +126,14 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
       onSwipeableWillOpen={() => onOpen(item.id)}
     >
       <TouchableOpacity
-        activeOpacity={1}
+        activeOpacity={0.7}
         onPress={onPress}
         onLayout={(e) => {
           rowWidth.value = e.nativeEvent.layout.width;
         }}
-        style={[styles.touch, isSelected && styles.touchSelected]}
+        style={styles.touch}
       >
-        <Text
-          numberOfLines={1}
-          style={[styles.title, isSelected && styles.titleSelected]}
-        >
+        <Text numberOfLines={1} style={styles.title}>
           {item.title}
         </Text>
       </TouchableOpacity>
@@ -160,19 +155,10 @@ const createStyles = (colors: ColorScheme) =>
       paddingRight: 16,
       paddingVertical: 12,
       borderRadius: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: 'transparent',
-    },
-    touchSelected: {
-      backgroundColor: colors.primarySelectedBackground,
-      borderLeftColor: colors.primary,
     },
     title: {
       fontSize: 18,
       color: colors.text,
-    },
-    titleSelected: {
-      color: colors.primary,
     },
     /** 右滑露出的删除区（由 ReanimatedSwipeable 的 absoluteFill 容器自动撑满行高）。
      *  仅放一个红色 X，无背景，露出时显示抽屉原色。 */

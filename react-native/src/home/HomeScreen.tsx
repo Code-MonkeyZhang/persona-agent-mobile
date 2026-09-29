@@ -473,7 +473,6 @@ const HomeScreen: React.FC = () => {
           renderItem={({ item }) => (
             <SessionListItem
               item={item}
-              isSelected={activeSessionId === item.id}
               openId={openId}
               onPress={() => handleOpenSession(item)}
               onOpen={setOpenId}
@@ -484,34 +483,15 @@ const HomeScreen: React.FC = () => {
             <View>
               {renderAgentCard()}
               <View style={styles.divider} />
-              {/* 常驻聊天入口，选中态左侧蓝条 */}
+              {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
               <TouchableOpacity
-                style={[
-                  styles.chatCard,
-                  activeSessionId === currentChatSessionId &&
-                    styles.chatCardSelected,
-                ]}
+                style={styles.chatCard}
                 activeOpacity={0.7}
                 onPress={openChatSession}
               >
-                <MessageCircle
-                  size={20}
-                  color={
-                    activeSessionId === currentChatSessionId
-                      ? colors.primary
-                      : colors.textSecondary
-                  }
-                />
+                <MessageCircle size={20} color={colors.textSecondary} />
                 <View style={styles.chatTextContainer}>
-                  <Text
-                    style={[
-                      styles.chatCardText,
-                      activeSessionId === currentChatSessionId &&
-                        styles.chatCardTextSelected,
-                    ]}
-                  >
-                    {t('home.chat')}
-                  </Text>
+                  <Text style={styles.chatCardText}>{t('home.chat')}</Text>
                   <Text style={styles.chatPreview} numberOfLines={1}>
                     {chatEntryPreview}
                   </Text>
@@ -675,20 +655,11 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
       marginHorizontal: 10,
       borderRadius: 12,
-      borderLeftWidth: 3.5,
-      borderLeftColor: 'transparent',
-    },
-    chatCardSelected: {
-      backgroundColor: colors.primarySelectedBackground,
-      borderLeftColor: colors.primary,
     },
     chatCardText: {
       fontSize: 18,
       fontWeight: '500',
       color: colors.text,
-    },
-    chatCardTextSelected: {
-      color: colors.primary,
     },
     chatTextContainer: {
       flex: 1,
