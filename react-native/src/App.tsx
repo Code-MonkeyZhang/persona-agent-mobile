@@ -9,6 +9,10 @@ import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import SettingsScreen from './settings/SettingsScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
+import AgentNavPage from './agent-nav/AgentNavPage.tsx';
+import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
+import SkillDetailScreen from './agent-nav/SkillDetailScreen.tsx';
+import BuiltinDetailScreen from './agent-nav/BuiltinDetailScreen.tsx';
 import ServerScreen from './server/ServerScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
 import AppLauncher from './chat/component/AppLauncher.tsx';
@@ -38,7 +42,8 @@ const styles = StyleSheet.create({
  * 包含页面：
  * - Home: 会话主页(默认首屏)
  * - Chat: 聊天页(压栈进入，返回即卸载，头部由 ChatScreen 自配置)
- * - AgentDetail / Server / ScanQR / Settings / AppLauncher / AppSurface
+ * - AgentDetail / AgentNav / McpDetail / SkillDetail / BuiltinDetail
+ * - Server / ScanQR / Settings / AppLauncher / AppSurface
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -69,6 +74,33 @@ const AppNavigator = () => {
           ...stackScreenOptions,
           title: t('agent.title'),
         }}
+      />
+      {/* 工具技能管理与详情，标题随 AgentNav 携带的视图参数取值 */}
+      <Stack.Screen
+        name="AgentNav"
+        component={AgentNavPage}
+        options={({ route }) => ({
+          ...stackScreenOptions,
+          title:
+            route.params.view === 'tools'
+              ? t('nav.titleTools')
+              : t('nav.titleSkills'),
+        })}
+      />
+      <Stack.Screen
+        name="McpDetail"
+        component={McpDetailScreen}
+        options={{ ...stackScreenOptions, title: t('detail.mcpTitle') }}
+      />
+      <Stack.Screen
+        name="SkillDetail"
+        component={SkillDetailScreen}
+        options={{ ...stackScreenOptions, title: t('detail.skillTitle') }}
+      />
+      <Stack.Screen
+        name="BuiltinDetail"
+        component={BuiltinDetailScreen}
+        options={{ ...stackScreenOptions, title: t('detail.mcpTitle') }}
       />
       <Stack.Screen
         name="Server"

@@ -22,10 +22,12 @@ import {
   MonitorSmartphone,
   Plus,
   Settings,
+  Sparkles,
+  Wrench,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ColorScheme, useTheme } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
@@ -244,6 +246,19 @@ const HomeScreen: React.FC = () => {
     handleUpdateHistory,
     loadAgentInfo,
   ]);
+
+  /** 返回焦点时重拉 agent 列表，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
+  const firstFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        return;
+      }
+      logger.info('[Home] focus reload agents');
+      loadAgents();
+    }, [loadAgents])
+  );
 
   /** agent 名称同步进会话仓库，占位气泡与历史消息转换使用 */
   useEffect(() => {
@@ -503,6 +518,32 @@ const HomeScreen: React.FC = () => {
                 </View>
               </TouchableOpacity>
               <View style={styles.divider} />
+              {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 18px 文字与 20px 图标档 */}
+              <TouchableOpacity
+                style={styles.navEntryRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  logger.info('[Home] open agent nav: tools');
+                  navigation.navigate('AgentNav', { view: 'tools' });
+                }}
+              >
+                <Wrench size={20} color={colors.textSecondary} />
+                <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
+                <ChevronRight size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.navEntryRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  logger.info('[Home] open agent nav: skills');
+                  navigation.navigate('AgentNav', { view: 'skills' });
+                }}
+              >
+                <Sparkles size={20} color={colors.textSecondary} />
+                <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
+                <ChevronRight size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
               {/* 会话区标题行，行尾新建加号 */}
               <View style={styles.sessionsHeader}>
                 <MessagesSquare size={20} color={colors.textSecondary} />
@@ -657,6 +698,21 @@ const createStyles = (colors: ColorScheme) =>
       fontSize: 13,
       color: colors.textTertiary,
       marginTop: 2,
+    },
+    /** 工具与技能入口行 */
+    navEntryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginHorizontal: 10,
+      borderRadius: 12,
+    },
+    navEntryText: {
+      flex: 1,
+      fontSize: 18,
+      color: colors.text,
     },
     /** 会话区标题行 */
     sessionsHeader: {
