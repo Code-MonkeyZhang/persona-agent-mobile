@@ -150,14 +150,15 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 2,
       borderRadius: 8,
     },
+    /** 左边距 42 复刻主页行图标加间距的占位宽度，会话标题与四行入口文字同列 */
     touch: {
-      paddingLeft: 28,
+      paddingLeft: 42,
       paddingRight: 16,
       paddingVertical: 12,
       borderRadius: 8,
     },
     title: {
-      ...typography.titleSection,
+      ...typography.titleDisplay,
       color: colors.text,
     },
     /** 右滑露出的删除区（由 ReanimatedSwipeable 的 absoluteFill 容器自动撑满行高）。

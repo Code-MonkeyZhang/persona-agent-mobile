@@ -6,6 +6,7 @@
  *   agent 拉取与当前 agent 确定与启动会话恢复在连接建立后完成。
  *   Chat 是压栈页，点聊天入口或会话行进入，返回即回到本页。
  *   长相基准是 demo 第三轮的 HomePage，横滑交互走原生 ScrollView。
+ *   字号与次级文字颜色及会话行缩进经用户确认有意偏离 demo 基准，不作为对齐缺陷回改。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -446,7 +447,11 @@ const HomeScreen: React.FC = () => {
               activeOpacity={0.7}
               onPress={openChatSession}
             >
-              <MessageCircle size={20} color={colors.textSecondary} />
+              <MessageCircle
+                size={20}
+                color={colors.textSecondary}
+                style={styles.chatCardIcon}
+              />
               <View style={styles.chatTextContainer}>
                 <Text style={styles.chatCardText}>{t('home.chat')}</Text>
                 <Text style={styles.chatPreview} numberOfLines={1}>
@@ -455,7 +460,7 @@ const HomeScreen: React.FC = () => {
               </View>
             </TouchableOpacity>
             <View style={styles.divider} />
-            {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 18px 文字与 20px 图标档 */}
+            {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
             <TouchableOpacity
               style={styles.navEntryRow}
               activeOpacity={0.7}
@@ -563,9 +568,9 @@ const createStyles = (colors: ColorScheme) =>
       borderColor: colors.primary,
     },
     agentItemName: {
-      ...typography.meta,
+      ...typography.content,
       maxWidth: 80,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
     },
     agentItemNameCurrent: {
       color: colors.primary,
@@ -598,18 +603,22 @@ const createStyles = (colors: ColorScheme) =>
       marginHorizontal: 10,
       borderRadius: 12,
     },
+    /** 聊天入口图标，顶部补偿 3px 与两行文字的首行光学居中 */
+    chatCardIcon: {
+      marginTop: 3,
+    },
     chatCardText: {
-      ...typography.titleSection,
+      ...typography.titleDisplay,
       fontWeight: '500',
       color: colors.text,
     },
     chatTextContainer: {
       flex: 1,
-      marginLeft: 10,
+      marginLeft: 12,
     },
     chatPreview: {
-      ...typography.meta,
-      color: colors.textTertiary,
+      ...typography.content,
+      color: colors.textSecondary,
       marginTop: 2,
     },
     /** 工具与技能入口行 */
@@ -624,7 +633,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     navEntryText: {
       flex: 1,
-      ...typography.titleSection,
+      ...typography.titleDisplay,
       color: colors.text,
     },
     /** 会话区标题行 */
@@ -633,19 +642,22 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       gap: 12,
       paddingHorizontal: 12,
+      marginHorizontal: 10,
       paddingTop: 12,
       paddingBottom: 4,
     },
     sessionsHeaderText: {
       flex: 1,
-      ...typography.titleSection,
+      ...typography.titleDisplay,
       color: colors.text,
     },
+    /** 零会话占位提示，左边距与会话标题同列对齐 */
     emptySessions: {
-      paddingHorizontal: 28,
+      paddingLeft: 54,
+      paddingRight: 28,
       paddingVertical: 12,
       ...typography.body,
-      color: colors.textTertiary,
+      color: colors.textSecondary,
     },
   });
 
