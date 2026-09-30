@@ -491,7 +491,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 12,
     },
     rowBorder: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
     },
     rowLabel: {
@@ -513,7 +513,7 @@ const createStyles = (colors: ColorScheme) =>
       transform: [{ rotate: '90deg' }],
     },
     promptBox: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
       paddingHorizontal: 16,
       paddingVertical: 12,

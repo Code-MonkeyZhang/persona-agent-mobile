@@ -575,7 +575,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     divider: {
-      height: StyleSheet.hairlineWidth,
+      height: 1,
       backgroundColor: colors.borderLight,
       marginHorizontal: 16,
       marginVertical: 10,

@@ -15,7 +15,6 @@
   "agent": {
     "title": "Agent 详情",
     "notFound": "未找到 Agent",
-    "defaultName": "Agent",
     "sectionModel": "模型配置",
     "sectionChat": "聊天配置",
     "sectionVoice": "音色",
@@ -72,13 +71,8 @@
     "errTimeout": "连接超时",
     "errHttp404": "服务未找到",
     "errHttp5xx": "服务器错误",
-    "errUnknown": "未知错误",
-    "enterAddress": "请输入服务器地址",
     "scanToConnect": "扫码连接",
     "scanning": "将二维码放入框内即可自动扫描",
-    "pairing": "配对中...",
-    "scanFailed": "配对失败",
-    "retry": "重试",
     "cameraPermissionDenied": "需要相机权限才能扫码"
   },
   "error": {

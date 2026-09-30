@@ -15,7 +15,6 @@
   "agent": {
     "title": "Agent Detail",
     "notFound": "Agent not found",
-    "defaultName": "Agent",
     "sectionModel": "Model Config",
     "sectionChat": "Chat Config",
     "sectionVoice": "Voice",
@@ -72,13 +71,8 @@
     "errTimeout": "Timed out",
     "errHttp404": "Service not found",
     "errHttp5xx": "Server error",
-    "errUnknown": "Unknown error",
-    "enterAddress": "Please enter a server address",
     "scanToConnect": "Scan to Connect",
     "scanning": "Align the QR code within the frame",
-    "pairing": "Pairing...",
-    "scanFailed": "Pairing failed",
-    "retry": "Retry",
     "cameraPermissionDenied": "Camera permission is required to scan QR codes"
   },
   "error": {

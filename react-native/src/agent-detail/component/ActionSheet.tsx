@@ -91,7 +91,7 @@ const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      backgroundColor: colors.overlay,
       justifyContent: 'flex-end',
     },
     panel: {
@@ -127,7 +127,7 @@ const createStyles = (colors: ColorScheme) =>
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 10,
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
     },
     optionLabel: {

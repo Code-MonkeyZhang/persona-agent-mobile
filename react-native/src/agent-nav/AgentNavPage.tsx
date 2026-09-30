@@ -449,7 +449,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 14,
     },
     rowBorder: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
     },
     rowContent: {

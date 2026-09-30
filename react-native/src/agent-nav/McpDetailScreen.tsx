@@ -265,7 +265,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
     },
     toolRowBorder: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
     },
     toolName: {

@@ -327,7 +327,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 12,
     },
     infoRowBorder: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.borderLight,
     },
     infoLabel: {
