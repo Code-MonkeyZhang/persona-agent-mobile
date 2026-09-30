@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
   type AgentInfo,
@@ -431,7 +431,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 80,
     },
     emptyStateText: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textTertiary,
     },
     row: {
@@ -457,7 +457,7 @@ const createStyles = (colors: ColorScheme) =>
       minWidth: 0,
     },
     rowTitle: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.text,
     },
     /** 副行容器，收住状态标与标题行的间距 */
@@ -466,7 +466,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     skillRowSub: {
       marginTop: 2,
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
     },
     builtinIconBox: {

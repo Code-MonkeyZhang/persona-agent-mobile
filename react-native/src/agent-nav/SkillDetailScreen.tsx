@@ -27,8 +27,8 @@ import {
   EntityLogo,
   GroupCard,
   GroupSection,
-  monoFont,
 } from './component/NavDetailShared.tsx';
+import { typography, monoFont } from '../theme/index.ts';
 
 type Props = NativeStackScreenProps<RouteParamList, 'SkillDetail'>;
 
@@ -159,7 +159,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 40,
     },
     emptyText: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textTertiary,
     },
     headerCard: {
@@ -177,34 +177,32 @@ const createStyles = (colors: ColorScheme) =>
       minWidth: 0,
     },
     headerName: {
-      fontSize: 17,
+      ...typography.titleBar,
       fontWeight: '600',
       color: colors.text,
     },
     headerAuthor: {
       marginTop: 2,
-      fontSize: 11,
+      ...typography.tertiary,
       color: colors.textTertiary,
     },
     infoText: {
-      fontSize: 14,
-      lineHeight: 21,
+      ...typography.content,
       color: colors.textDarkGray,
     },
     infoIntro: {
-      fontSize: 13,
-      lineHeight: 21,
+      ...typography.meta,
       color: colors.textDarkGray,
     },
     slugText: {
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textDarkGray,
       fontFamily: monoFont,
     },
     hintText: {
       paddingHorizontal: 16,
       paddingVertical: 14,
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
     },
     docContainer: {

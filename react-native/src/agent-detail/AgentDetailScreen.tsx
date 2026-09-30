@@ -19,7 +19,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ImageViewing from 'react-native-image-viewing';
 import { ChevronRight, Folder, Volume2 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography, monoFont } from '../theme/index.ts';
 import { logger } from '../lib/logger';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -39,7 +39,6 @@ import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import {
   GroupCard,
   GroupSection,
-  monoFont,
 } from '../agent-nav/component/NavDetailShared.tsx';
 import { synthesize } from '../lib/tts.ts';
 import { getAudioPlayer } from '../lib/audio-player.ts';
@@ -456,7 +455,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.surface,
     },
     emptyText: {
-      fontSize: 16,
+      ...typography.bodyLg,
       color: colors.textSecondary,
     },
     headerCard: {
@@ -475,14 +474,13 @@ const createStyles = (colors: ColorScheme) =>
       minWidth: 0,
     },
     name: {
-      fontSize: 20,
+      ...typography.titleDisplay,
       fontWeight: '600',
       color: colors.text,
     },
     desc: {
       marginTop: 4,
-      fontSize: 12,
-      lineHeight: 18,
+      ...typography.caption,
       color: colors.textTertiary,
     },
     row: {
@@ -498,16 +496,16 @@ const createStyles = (colors: ColorScheme) =>
     },
     rowLabel: {
       flex: 1,
-      fontSize: 14,
+      ...typography.content,
       color: colors.text,
     },
     rowValue: {
-      fontSize: 14,
+      ...typography.content,
       color: colors.textTertiary,
     },
     rowValueMono: {
       maxWidth: 170,
-      fontSize: 12,
+      ...typography.caption,
       fontFamily: monoFont,
       color: colors.textTertiary,
     },
@@ -525,8 +523,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 10,
       backgroundColor: colors.surfaceSecondary,
       padding: 10,
-      fontSize: 12,
-      lineHeight: 18,
+      ...typography.caption,
       color: colors.text,
     },
     previewBtn: {
@@ -554,8 +551,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     pathText: {
       flex: 1,
-      fontSize: 11,
-      lineHeight: 18,
+      ...typography.tertiary,
       fontFamily: monoFont,
       color: colors.textTertiary,
     },

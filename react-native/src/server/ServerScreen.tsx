@@ -14,7 +14,7 @@ import { Link as LinkIcon, Check, ScanLine } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { logger } from '../lib/logger';
@@ -234,7 +234,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     scanButtonText: {
       color: colors.primary,
-      fontSize: 15,
+      ...typography.body,
       fontWeight: '600',
     },
     inputWrap: {
@@ -253,7 +253,7 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 12,
       paddingLeft: 32,
       paddingRight: 12,
-      fontSize: 16,
+      ...typography.bodyLg,
       color: colors.text,
     },
     connectButton: {
@@ -275,7 +275,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     connectButtonText: {
       color: colors.primaryForeground,
-      fontSize: 16,
+      ...typography.bodyLg,
       fontWeight: '600',
     },
     banner: {
@@ -295,8 +295,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     bannerText: {
       flex: 1,
-      fontSize: 14,
-      lineHeight: 20,
+      ...typography.content,
     },
   });
 

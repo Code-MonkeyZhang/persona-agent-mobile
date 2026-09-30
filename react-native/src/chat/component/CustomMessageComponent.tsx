@@ -35,7 +35,7 @@ import { logger } from '../../lib/logger';
 import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
-import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import { Check, Copy } from 'lucide-react-native';
 import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
@@ -287,7 +287,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     name: {
       flex: 1,
-      fontSize: 19,
+      ...typography.body,
       fontWeight: '500',
       color: colors.text,
     },
@@ -305,8 +305,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.surfaceSecondary,
     },
     questionText: {
-      lineHeight: 29,
-      fontSize: 19,
+      ...typography.body,
       color: colors.text,
     },
     /** 待注入插话的弱化文字 */
@@ -329,7 +328,7 @@ const createStyles = (colors: ColorScheme) =>
       padding: 8,
     },
     metricsText: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textTertiary,
       marginRight: 4,
     },
@@ -339,10 +338,10 @@ const createStyles = (colors: ColorScheme) =>
 const customMarkedStyles: MarkedStyles = {
   table: { marginVertical: 4 },
   li: { paddingVertical: 4 },
-  h1: { fontSize: 34 },
-  h2: { fontSize: 29 },
-  h3: { fontSize: 24 },
-  h4: { fontSize: 22 },
+  h1: { ...typography.display },
+  h2: { ...typography.display },
+  h3: { ...typography.titleDisplay },
+  h4: { ...typography.titleDisplay },
   blockquote: { marginVertical: 8 },
   paragraph: { paddingVertical: 6 },
 };

@@ -9,7 +9,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ChatStatus, FileInfo } from '../../types/Chat.ts';
-import { ColorScheme, useTheme } from '../../theme/index.ts';
+import { ColorScheme, useTheme, typography } from '../../theme/index.ts';
 import CustomSendComponent from './CustomSendComponent.tsx';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { CustomChatFooter } from './CustomChatFooter.tsx';
@@ -98,7 +98,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     textInput: {
       color: colors.text,
-      fontSize: 19,
+      ...typography.bodyLg,
       fontWeight: 'normal',
       maxHeight: 200,
       textAlignVertical: 'top',

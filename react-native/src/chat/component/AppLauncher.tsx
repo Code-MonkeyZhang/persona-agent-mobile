@@ -15,7 +15,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme/index.ts';
+import { useTheme, typography } from '../../theme/index.ts';
 import { useAppPanelStore } from '../../stores/appPanelStore';
 import { getServerAddress } from '../../storage/StorageUtils.ts';
 import { logger } from '../../lib/logger';
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   appName: {
-    fontSize: 14,
+    ...typography.content,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 15,
+    ...typography.body,
   },
 });
 

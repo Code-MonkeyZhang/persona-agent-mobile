@@ -21,7 +21,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Chat } from '../types/Chat.ts';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 
@@ -157,7 +157,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 8,
     },
     title: {
-      fontSize: 18,
+      ...typography.titleSection,
       color: colors.text,
     },
     /** 右滑露出的删除区（由 ReanimatedSwipeable 的 absoluteFill 容器自动撑满行高）。

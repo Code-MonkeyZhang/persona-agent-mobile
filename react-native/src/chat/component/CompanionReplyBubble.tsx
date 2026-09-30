@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, ScrollView, Text, StyleSheet } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ColorScheme } from '../../theme/index';
+import { ColorScheme, typography } from '../../theme/index';
 
 const createBubbleStyles = (colors: ColorScheme) =>
   StyleSheet.create({
@@ -32,12 +32,11 @@ const createBubbleStyles = (colors: ColorScheme) =>
       paddingBottom: 12,
     },
     text: {
-      fontSize: 17,
+      ...typography.content,
       color: colors.textDarkGray,
-      lineHeight: 26,
     },
     thinking: {
-      fontSize: 16,
+      ...typography.bodyLg,
       color: colors.textTertiary,
       textAlign: 'center',
       paddingHorizontal: 16,

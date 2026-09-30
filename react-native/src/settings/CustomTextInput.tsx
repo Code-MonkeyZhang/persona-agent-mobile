@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
-import { useTheme, ColorScheme } from '../theme';
+import { useTheme, ColorScheme, typography } from '../theme';
 
 /** 文本输入框 Props */
 interface CustomTextInputProps {
@@ -99,7 +99,7 @@ const createStyles = (colors: ColorScheme) =>
       top: -8,
       zIndex: 999,
       paddingHorizontal: 4,
-      fontSize: 15,
+      ...typography.body,
       fontWeight: '500',
     },
     inputContainer: {

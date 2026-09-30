@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 
 interface ConnectionBannerProps {
@@ -85,7 +85,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     text: {
       flex: 1,
-      fontSize: 15,
+      ...typography.body,
       fontWeight: '600',
     },
     textStalled: {
@@ -101,7 +101,7 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.primaryForeground,
     },
     reconnectText: {
-      fontSize: 14,
+      ...typography.content,
       fontWeight: '600',
       color: colors.error,
     },

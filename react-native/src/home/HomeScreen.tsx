@@ -29,7 +29,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ColorScheme, useTheme } from '../theme/index.ts';
+import { ColorScheme, typography, useTheme } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
   type AgentInfo,
@@ -638,12 +638,12 @@ const createStyles = (colors: ColorScheme) =>
       marginLeft: 12,
     },
     agentName: {
-      fontSize: 17,
+      ...typography.titleBar,
       fontWeight: '600',
       color: colors.text,
     },
     agentDesc: {
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
       marginTop: 3,
     },
@@ -657,7 +657,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 12,
     },
     chatCardText: {
-      fontSize: 18,
+      ...typography.titleSection,
       fontWeight: '500',
       color: colors.text,
     },
@@ -666,7 +666,7 @@ const createStyles = (colors: ColorScheme) =>
       marginLeft: 10,
     },
     chatPreview: {
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
       marginTop: 2,
     },
@@ -682,7 +682,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     navEntryText: {
       flex: 1,
-      fontSize: 18,
+      ...typography.titleSection,
       color: colors.text,
     },
     /** 会话区标题行 */
@@ -696,7 +696,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     sessionsHeaderText: {
       flex: 1,
-      fontSize: 18,
+      ...typography.titleSection,
       color: colors.text,
     },
     newChatButton: {
@@ -706,7 +706,7 @@ const createStyles = (colors: ColorScheme) =>
     emptySessions: {
       paddingHorizontal: 28,
       paddingVertical: 12,
-      fontSize: 15,
+      ...typography.body,
       color: colors.textTertiary,
     },
   });

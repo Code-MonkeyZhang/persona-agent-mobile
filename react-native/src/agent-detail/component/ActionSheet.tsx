@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 
 /** 底部选择器：标题带上提面板，遮罩点击收起 */
 export function ActionSheet({
@@ -112,13 +112,13 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: 12,
     },
     title: {
-      fontSize: 15,
+      ...typography.body,
       fontWeight: '600',
       color: colors.text,
       marginBottom: 4,
     },
     groupLabel: {
-      fontSize: 11,
+      ...typography.tertiary,
       color: colors.textTertiary,
       marginTop: 10,
       marginBottom: 2,
@@ -131,11 +131,11 @@ const createStyles = (colors: ColorScheme) =>
       borderTopColor: colors.borderLight,
     },
     optionLabel: {
-      fontSize: 14,
+      ...typography.content,
       color: colors.text,
     },
     optionSub: {
-      fontSize: 12,
+      ...typography.caption,
       color: colors.textTertiary,
       marginLeft: 6,
     },

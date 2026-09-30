@@ -6,30 +6,16 @@
  *   长相基准是 demo 的 NavDetailShared，页面壳由原生 Stack header 承担故不做壳组件。
  */
 import React, { Fragment, useEffect, useMemo, useState } from 'react';
-import {
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Minus, Plus, type LucideIcon } from 'lucide-react-native';
 import type { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
-import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import type { McpServerInfo } from '../../api/server-api.ts';
 import type { PressMode } from '../../types/Chat.ts';
 import { ChatStatus } from '../../types/Chat.ts';
 import useMarkdown from '../../chat/component/markdown/useMarkdown.ts';
 import { CustomMarkdownRenderer } from '../../chat/component/markdown/CustomMarkdownRenderer.tsx';
 import { CustomTokenizer } from '../../chat/component/markdown/CustomTokenizer.ts';
-
-/** 等宽字体，功能名的展示档 */
-export const monoFont = Platform.select({
-  ios: 'Menlo',
-  android: 'monospace',
-  default: 'monospace',
-});
 
 /**
  * MCP 状态四态直映，未连接且带 error 覆盖为红点配连接失败文案。
@@ -231,10 +217,10 @@ export function DetailInfoRow({
 
 /** 详情文档段的字号档，比聊天气泡收缩一档适配卡内阅读 */
 const detailMarkedStyles: MarkedStyles = {
-  h1: { fontSize: 20 },
-  h2: { fontSize: 18 },
-  h3: { fontSize: 17 },
-  h4: { fontSize: 16 },
+  h1: { ...typography.titleDisplay },
+  h2: { ...typography.titleSection },
+  h3: { ...typography.titleBar },
+  h4: { ...typography.bodyLg },
   li: { paddingVertical: 3 },
   paragraph: { paddingVertical: 4 },
   blockquote: { marginVertical: 6 },
@@ -322,7 +308,7 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: 16,
     },
     groupLabel: {
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
       marginLeft: 16,
       marginBottom: 8,
@@ -330,7 +316,7 @@ const createStyles = (colors: ColorScheme) =>
     groupEmpty: {
       paddingHorizontal: 16,
       paddingVertical: 14,
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
     },
     infoRow: {
@@ -348,7 +334,7 @@ const createStyles = (colors: ColorScheme) =>
       width: 64,
       flexShrink: 0,
       paddingTop: 2,
-      fontSize: 13,
+      ...typography.meta,
       color: colors.textTertiary,
     },
     infoValue: {
@@ -367,12 +353,11 @@ const createStyles = (colors: ColorScheme) =>
       flexShrink: 0,
     },
     statusTextSm: {
-      fontSize: 12,
+      ...typography.caption,
       color: colors.textTertiary,
     },
     statusTextMd: {
-      fontSize: 14,
-      lineHeight: 21,
+      ...typography.content,
       color: colors.textDarkGray,
     },
   });

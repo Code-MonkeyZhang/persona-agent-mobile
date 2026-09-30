@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { ColorScheme, useTheme } from '../../theme/index.ts';
+import { ColorScheme, useTheme, typography } from '../../theme/index.ts';
 import { useConnectionStore } from '../../stores/connectionStore.ts';
 import { TypingDots } from './TypingDots.tsx';
 
@@ -64,7 +64,7 @@ const createStyles = (colors: ColorScheme) =>
       gap: 6,
     },
     title: {
-      fontSize: 17,
+      ...typography.titleBar,
       fontWeight: '600',
       color: colors.text,
       maxWidth: 180,
@@ -76,7 +76,7 @@ const createStyles = (colors: ColorScheme) =>
       borderRadius: 10,
     },
     pillText: {
-      fontSize: 11,
+      ...typography.tertiary,
       fontWeight: '600',
       color: colors.primaryForeground,
     },

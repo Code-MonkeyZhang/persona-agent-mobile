@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { Check } from 'lucide-react-native';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 
 interface DropdownItem {
   label: string;
@@ -87,7 +87,7 @@ const createStyles = (colors: ColorScheme) =>
       top: -8,
       zIndex: 999,
       paddingHorizontal: 4,
-      fontSize: 15,
+      ...typography.body,
       fontWeight: '500',
     },
     dropdown: {
@@ -108,16 +108,16 @@ const createStyles = (colors: ColorScheme) =>
       elevation: 0,
     },
     placeholderStyle: {
-      fontSize: 17,
+      ...typography.titleBar,
       color: colors.placeholder,
     },
     selectedTextStyle: {
-      fontSize: 17,
+      ...typography.titleBar,
       color: colors.text,
     },
     inputSearchStyle: {
       height: 36,
-      fontSize: 17,
+      ...typography.titleBar,
       color: colors.text,
       borderRadius: 4,
     },
@@ -133,7 +133,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     textItem: {
       flex: 1,
-      fontSize: 17,
+      ...typography.titleBar,
       color: colors.text,
     },
   });

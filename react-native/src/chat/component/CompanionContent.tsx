@@ -11,7 +11,7 @@ import {
   getPoseImageUrl,
 } from '../../api/server-api.ts';
 import { logger } from '../../lib/logger';
-import { useTheme, type ColorScheme } from '../../theme';
+import { useTheme, typography, type ColorScheme } from '../../theme';
 
 interface CompanionContentProps {
   agentId: string;
@@ -107,18 +107,16 @@ const useCompanionStyles = (colors: ColorScheme) =>
           paddingHorizontal: 32,
         },
         noAssetTitle: {
-          fontSize: 22,
+          ...typography.bodyLg,
           fontWeight: '600',
           color: colors.textDarkGray,
           textAlign: 'center',
-          lineHeight: 32,
         },
         noAssetHint: {
-          fontSize: 17,
+          ...typography.meta,
           color: colors.textTertiary,
           marginTop: 12,
           textAlign: 'center',
-          lineHeight: 26,
         },
       }),
     [colors]

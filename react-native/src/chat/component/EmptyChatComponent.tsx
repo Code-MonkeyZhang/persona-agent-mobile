@@ -9,7 +9,7 @@ import React from 'react';
 import { Text, Platform, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from './LoadingSpinner.tsx';
-import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 
 const isAndroid = Platform.OS === 'android';
 
@@ -45,7 +45,7 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     hintText: {
-      fontSize: 19,
+      ...typography.titlePage,
       fontWeight: '500',
       paddingHorizontal: 16,
       textAlign: 'center',

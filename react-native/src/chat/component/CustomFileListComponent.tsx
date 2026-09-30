@@ -20,7 +20,7 @@ import FileViewer from 'react-native-file-viewer';
 import { getFullFileUrl, saveFile } from '../util/FileUtils.ts';
 import { getVideoMetaData, Video } from 'react-native-compressor';
 import * as Progress from 'react-native-progress';
-import { ColorScheme, useTheme } from '../../theme/index.ts';
+import { ColorScheme, useTheme, typography } from '../../theme/index.ts';
 import { logger } from '../../lib/logger';
 import { FileText, Play } from 'lucide-react-native';
 
@@ -390,7 +390,7 @@ const getStyles = (colors: ColorScheme) =>
     },
     deleteText: {
       color: colors.primaryForeground,
-      fontSize: 19,
+      ...typography.micro,
       marginTop: -1.5,
       marginRight: -0.5,
       fontWeight: 'normal',
@@ -434,12 +434,12 @@ const getStyles = (colors: ColorScheme) =>
       marginRight: 4,
     },
     fileName: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.text,
       paddingRight: 12,
     },
     fileFormat: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textSecondary,
       marginTop: 2,
     },

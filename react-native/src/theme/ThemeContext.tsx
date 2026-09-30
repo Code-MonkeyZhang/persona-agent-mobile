@@ -1,8 +1,10 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { lightColors, ColorScheme } from './colors';
+import { typography, Typography } from './typography';
 
 interface ThemeContextType {
   colors: ColorScheme;
+  typography: Typography;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -14,6 +16,7 @@ interface ThemeProviderProps {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const value: ThemeContextType = {
     colors: lightColors,
+    typography,
   };
 
   return (

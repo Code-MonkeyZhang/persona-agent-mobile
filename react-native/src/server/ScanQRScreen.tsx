@@ -13,7 +13,7 @@ import { Camera } from 'react-native-camera-kit';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { logger } from '../lib/logger';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import type { RouteParamList } from '../types/RouteTypes.ts';
@@ -124,7 +124,7 @@ const createStyles = (colors: ColorScheme) =>
       padding: 32,
     },
     permissionText: {
-      fontSize: 16,
+      ...typography.bodyLg,
       color: colors.text,
       textAlign: 'center',
       marginBottom: 24,
@@ -137,7 +137,7 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
     },
     statusText: {
-      fontSize: 15,
+      ...typography.body,
       color: '#fff',
     },
     retryButton: {
@@ -149,7 +149,7 @@ const createStyles = (colors: ColorScheme) =>
       borderColor: 'rgba(255,255,255,0.3)',
     },
     retryButtonText: {
-      fontSize: 14,
+      ...typography.content,
       color: '#fff',
       fontWeight: '500',
     },

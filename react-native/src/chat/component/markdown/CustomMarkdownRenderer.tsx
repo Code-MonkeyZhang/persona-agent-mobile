@@ -25,7 +25,7 @@ import MarkedList from '@jsamr/react-native-li';
 import Decimal from '@jsamr/counter-style/lib/es/presets/decimal';
 import Disc from '@jsamr/counter-style/lib/es/presets/disc';
 import { isAndroid } from '../../../utils/PlatformUtils.ts';
-import { ColorScheme } from '../../../theme/index.ts';
+import { ColorScheme, typography, monoFont } from '../../../theme/index.ts';
 import CopyButton from './CopyButton.tsx';
 
 const CustomCodeHighlighter = lazy(() => import('./CustomCodeHighlighter.tsx'));
@@ -366,15 +366,15 @@ const getTableWidthArr = (
 const createCustomStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     text: {
-      fontSize: 15,
+      ...typography.body,
       paddingVertical: 1.3,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo-Regular' : 'monospace',
+      fontFamily: monoFont,
       color: colors.text,
     },
     codeSpanText: {
       fontStyle: 'normal',
       backgroundColor: colors.input,
-      fontSize: 19,
+      ...typography.body,
       color: colors.text,
     },
     imageContainer: {

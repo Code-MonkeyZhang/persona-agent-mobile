@@ -15,7 +15,7 @@ import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
 
-import { useTheme, ColorScheme } from '../theme/index.ts';
+import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 
 function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme();
@@ -94,12 +94,12 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     rowLabel: {
-      fontSize: 18,
+      ...typography.titleSection,
       fontWeight: '500',
       color: colors.text,
     },
     rowDesc: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textSecondary,
       marginTop: 2,
     },

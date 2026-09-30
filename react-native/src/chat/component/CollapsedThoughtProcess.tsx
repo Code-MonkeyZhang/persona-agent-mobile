@@ -20,7 +20,7 @@ import {
   getThoughtLabel,
   getToolFriendlyFormat,
 } from '../util/thought-utils';
-import { useTheme, type ColorScheme } from '../../theme';
+import { useTheme, typography, type ColorScheme } from '../../theme';
 
 interface CollapsedThoughtProcessProps {
   steps: Thought[];
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   collapsedLabel: {
-    fontSize: 14,
+    ...typography.content,
   },
   panel: {
     marginTop: 4,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   header: {
-    fontSize: 14,
+    ...typography.content,
     fontWeight: '500',
   },
   bodyRow: {
@@ -262,14 +262,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    fontSize: 14,
+    ...typography.content,
   },
   expandBtn: {
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
   expandBtnText: {
-    fontSize: 14,
+    ...typography.content,
   },
 });
 

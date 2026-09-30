@@ -11,7 +11,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { WebView, type WebViewProps } from 'react-native-webview';
 import { LayoutGrid } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../theme/index.ts';
+import { useTheme, typography } from '../../theme/index.ts';
 import { useAppPanelStore } from '../../stores/appPanelStore';
 import { getServerAddress } from '../../storage/StorageUtils.ts';
 import { logger } from '../../lib/logger';
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appName: {
-    fontSize: 17,
+    ...typography.titleBar,
     fontWeight: '600',
     marginLeft: 10,
   },
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    fontSize: 15,
+    ...typography.body,
   },
 });
 
