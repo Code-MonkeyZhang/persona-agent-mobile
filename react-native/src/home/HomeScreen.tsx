@@ -1,10 +1,11 @@
 /**
  * @file home/HomeScreen.tsx
  * @description 会话主页，应用首屏。
- *   左缘 76 像素 agent 竖栏加内容列的两列布局，长相基准是 demo 抽屉设计。
- *   竖栏底色铺满安全区，头像与内容只避让状态栏与 home indicator。
+ *   顶部固定区从上到下是圆钮行、agent 横向条、连接横幅、分隔线与淡阴影，不随列表滚动。
+ *   圆钮行避让状态栏，滚动区从聊天入口开始，列表底部避让 home indicator。
  *   agent 拉取与当前 agent 确定与启动会话恢复在连接建立后完成。
  *   Chat 是压栈页，点聊天入口或会话行进入，返回即回到本页。
+ *   长相基准是 demo 第三轮的 HomePage，横滑交互走原生 ScrollView。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -35,7 +36,6 @@ import {
   type AgentInfo,
   chatSessionIdFor,
   deleteSession,
-  fetchAgentDetail,
   fetchAgents,
   fetchSessions,
   isChatSession,
@@ -58,21 +58,18 @@ import { useChatStore } from '../stores/chatStore';
 import { Chat } from '../types/Chat.ts';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
-import ConnectionBanner from './ConnectionBanner.tsx';
+import ConnectionBanner, { useBannerPress } from './ConnectionBanner.tsx';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
   'Home'
 >;
 
-/** 左缘 agent 竖栏宽度 */
-const RAIL_WIDTH = 76;
-
 const HomeScreen: React.FC = () => {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  /** 安全区尺寸，竖栏底色铺满安全区，内容与头像只做避让 */
+  /** 安全区尺寸，固定区顶部与列表底部只做避让 */
   const insets = useSafeAreaInsets();
   const styles = createStyles(colors);
 
@@ -82,8 +79,6 @@ const HomeScreen: React.FC = () => {
   const [currentAgentId, setCurrentAgentId] = useState(
     getServerAgentId() || ''
   );
-  /** 内容列头卡的当前 Agent 详情 */
-  const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   /** 会话列表，常驻聊天会话不进列表 */
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
   /** 服务端返回的常驻聊天会话预览，拉取列表时更新 */
@@ -141,24 +136,6 @@ const HomeScreen: React.FC = () => {
       );
     } catch (e) {
       logger.error(`[Home] fetchSessions failed: ${e}`);
-    }
-  }, []);
-
-  /** 从服务器拉取当前 Agent 详情，用于内容列头卡展示 */
-  const loadAgentInfo = useCallback(async () => {
-    const address = getServerAddress();
-    const agentId = getServerAgentId();
-    if (!address || !agentId) {
-      return;
-    }
-    try {
-      const detail = await fetchAgentDetail(address, agentId);
-      if (getServerAgentId() !== agentId) {
-        return;
-      }
-      setAgentInfo(detail);
-    } catch (e) {
-      logger.error(`[Home] fetchAgentDetail failed: ${e}`);
     }
   }, []);
 
@@ -237,14 +214,12 @@ const HomeScreen: React.FC = () => {
     );
     loadAgents();
     handleUpdateHistory();
-    loadAgentInfo();
   }, [
     reconnectVersion,
     homeRefreshVersion,
     currentAgentId,
     loadAgents,
     handleUpdateHistory,
-    loadAgentInfo,
   ]);
 
   /** 返回焦点时重拉 agent 列表，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
@@ -269,10 +244,10 @@ const HomeScreen: React.FC = () => {
       );
   }, [agents, currentAgentId]);
 
-  // ==================== 竖栏交互 ====================
+  // ==================== agent 条交互 ====================
   /**
-   * 竖栏点击。点其他 agent 切当前 agent 并刷新内容列，
-   * 点当前 agent 无动作，进入聊天只走内容列入口。
+   * 头像条点击。点其他 agent 切当前 agent 并刷新内容列，
+   * 点当前 agent 进配置页，进入聊天只走内容列入口。
    */
   const handleSelectAgent = (agentId: string) => {
     if (agentId === currentAgentId) {
@@ -342,19 +317,10 @@ const HomeScreen: React.FC = () => {
   };
 
   // ==================== 连接态条 ====================
-  /** 红条点击。地址无效或无地址进 Server 改地址，其余以当前地址立即重连重置退避 */
-  const handleBannerPress = () => {
-    const conn = useConnectionStore.getState();
-    if (conn.status === 'address_invalid' || !conn.serverAddress) {
-      logger.info('[Home] banner tap, go Server');
-      navigation.navigate('Server');
-      return;
-    }
-    logger.info('[Home] banner tap, reconnect now');
-    conn.connect(conn.serverAddress);
-  };
+  /** 红条点击判定来自共享 hook，语义见 useBannerPress */
+  const handleBannerPress = useBannerPress(navigation);
 
-  /** 竖栏底部服务器图标按连接三态着色，连接绿、连接中与重连中蓝、断开红 */
+  /** 顶部连接钮图标按连接三态着色，连接绿、连接中与重连中蓝、断开红 */
   const serverIconColor =
     connectionStatus === 'connected'
       ? colors.success
@@ -362,189 +328,171 @@ const HomeScreen: React.FC = () => {
       ? colors.primary
       : colors.error;
 
-  /** 内容列头卡行，进 AgentDetail */
-  const renderAgentCard = () => {
-    if (!agentInfo) {
-      return (
-        <View style={styles.agentCard}>
-          <AgentAvatar
-            agentId=""
-            serverAddress=""
-            size={44}
-            fallbackIconSize={22}
-          />
-        </View>
-      );
+  /** 点当前头像进 AgentDetail 配置页 */
+  const openAgentDetail = () => {
+    if (!currentAgentId) {
+      return;
     }
-    return (
-      <TouchableOpacity
-        style={styles.agentCard}
-        activeOpacity={0.7}
-        onPress={() => {
-          if (!currentAgentId) {
-            return;
-          }
-          navigation.navigate('AgentDetail', { agentId: currentAgentId });
-        }}
-      >
-        <AgentAvatar
-          agentId={agentInfo.id}
-          serverAddress={serverAddress}
-          size={44}
-          fallbackIconSize={22}
-        />
-        <View style={styles.agentInfo}>
-          <Text style={styles.agentName} numberOfLines={1}>
-            {agentInfo.name}
-          </Text>
-          {agentInfo.description ? (
-            <Text style={styles.agentDesc} numberOfLines={1}>
-              {agentInfo.description}
-            </Text>
-          ) : null}
-        </View>
-        <ChevronRight size={18} color={colors.textTertiary} />
-      </TouchableOpacity>
-    );
+    logger.info(`[Home] open agent detail: ${currentAgentId}`);
+    navigation.navigate('AgentDetail', { agentId: currentAgentId });
   };
 
   return (
     <View style={styles.root}>
-      {/* === 左缘 agent 竖栏，底色铺满安全区 === */}
-      <View style={styles.rail}>
+      {/* === 固定区，圆钮行避让状态栏，整体不随列表滚动 === */}
+      <View style={[styles.fixed, { paddingTop: insets.top }]}>
+        {/* 圆钮行，左上设置，右上连接与新建并排 */}
+        <View style={styles.circleRow}>
+          <TouchableOpacity
+            style={styles.circleBtn}
+            activeOpacity={0.7}
+            accessibilityLabel={t('home.settings')}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Settings size={20} color={colors.textDarkGray} />
+          </TouchableOpacity>
+          <View style={styles.circleRowRight}>
+            <TouchableOpacity
+              style={styles.circleBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t('home.server')}
+              onPress={() => navigation.navigate('Server')}
+            >
+              <MonitorSmartphone size={20} color={serverIconColor} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.circleBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t('home.newSession')}
+              onPress={handleNewChat}
+            >
+              <Plus size={20} color={colors.textDarkGray} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {/* agent 横向条，原生横滑，点当前头像进配置页，点其他头像切换 */}
         <ScrollView
-          style={styles.railList}
-          contentContainerStyle={{ paddingTop: insets.top + 2 }}
-          showsVerticalScrollIndicator={false}
+          style={styles.agentStrip}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.agentTrack}
         >
           {agents.map((agent) => {
             const isCurrent = currentAgentId === agent.id;
             return (
               <TouchableOpacity
                 key={agent.id}
-                style={styles.railItem}
+                style={styles.agentItem}
                 activeOpacity={0.8}
-                onPress={() => handleSelectAgent(agent.id)}
+                onPress={() =>
+                  isCurrent ? openAgentDetail() : handleSelectAgent(agent.id)
+                }
               >
-                {isCurrent && <View style={styles.railPill} />}
-                {isCurrent && <View style={styles.railBar} />}
-                <AgentAvatar
-                  agentId={agent.id}
-                  serverAddress={serverAddress}
-                  size={44}
-                  fallbackIconSize={22}
-                />
+                <View
+                  style={[
+                    styles.avatarRing,
+                    isCurrent && styles.avatarRingCurrent,
+                  ]}
+                >
+                  <AgentAvatar
+                    agentId={agent.id}
+                    serverAddress={serverAddress}
+                    size={64}
+                    fallbackIconSize={32}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.agentItemName,
+                    isCurrent && styles.agentItemNameCurrent,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {agent.name}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-        {/* 竖栏底部 Server 与 Settings，Server 图标按连接态着色，避让 home indicator */}
-        <View style={[styles.railFooter, { paddingBottom: insets.bottom + 8 }]}>
-          <TouchableOpacity
-            style={styles.railFooterButton}
-            activeOpacity={0.7}
-            accessibilityLabel={t('home.server')}
-            onPress={() => navigation.navigate('Server')}
-          >
-            <MonitorSmartphone size={26} color={serverIconColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.railFooterButton}
-            activeOpacity={0.7}
-            accessibilityLabel={t('home.settings')}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Settings size={26} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        <ConnectionBanner onPress={handleBannerPress} />
+        <View style={styles.divider} />
+        {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
+        <View style={styles.fixedShadow} />
       </View>
 
-      {/* === 内容列，连接态条置顶，其余整体滚动，顶部避让状态栏 === */}
-      <View style={[styles.content, { paddingTop: insets.top }]}>
-        <ConnectionBanner onPress={handleBannerPress} />
-        <FlatList
-          data={chatHistory.map((chat) => ({
-            ...chat,
-            title: sessionTitles[chat.id] ?? chat.title,
-          }))}
-          style={styles.flatList}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
-          renderItem={({ item }) => (
-            <SessionListItem
-              item={item}
-              openId={openId}
-              onPress={() => handleOpenSession(item)}
-              onOpen={setOpenId}
-              onDelete={handleDelete}
-            />
-          )}
-          ListHeaderComponent={
-            <View>
-              {renderAgentCard()}
-              <View style={styles.divider} />
-              {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
-              <TouchableOpacity
-                style={styles.chatCard}
-                activeOpacity={0.7}
-                onPress={openChatSession}
-              >
-                <MessageCircle size={20} color={colors.textSecondary} />
-                <View style={styles.chatTextContainer}>
-                  <Text style={styles.chatCardText}>{t('home.chat')}</Text>
-                  <Text style={styles.chatPreview} numberOfLines={1}>
-                    {chatEntryPreview}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 18px 文字与 20px 图标档 */}
-              <TouchableOpacity
-                style={styles.navEntryRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  logger.info('[Home] open agent nav: tools');
-                  navigation.navigate('AgentNav', { view: 'tools' });
-                }}
-              >
-                <Wrench size={20} color={colors.textSecondary} />
-                <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
-                <ChevronRight size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navEntryRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  logger.info('[Home] open agent nav: skills');
-                  navigation.navigate('AgentNav', { view: 'skills' });
-                }}
-              >
-                <Sparkles size={20} color={colors.textSecondary} />
-                <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
-                <ChevronRight size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              {/* 会话区标题行，行尾新建加号 */}
-              <View style={styles.sessionsHeader}>
-                <MessagesSquare size={20} color={colors.textSecondary} />
-                <Text style={styles.sessionsHeaderText}>
-                  {t('home.sessions')}
+      {/* === 滚动区，从聊天入口开始，底部避让 home indicator === */}
+      <FlatList
+        data={chatHistory.map((chat) => ({
+          ...chat,
+          title: sessionTitles[chat.id] ?? chat.title,
+        }))}
+        style={styles.flatList}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
+        renderItem={({ item }) => (
+          <SessionListItem
+            item={item}
+            openId={openId}
+            onPress={() => handleOpenSession(item)}
+            onOpen={setOpenId}
+            onDelete={handleDelete}
+          />
+        )}
+        ListHeaderComponent={
+          <View>
+            {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
+            <TouchableOpacity
+              style={styles.chatCard}
+              activeOpacity={0.7}
+              onPress={openChatSession}
+            >
+              <MessageCircle size={20} color={colors.textSecondary} />
+              <View style={styles.chatTextContainer}>
+                <Text style={styles.chatCardText}>{t('home.chat')}</Text>
+                <Text style={styles.chatPreview} numberOfLines={1}>
+                  {chatEntryPreview}
                 </Text>
-                <TouchableOpacity
-                  onPress={handleNewChat}
-                  style={styles.newChatButton}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Plus size={20} color={colors.text} />
-                </TouchableOpacity>
               </View>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 18px 文字与 20px 图标档 */}
+            <TouchableOpacity
+              style={styles.navEntryRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                logger.info('[Home] open agent nav: tools');
+                navigation.navigate('AgentNav', { view: 'tools' });
+              }}
+            >
+              <Wrench size={20} color={colors.textSecondary} />
+              <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
+              <ChevronRight size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navEntryRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                logger.info('[Home] open agent nav: skills');
+                navigation.navigate('AgentNav', { view: 'skills' });
+              }}
+            >
+              <Sparkles size={20} color={colors.textSecondary} />
+              <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
+              <ChevronRight size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+            {/* 会话区标题行并入导航组，新建入口已迁至右上角圆钮 */}
+            <View style={styles.sessionsHeader}>
+              <MessagesSquare size={20} color={colors.textSecondary} />
+              <Text style={styles.sessionsHeaderText}>
+                {t('home.sessions')}
+              </Text>
             </View>
-          }
-          ListEmptyComponent={
-            <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
-          }
-        />
-      </View>
+          </View>
+        }
+        ListEmptyComponent={
+          <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
+        }
+      />
     </View>
   );
 };
@@ -554,98 +502,92 @@ const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     root: {
       flex: 1,
-      flexDirection: 'row',
       backgroundColor: colors.background,
     },
-    /** 左缘竖栏 */
-    rail: {
-      width: RAIL_WIDTH,
-      borderRightWidth: StyleSheet.hairlineWidth,
-      borderRightColor: colors.border,
-      backgroundColor: colors.surfaceSecondary,
+    /** 固定区，圆钮行到淡阴影整体不随列表滚动 */
+    fixed: {
+      backgroundColor: colors.background,
     },
-    railList: {
-      flex: 1,
-    },
-    railItem: {
-      position: 'relative',
-      width: '100%',
-      paddingVertical: 11,
+    /** 圆钮行，左右两端对齐 */
+    circleRow: {
+      flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 2,
     },
-    /** 选中项的白底胶囊，右缘留 4 像素缺口 */
-    railPill: {
-      position: 'absolute',
-      left: 0,
-      top: 6,
-      bottom: 6,
-      right: 4,
-      borderTopRightRadius: 16,
-      borderBottomRightRadius: 16,
+    circleRowRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    /** 悬浮白圆钮，柔投影浮在页面之上 */
+    circleBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: colors.card,
       shadowColor: colors.shadow,
       shadowOpacity: 1,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 2,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
     },
-    /** 选中项左侧的蓝色指示条 */
-    railBar: {
-      position: 'absolute',
-      left: 0,
-      top: 10,
-      bottom: 10,
-      width: 4,
-      borderTopRightRadius: 2,
-      borderBottomRightRadius: 2,
-      backgroundColor: colors.primary,
+    /** agent 横向条 */
+    agentStrip: {
+      flexGrow: 0,
+      marginTop: 6,
     },
-    railFooter: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-      paddingHorizontal: 10,
-      paddingTop: 10,
+    agentTrack: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
+    agentItem: {
       alignItems: 'center',
       gap: 6,
     },
-    railFooterButton: {
-      paddingVertical: 10,
+    /** 头像外常驻包裹，非当前项边框透明，保证有环无环头像与名字对齐 */
+    avatarRing: {
+      padding: 3,
+      borderRadius: 37,
+      borderWidth: 2,
+      borderColor: 'transparent',
     },
-    /** 内容列 */
-    content: {
-      flex: 1,
-      backgroundColor: colors.background,
+    avatarRingCurrent: {
+      borderColor: colors.primary,
+    },
+    agentItemName: {
+      ...typography.meta,
+      maxWidth: 80,
+      color: colors.textTertiary,
+    },
+    agentItemNameCurrent: {
+      color: colors.primary,
+      fontWeight: '600',
     },
     flatList: {
       flex: 1,
     },
     divider: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
+      backgroundColor: colors.borderLight,
       marginHorizontal: 16,
-      marginVertical: 6,
+      marginVertical: 10,
     },
-    /** Agent 信息卡片 */
-    agentCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 6,
-      marginTop: 4,
-    },
-    agentInfo: {
-      flex: 1,
-      marginLeft: 12,
-    },
-    agentName: {
-      ...typography.titleBar,
-      fontWeight: '600',
-      color: colors.text,
-    },
-    agentDesc: {
-      ...typography.meta,
-      color: colors.textTertiary,
-      marginTop: 3,
+    /** 固定区下沿淡阴影，透明底出影仅 iOS 生效 */
+    fixedShadow: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: 'transparent',
+      shadowColor: colors.shadow,
+      shadowOpacity: 1,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 4 },
     },
     /** 常驻聊天入口卡片 */
     chatCard: {
@@ -698,10 +640,6 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       ...typography.titleSection,
       color: colors.text,
-    },
-    newChatButton: {
-      padding: 4,
-      marginRight: 4,
     },
     emptySessions: {
       paddingHorizontal: 28,

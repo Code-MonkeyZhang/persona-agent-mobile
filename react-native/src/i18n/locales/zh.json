@@ -92,6 +92,7 @@
   },
   "home": {
     "newChat": "新对话",
+    "newSession": "新建会话",
     "connFailed": "连接已断开",
     "tapReconnect": "点按重连",
     "connInvalid": "连接失败，点按检查服务器地址",

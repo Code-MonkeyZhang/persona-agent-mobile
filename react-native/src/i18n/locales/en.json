@@ -92,6 +92,7 @@
   },
   "home": {
     "newChat": "New Chat",
+    "newSession": "New Session",
     "connFailed": "Disconnected",
     "tapReconnect": "Tap to reconnect",
     "connInvalid": "Connection failed, tap to check server address",

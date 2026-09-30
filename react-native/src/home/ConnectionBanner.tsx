@@ -1,11 +1,12 @@
 /**
  * @file home/ConnectionBanner.tsx
- * @description 会话主页内容列顶部的连接态条。
+ * @description Home 与 Chat 两页共用的连接态条。
  *   - connecting 与 reconnecting 出蓝条过渡，重连由 ws-client 自动进行，不可点
  *   - 断线停滞出红条整条可点，address_invalid 提示检查地址，其余点击以当前地址立即重连重置退避
  *   - 已连接不显示任何条
+ *   红条按压判定抽成 useBannerPress 供两页宿主共用。
  */
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -17,6 +18,29 @@ import { WifiOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
+import { logger } from '../lib/logger';
+
+/** 能跳 Server 页的最小导航形状，Home 与 Chat 两页的栈导航都满足 */
+interface BannerNavigation {
+  navigate: (screen: 'Server') => void;
+}
+
+/**
+ * 红条按压判定，Home 与 Chat 两页共用。
+ * 地址无效或无地址进 Server 改地址，其余以当前地址立即重连重置退避。
+ */
+export function useBannerPress(navigation: BannerNavigation) {
+  return useCallback(() => {
+    const conn = useConnectionStore.getState();
+    if (conn.status === 'address_invalid' || !conn.serverAddress) {
+      logger.info('[ConnectionBanner] banner tap, go Server');
+      navigation.navigate('Server');
+      return;
+    }
+    logger.info('[ConnectionBanner] banner tap, reconnect now');
+    conn.connect(conn.serverAddress);
+  }, [navigation]);
+}
 
 interface ConnectionBannerProps {
   /** 红条点击回调，由宿主决定重连还是进 Server */
