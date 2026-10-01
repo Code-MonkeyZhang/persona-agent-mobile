@@ -38,7 +38,7 @@ import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomC
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
 import { SweepIndicator } from './component/SweepIndicator.tsx';
-import ConnectionBanner, { useBannerPress } from '../home/ConnectionBanner.tsx';
+import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
 import { CompanionReplyBubble } from './component/CompanionReplyBubble.tsx';
@@ -189,9 +189,6 @@ function ChatScreen(): React.JSX.Element {
       navigation.navigate('AppLauncher');
     }
   }, [navigation]);
-
-  /** 红条点击判定来自共享 hook，语义见 useBannerPress */
-  const handleBannerPress = useBannerPress(navigation);
 
   // ==================== Header 配置 ====================
   React.useLayoutEffect(() => {
@@ -376,8 +373,8 @@ function ChatScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.contentArea}>
-        {/* 头部下方状态槽，红蓝横幅在上，生成扫动条在下，连接正常时横幅不占布局 */}
-        <ConnectionBanner onPress={handleBannerPress} />
+        {/* 头部下方状态槽，红蓝绿条在上，生成扫动条在下，绿条亮两秒收起后不占布局 */}
+        <ConnectionBanner />
         {chatStatus === ChatStatus.Running && <SweepIndicator />}
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
           {/* Pane 1: 聊天列表 */}

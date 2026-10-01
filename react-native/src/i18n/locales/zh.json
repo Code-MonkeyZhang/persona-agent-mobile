@@ -87,9 +87,9 @@
   "home": {
     "newChat": "新对话",
     "newSession": "新建会话",
-    "connFailed": "连接已断开",
-    "tapReconnect": "点按重连",
-    "connInvalid": "连接失败，点按检查服务器地址",
+    "connFailed": "连接失败",
+    "connNoAddress": "还没填入地址，请填入地址",
+    "connected": "已连接",
     "chat": "聊天",
     "sessions": "会话",
     "server": "服务器",

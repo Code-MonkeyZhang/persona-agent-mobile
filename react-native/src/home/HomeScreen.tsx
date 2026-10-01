@@ -1,7 +1,7 @@
 /**
  * @file home/HomeScreen.tsx
  * @description 会话主页，应用首屏。
- *   顶部固定区从上到下是圆钮行、agent 横向条、连接横幅、分隔线与淡阴影，不随列表滚动。
+ *   顶部固定区从上到下是圆钮行、agent 横向条、分隔线、连接横幅与淡阴影，不随列表滚动。
  *   圆钮行避让状态栏，滚动区从聊天入口开始，列表底部避让 home indicator。
  *   agent 拉取与当前 agent 确定与启动会话恢复在连接建立后完成。
  *   Chat 是压栈页，点聊天入口或会话行进入，返回即回到本页。
@@ -59,7 +59,7 @@ import { useChatStore } from '../stores/chatStore';
 import { Chat } from '../types/Chat.ts';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
-import ConnectionBanner, { useBannerPress } from './ConnectionBanner.tsx';
+import ConnectionBanner from './ConnectionBanner.tsx';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
@@ -317,9 +317,7 @@ const HomeScreen: React.FC = () => {
     trigger(HapticFeedbackTypes.soft);
   };
 
-  // ==================== 连接态条 ====================
-  /** 红条点击判定来自共享 hook，语义见 useBannerPress */
-  const handleBannerPress = useBannerPress(navigation);
+  // ==================== 连接态 ====================
 
   /** 顶部连接钮图标按连接三态着色，连接绿、连接中与重连中蓝、断开红 */
   const serverIconColor =
@@ -415,8 +413,9 @@ const HomeScreen: React.FC = () => {
             );
           })}
         </ScrollView>
-        <ConnectionBanner onPress={handleBannerPress} />
         <View style={styles.divider} />
+        {/* 分隔线下方状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
       </View>

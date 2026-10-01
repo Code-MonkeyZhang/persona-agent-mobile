@@ -87,9 +87,9 @@
   "home": {
     "newChat": "New Chat",
     "newSession": "New Session",
-    "connFailed": "Disconnected",
-    "tapReconnect": "Tap to reconnect",
-    "connInvalid": "Connection failed, tap to check server address",
+    "connFailed": "Connection failed",
+    "connNoAddress": "No server address yet, tap to add one",
+    "connected": "Connected",
     "chat": "Chat",
     "sessions": "Sessions",
     "server": "Server",
