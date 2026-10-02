@@ -81,6 +81,9 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 
+/** 键盘弹出时输入栏与键盘顶边保留的间距 */
+const KEYBOARD_GAP = 8;
+
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -125,7 +128,7 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardHeight, showKeyboard } = useKeyboardLayout(
+  const { keyboardHeight } = useKeyboardLayout(
     textInputViewRef,
     scroll.scrollToBottom
   );
@@ -241,7 +244,6 @@ function ChatScreen(): React.JSX.Element {
       trigger(HapticFeedbackTypes.impactMedium);
       logger.info('[ChatScreen] startNewChat');
       useChatStore.getState().activateSession(NEW_CHAT_SESSION);
-      showKeyboard();
       return;
     }
 
@@ -257,13 +259,9 @@ function ChatScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, scroll, showKeyboard]);
+  }, [activeSessionId, scroll]);
 
-  // ==================== 键盘 & 屏幕 ====================
-  useEffect(() => {
-    showKeyboard();
-  }, [showKeyboard]);
-
+  // ==================== 屏幕 ====================
   useEffect(() => {
     const updateDimensions = () => {
       setScreenDimensions(Dimensions.get('window'));
@@ -488,8 +486,8 @@ function ChatScreen(): React.JSX.Element {
           style={{
             paddingBottom:
               Platform.OS === 'ios'
-                ? Math.max(keyboardHeight, insets.bottom)
-                : insets.bottom,
+                ? Math.max(keyboardHeight + KEYBOARD_GAP, insets.bottom)
+                : insets.bottom + (keyboardHeight > 0 ? KEYBOARD_GAP : 0),
           }}
           blurType="light"
           blurAmount={15}

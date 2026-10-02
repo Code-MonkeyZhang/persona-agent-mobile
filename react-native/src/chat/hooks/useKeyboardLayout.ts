@@ -2,7 +2,7 @@
  * @file hooks/useKeyboardLayout.ts
  * @description 键盘弹出/收起监听，驱动输入栏的 paddingBottom 避让。
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Platform, Keyboard, LayoutAnimation, TextInput } from 'react-native';
 import { logger } from '../../lib/logger';
 
@@ -56,12 +56,5 @@ export function useKeyboardLayout(
     };
   }, [textInputViewRef]);
 
-  /** 延迟 100ms 后聚焦输入框，等待布局完成 */
-  const showKeyboard = useCallback(() => {
-    setTimeout(() => {
-      textInputViewRef.current?.focus();
-    }, 100);
-  }, [textInputViewRef]);
-
-  return { keyboardHeight, showKeyboard };
+  return { keyboardHeight };
 }
