@@ -1,14 +1,20 @@
 /**
  * @file home/HomeScreen.tsx
  * @description 会话主页，应用首屏。
- *   顶部固定区从上到下是圆钮行、agent 横向条、连接横幅、分隔线与淡阴影，不随列表滚动。
+ *   顶部固定区从上到下是圆钮行、agent 横向条、分隔线、连接横幅与淡阴影，不随列表滚动。
  *   圆钮行避让状态栏，滚动区从聊天入口开始，列表底部避让 home indicator。
  *   agent 拉取与当前 agent 确定与启动会话恢复在连接建立后完成。
  *   Chat 是压栈页，点聊天入口或会话行进入，返回即回到本页。
  *   长相基准是 demo 第三轮的 HomePage，横滑交互走原生 ScrollView。
  *   字号与次级文字颜色及会话行缩进经用户确认有意偏离 demo 基准，不作为对齐缺陷回改。
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   FlatList,
   ScrollView,
@@ -59,12 +65,86 @@ import { useChatStore } from '../stores/chatStore';
 import { Chat } from '../types/Chat.ts';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
-import ConnectionBanner, { useBannerPress } from './ConnectionBanner.tsx';
+import ConnectionBanner from './ConnectionBanner.tsx';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
   'Home'
 >;
+
+/** 列表头部属性：聊天入口预览文本与打开回调 */
+interface HomeListHeaderProps {
+  preview: string;
+  onOpenChat: () => void;
+}
+
+/**
+ * 列表头部：聊天入口卡、工具与技能入口、会话区标题。
+ * 经 memo 固化，会话行展开态变化不再触发这块头部重渲染，滑动动画不被 JS 线程挤帧。
+ */
+const HomeListHeader = React.memo(function HomeListHeader({
+  preview,
+  onOpenChat,
+}: HomeListHeaderProps) {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const styles = createStyles(colors);
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+
+  return (
+    <View>
+      {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
+      <TouchableOpacity
+        style={styles.chatCard}
+        activeOpacity={0.7}
+        onPress={onOpenChat}
+      >
+        <MessageCircle
+          size={20}
+          color={colors.textSecondary}
+          style={styles.chatCardIcon}
+        />
+        <View style={styles.chatTextContainer}>
+          <Text style={styles.chatCardText}>{t('home.chat')}</Text>
+          <Text style={styles.chatPreview} numberOfLines={1}>
+            {preview}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <View style={styles.divider} />
+      {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
+      <TouchableOpacity
+        style={styles.navEntryRow}
+        activeOpacity={0.7}
+        onPress={() => {
+          logger.info('[Home] open agent nav: tools');
+          navigation.navigate('AgentNav', { view: 'tools' });
+        }}
+      >
+        <Wrench size={20} color={colors.textSecondary} />
+        <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
+        <ChevronRight size={16} color={colors.textTertiary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.navEntryRow}
+        activeOpacity={0.7}
+        onPress={() => {
+          logger.info('[Home] open agent nav: skills');
+          navigation.navigate('AgentNav', { view: 'skills' });
+        }}
+      >
+        <Sparkles size={20} color={colors.textSecondary} />
+        <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
+        <ChevronRight size={16} color={colors.textTertiary} />
+      </TouchableOpacity>
+      {/* 会话区标题行并入导航组，新建入口已迁至右上角圆钮 */}
+      <View style={styles.sessionsHeader}>
+        <MessagesSquare size={20} color={colors.textSecondary} />
+        <Text style={styles.sessionsHeaderText}>{t('home.sessions')}</Text>
+      </View>
+    </View>
+  );
+});
 
 const HomeScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -86,8 +166,6 @@ const HomeScreen: React.FC = () => {
   const [chatLastMessage, setChatLastMessage] = useState<string | undefined>(
     undefined
   );
-  /** 当前处于展开状态的会话 id，用于左滑删除的同时只开一个协调 */
-  const [openId, setOpenId] = useState<string | null>(null);
   /** 启动恢复只执行一次的守卫 */
   const hasRestoredRef = useRef(false);
 
@@ -265,25 +343,30 @@ const HomeScreen: React.FC = () => {
     setActiveSessionId(chatSessionIdFor(agentId));
   };
 
-  /** 打开当前 Agent 的常驻聊天会话，入口卡标题作快照传给 Chat 头部 */
-  const openChatSession = () => {
+  /** 打开当前 Agent 的常驻聊天会话，入口卡标题作快照传给 Chat 头部。
+   *  身份经 useCallback 固化，配合列表头部的 memo 隔离无关重渲染。 */
+  const openChatSession = useCallback(() => {
     if (!currentAgentId) {
       return;
     }
     logger.info(`[Home] open chat session: ${currentChatSessionId}`);
     setActiveSessionId(currentChatSessionId);
     navigation.navigate('Chat', { title: t('home.chat') });
-  };
+  }, [currentAgentId, currentChatSessionId, setActiveSessionId, navigation, t]);
 
   // ==================== 会话列表交互 ====================
-  /** 点会话行续聊，列表标题作快照传给 Chat 头部 */
-  const handleOpenSession = (item: Chat) => {
-    logger.info(`[Home] open session: ${item.id}`);
-    setActiveSessionId(item.id);
-    navigation.navigate('Chat', {
-      title: sessionTitles[item.id] ?? item.title,
-    });
-  };
+  /** 点会话行续聊，列表标题作快照传给 Chat 头部。
+   *  身份经 useCallback 固化，会话行 memo 才能在无关渲染时跳过。 */
+  const handleOpenSession = useCallback(
+    (item: Chat) => {
+      logger.info(`[Home] open session: ${item.id}`);
+      setActiveSessionId(item.id);
+      navigation.navigate('Chat', {
+        title: sessionTitles[item.id] ?? item.title,
+      });
+    },
+    [navigation, sessionTitles, setActiveSessionId]
+  );
 
   /** 新建对话，进入 Chat 的空白新建态 */
   const handleNewChat = () => {
@@ -296,31 +379,47 @@ const HomeScreen: React.FC = () => {
   /**
    * 删除会话：先乐观更新 UI，再调服务器 API，失败时回滚。
    * 删的是当前会话则回到该 Agent 的常驻聊天，并同步清掉会话仓库分片。
+   * 身份经 useCallback 固化，会话行 memo 才能在无关渲染时跳过。
    */
-  const handleDelete = (id: string) => {
-    logger.info(`[Home] delete session: ${id}`);
-    setChatHistory((prev) => prev.filter((chat) => chat.id !== id));
-    useChatStore.getState().removeSession(id);
-    if (id === activeSessionId) {
-      setActiveSessionId(currentChatSessionId);
-    }
+  const handleDelete = useCallback(
+    (id: string) => {
+      logger.info(`[Home] delete session: ${id}`);
+      setChatHistory((prev) => prev.filter((chat) => chat.id !== id));
+      useChatStore.getState().removeSession(id);
+      if (id === activeSessionId) {
+        setActiveSessionId(currentChatSessionId);
+      }
 
-    const address = getServerAddress();
-    const agentId = getServerAgentId();
-    if (address && agentId) {
-      deleteSession(address, agentId, id).catch(() => {
-        logger.warn('[Home] deleteSession failed, reloading');
-        handleUpdateHistory();
-      });
-    }
+      const address = getServerAddress();
+      const agentId = getServerAgentId();
+      if (address && agentId) {
+        deleteSession(address, agentId, id).catch(() => {
+          logger.warn('[Home] deleteSession failed, reloading');
+          handleUpdateHistory();
+        });
+      }
 
-    trigger(HapticFeedbackTypes.soft);
-  };
+      trigger(HapticFeedbackTypes.soft);
+    },
+    [
+      activeSessionId,
+      currentChatSessionId,
+      setActiveSessionId,
+      handleUpdateHistory,
+    ]
+  );
 
-  // ==================== 连接态条 ====================
-  /** 红条点击判定来自共享 hook，语义见 useBannerPress */
-  const handleBannerPress = useBannerPress(navigation);
+  /** 列表数据：标题映射后用 useMemo 固化身份，无关渲染不再重建数组 */
+  const sessionListData = useMemo(
+    () =>
+      chatHistory.map((chat) => ({
+        ...chat,
+        title: sessionTitles[chat.id] ?? chat.title,
+      })),
+    [chatHistory, sessionTitles]
+  );
 
+  // ==================== 连接态 ====================
   /** 顶部连接钮图标按连接三态着色，连接绿、连接中与重连中蓝、断开红 */
   const serverIconColor =
     connectionStatus === 'connected'
@@ -415,84 +514,31 @@ const HomeScreen: React.FC = () => {
             );
           })}
         </ScrollView>
-        <ConnectionBanner onPress={handleBannerPress} />
         <View style={styles.divider} />
+        {/* 分隔线下方状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
       </View>
 
       {/* === 滚动区，从聊天入口开始，底部避让 home indicator === */}
       <FlatList
-        data={chatHistory.map((chat) => ({
-          ...chat,
-          title: sessionTitles[chat.id] ?? chat.title,
-        }))}
+        data={sessionListData}
         style={styles.flatList}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: insets.bottom }}
         renderItem={({ item }) => (
           <SessionListItem
             item={item}
-            openId={openId}
-            onPress={() => handleOpenSession(item)}
-            onOpen={setOpenId}
+            onPress={handleOpenSession}
             onDelete={handleDelete}
           />
         )}
         ListHeaderComponent={
-          <View>
-            {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
-            <TouchableOpacity
-              style={styles.chatCard}
-              activeOpacity={0.7}
-              onPress={openChatSession}
-            >
-              <MessageCircle
-                size={20}
-                color={colors.textSecondary}
-                style={styles.chatCardIcon}
-              />
-              <View style={styles.chatTextContainer}>
-                <Text style={styles.chatCardText}>{t('home.chat')}</Text>
-                <Text style={styles.chatPreview} numberOfLines={1}>
-                  {chatEntryPreview}
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
-            <TouchableOpacity
-              style={styles.navEntryRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                logger.info('[Home] open agent nav: tools');
-                navigation.navigate('AgentNav', { view: 'tools' });
-              }}
-            >
-              <Wrench size={20} color={colors.textSecondary} />
-              <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
-              <ChevronRight size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.navEntryRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                logger.info('[Home] open agent nav: skills');
-                navigation.navigate('AgentNav', { view: 'skills' });
-              }}
-            >
-              <Sparkles size={20} color={colors.textSecondary} />
-              <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
-              <ChevronRight size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-            {/* 会话区标题行并入导航组，新建入口已迁至右上角圆钮 */}
-            <View style={styles.sessionsHeader}>
-              <MessagesSquare size={20} color={colors.textSecondary} />
-              <Text style={styles.sessionsHeaderText}>
-                {t('home.sessions')}
-              </Text>
-            </View>
-          </View>
+          <HomeListHeader
+            preview={chatEntryPreview}
+            onOpenChat={openChatSession}
+          />
         }
         ListEmptyComponent={
           <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
