@@ -400,9 +400,6 @@ function ChatScreen(): React.JSX.Element {
               )}
               renderInputToolbar={() => null}
               renderMessage={(props) => {
-                const messageIndex = messages.findIndex(
-                  (msg) => msg._id === props.currentMessage?._id
-                );
                 const isLastAIMessage =
                   props.currentMessage?._id === lastAgentMessage?._id &&
                   props.currentMessage?.user._id !== 1;
@@ -412,7 +409,6 @@ function ChatScreen(): React.JSX.Element {
                     chatStatus={chatStatus}
                     isLastAIMessage={isLastAIMessage}
                     onReasoningToggle={scroll.handleReasoningToggle}
-                    messageIndex={messageIndex}
                     agentId={currentAgentId}
                     serverAddress={serverAddressRef.current}
                   />
