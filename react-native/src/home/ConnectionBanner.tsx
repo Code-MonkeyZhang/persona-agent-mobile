@@ -5,17 +5,24 @@
  *   - 蓝条未填地址引导进 Server，点本体与点箭头等价
  *   - 蓝条连接中与重连中转圈过渡，重连由 ws-client 自动进行，不可点
  *   - 绿条已连接亮两秒后压高收起，动画回调摘除并配兜底定时器双保险，重挂载不重播
+ *   - 进场与收起动画由 reanimated 在 UI 线程驱动，新架构下 JS 驱动布局动画会掉帧留残影
  *   组件自取导航与连接态，两页宿主直接挂载即可，无需传回调。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   StyleSheet,
   Text,
   TouchableOpacity,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { Check, ChevronRight, Link2Off, WifiOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -63,8 +70,8 @@ const ConnectionBanner: React.FC = () => {
 
   const [flashPhase, setFlashPhase] = useState<FlashPhase>('gone');
 
-  const enterAnim = useRef(new Animated.Value(0)).current;
-  const collapseAnim = useRef(new Animated.Value(0)).current;
+  const enterProgress = useSharedValue(0);
+  const collapseProgress = useSharedValue(0);
 
   const kind: BannerKind =
     status === 'connected'
@@ -90,75 +97,71 @@ const ConnectionBanner: React.FC = () => {
     if (wasConnected) {
       return;
     }
+    collapseProgress.value = 0;
+    logger.debug('[ConnectionBanner] green banner shown');
     setFlashPhase('shown');
     const timer = setTimeout(
       () => setFlashPhase('collapsing'),
       CONNECTED_FLASH_MS
     );
     return () => clearTimeout(timer);
-  }, [status]);
+  }, [status, collapseProgress]);
+
+  /** 收起动画完成回调，UI 线程的动画完成信号经 runOnJS 回到 JS 线程摘除绿条 */
+  const onCollapseFinished = useCallback(() => {
+    logger.debug('[ConnectionBanner] green banner collapsed');
+    setFlashPhase('gone');
+  }, []);
 
   // 收起动画播完由完成回调摘除，回调被中断时由兜底定时器收尾
   useEffect(() => {
     if (flashPhase !== 'collapsing') {
       return;
     }
-    collapseAnim.setValue(0);
-    Animated.timing(collapseAnim, {
-      toValue: 1,
-      duration: COLLAPSE_MS,
-      useNativeDriver: false,
-    }).start((event) => {
-      if (event.finished) {
-        logger.debug('[ConnectionBanner] green banner collapsed');
-        setFlashPhase('gone');
+    logger.debug('[ConnectionBanner] green banner collapse start');
+    collapseProgress.value = withTiming(
+      1,
+      { duration: COLLAPSE_MS },
+      (finished) => {
+        if (finished) {
+          runOnJS(onCollapseFinished)();
+        }
       }
-    });
+    );
     const fallback = setTimeout(
       () => setFlashPhase('gone'),
       COLLAPSE_FALLBACK_MS
     );
-    return () => clearTimeout(fallback);
-  }, [flashPhase, collapseAnim]);
+    return () => {
+      clearTimeout(fallback);
+      cancelAnimation(collapseProgress);
+    };
+  }, [flashPhase, collapseProgress, onCollapseFinished]);
 
   // 每次视觉分档变化重播进场动画，淡入加自上而下八像素落位
   useEffect(() => {
-    enterAnim.setValue(0);
-    Animated.timing(enterAnim, {
-      toValue: 1,
+    enterProgress.value = 0;
+    enterProgress.value = withTiming(1, {
       duration: ENTER_MS,
       easing: Easing.ease,
-      useNativeDriver: true,
-    }).start();
-  }, [kind, enterAnim]);
+    });
+  }, [kind, enterProgress]);
 
-  const enterStyle = {
-    opacity: enterAnim,
-    transform: [
-      {
-        translateY: enterAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-8, 0],
-        }),
-      },
-    ],
-  };
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: enterProgress.value,
+    transform: [{ translateY: -8 * (1 - enterProgress.value) }],
+  }));
 
-  const collapseStyle = {
-    height: collapseAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [BANNER_HEIGHT, 0],
-    }),
-    paddingTop: collapseAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [BANNER_PAD_V, 0],
-    }),
-    paddingBottom: collapseAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [BANNER_PAD_V, 0],
-    }),
-    opacity: collapseAnim,
-  };
+  /** 收起进度单值同时驱动高度、上下内边距与透明度归零 */
+  const collapseStyle = useAnimatedStyle(() => {
+    const remaining = 1 - collapseProgress.value;
+    return {
+      height: BANNER_HEIGHT * remaining,
+      paddingTop: BANNER_PAD_V * remaining,
+      paddingBottom: BANNER_PAD_V * remaining,
+      opacity: remaining,
+    };
+  });
 
   /** 红条本体点击，以当前地址立即重连并重置退避节奏 */
   const retryNow = useCallback(() => {
