@@ -21,7 +21,6 @@ import {
   Image,
   Keyboard,
   LayoutChangeEvent,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -65,7 +64,10 @@ import { useAppPanelStore } from '../stores/appPanelStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
-import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
+import {
+  keyboardAvoidanceOf,
+  useKeyboardLayout,
+} from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
 import Animated, {
   useAnimatedStyle,
@@ -81,9 +83,6 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 >;
 
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
-
-/** 键盘弹出时输入栏与键盘顶边保留的间距 */
-const KEYBOARD_GAP = 8;
 
 /** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
 const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
@@ -102,7 +101,8 @@ function ChatScreen(): React.JSX.Element {
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [fibWrapperHeight, setFibWrapperHeight] = useState(130);
+  const [inputBarHeight, setInputBarHeight] = useState(96);
+  const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
@@ -132,9 +132,10 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardHeight } = useKeyboardLayout(
+  const { keyboardBottomStyle, keyboardHeight } = useKeyboardLayout(
     textInputViewRef,
-    scroll.scrollToBottom
+    scroll.scrollToBottom,
+    insets.bottom
   );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
 
@@ -344,12 +345,18 @@ function ChatScreen(): React.JSX.Element {
 
   const styles = createStyles(colors);
 
+  // 底部浮层总高度，输入栏本体加避让量加陪伴气泡，供列表占位与回底按钮定位，事件时刻一次跳变
+  const overlayHeight =
+    inputBarHeight +
+    companionBubbleHeight +
+    keyboardAvoidanceOf(keyboardHeight, insets.bottom);
+
   const scrollStyle = StyleSheet.create({
     scrollToBottomContainerStyle: {
       width: 30,
       height: 30,
       right: 16,
-      bottom: fibWrapperHeight + 44,
+      bottom: overlayHeight + 44,
     },
   });
 
@@ -364,13 +371,21 @@ function ChatScreen(): React.JSX.Element {
       height: '100%',
     },
     chatFooterSpacer: {
-      height: fibWrapperHeight,
+      height: overlayHeight,
     },
   });
 
   // 最新 AI 消息用于陪伴气泡与操作按钮判定，生成期间无占位气泡，运行态直接由 chatStatus 表达
   const lastAgentMessage = messages.find((m) => m.user._id === BOT_ID) ?? null;
   const isThinking = chatStatus === ChatStatus.Running;
+
+  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位
+  const companionBubbleVisible = companion.companionOpen && !!lastAgentMessage;
+  useEffect(() => {
+    if (!companionBubbleVisible) {
+      setCompanionBubbleHeight(0);
+    }
+  }, [companionBubbleVisible]);
 
   return (
     <View style={styles.container}>
@@ -479,47 +494,53 @@ function ChatScreen(): React.JSX.Element {
         </Animated.View>
       </View>
       {/* FIB 容器：绝对定位浮在内容上方 */}
-      <View
-        style={styles.fibWrapper}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h > 0 && h !== fibWrapperHeight) {
-            setFibWrapperHeight(h);
-          }
-        }}
-      >
+      <View style={styles.fibWrapper}>
         {/* 陪伴回复气泡 */}
-        {companion.companionOpen && lastAgentMessage && (
-          <CompanionReplyBubble
-            messageKey={lastAgentMessage._id as string}
-            text={lastAgentMessage.text}
-            isThinking={isThinking}
-            thinkingText={t('chat.thinking')}
-            colors={colors}
-          />
+        {companionBubbleVisible && lastAgentMessage && (
+          <View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && h !== companionBubbleHeight) {
+                setCompanionBubbleHeight(h);
+              }
+            }}
+          >
+            <CompanionReplyBubble
+              messageKey={lastAgentMessage._id as string}
+              text={lastAgentMessage.text}
+              isThinking={isThinking}
+              thinkingText={t('chat.thinking')}
+              colors={colors}
+            />
+          </View>
         )}
-        {/* BlurView 只覆盖输入框区域，Android 需显式启用实验模糊实现 */}
-        <BlurView
-          style={{
-            paddingBottom:
-              Platform.OS === 'ios'
-                ? Math.max(keyboardHeight + KEYBOARD_GAP, insets.bottom)
-                : insets.bottom + (keyboardHeight > 0 ? KEYBOARD_GAP : 0),
-          }}
-          tint="light"
-          intensity={40}
-          experimentalBlurMethod="dimezisBlurView"
-        >
-          <FloatingInputBar
-            textInputRef={textInputViewRef}
-            onSend={handleSend}
-            onStop={handleStop}
-            selectedFiles={selectedFiles}
-            chatStatus={chatStatus}
-            onFileSelected={handleNewFileSelected}
-            onFileUpdated={handleFileUpdated}
+        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，Android 需显式启用实验模糊实现 */}
+        <Animated.View style={keyboardBottomStyle}>
+          <BlurView
+            style={StyleSheet.absoluteFill}
+            tint="light"
+            intensity={40}
+            experimentalBlurMethod="dimezisBlurView"
           />
-        </BlurView>
+          <View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && h !== inputBarHeight) {
+                setInputBarHeight(h);
+              }
+            }}
+          >
+            <FloatingInputBar
+              textInputRef={textInputViewRef}
+              onSend={handleSend}
+              onStop={handleStop}
+              selectedFiles={selectedFiles}
+              chatStatus={chatStatus}
+              onFileSelected={handleNewFileSelected}
+              onFileUpdated={handleFileUpdated}
+            />
+          </View>
+        </Animated.View>
       </View>
     </View>
   );
