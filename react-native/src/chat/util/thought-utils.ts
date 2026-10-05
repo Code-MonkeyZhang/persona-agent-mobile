@@ -11,7 +11,7 @@ import {
   MessageSquare,
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import i18n from '../../i18n/index.ts';
 import type { Thought, ThoughtType } from '../../types/Thought';
 import type { ToolCall, WsToolResult } from '../../api/server-api';
@@ -30,11 +30,11 @@ export function cycleToThoughts(
   const thoughts: Thought[] = [];
 
   if (thinking) {
-    thoughts.push({ id: uuid.v4(), type: 'thinking', content: thinking });
+    thoughts.push({ id: uuidv4(), type: 'thinking', content: thinking });
   }
 
   if (content) {
-    thoughts.push({ id: uuid.v4(), type: 'text', content });
+    thoughts.push({ id: uuidv4(), type: 'text', content });
   }
 
   toolCalls?.forEach((tc) => {

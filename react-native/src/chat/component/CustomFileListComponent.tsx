@@ -152,7 +152,7 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
             const newFiles = filesRef.current.filter((f) => f.url !== file.url);
             onFileUpdated!(newFiles, true);
           }
-        } catch (error) {
+        } catch {
           compressingFiles.current = '';
           isCompressing.current = false;
           // 压缩失败，移除该视频

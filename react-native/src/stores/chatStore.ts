@@ -9,7 +9,7 @@
  */
 import { create } from 'zustand';
 import { GiftedChat } from 'react-native-gifted-chat';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import * as wsClient from '../api/ws-client.ts';
 import {
   createSession,
@@ -54,7 +54,7 @@ export const EMPTY_MESSAGES: ChatMessage[] = [];
 
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
 const createBotMessage = (agentName: string, avatar: string): ChatMessage => ({
-  _id: uuid.v4() as string,
+  _id: uuidv4(),
   text: textPlaceholder,
   createdAt: new Date(),
   user: { _id: BOT_ID, name: agentName, avatar },
@@ -63,7 +63,7 @@ const createBotMessage = (agentName: string, avatar: string): ChatMessage => ({
 
 /** 创建一条待注入插话的灰气泡消息，pendingId 关联服务端缓冲条目 */
 const createPendingMessage = (input: PendingInput): ChatMessage => ({
-  _id: uuid.v4() as string,
+  _id: uuidv4(),
   text: input.content,
   createdAt: new Date(),
   user: { _id: 1 },
@@ -242,7 +242,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       text: messageText,
       user: { _id: 1 },
       createdAt: new Date(),
-      _id: uuid.v4() as string,
+      _id: uuidv4(),
     };
     if (files.length > 0) {
       message.image = JSON.stringify(files);

@@ -1,23 +1,8 @@
 import { MMKV } from 'react-native-mmkv';
 import { Model } from '../types/Chat.ts';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 export const storage = new MMKV();
-
-const initializeStorage = () => {
-  const key = 'encryption_key';
-  let encryptionKey = storage.getString(key);
-  if (!encryptionKey) {
-    encryptionKey = uuid.v4();
-    storage.set(key, encryptionKey);
-  }
-
-  return new MMKV({
-    id: 'persona',
-    encryptionKey: encryptionKey,
-  });
-};
-export const encryptStorage = initializeStorage();
 
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
@@ -115,11 +100,12 @@ export function getLastConversation(): LastConversation | null {
  * deviceId 永久不变，用于服务端设备注册和在线检测。
  */
 export function getDeviceId(): string {
-  let id = storage.getString(deviceIdKey);
-  if (!id) {
-    id = uuid.v4();
-    storage.set(deviceIdKey, id);
+  const existing = storage.getString(deviceIdKey);
+  if (existing) {
+    return existing;
   }
+  const id = uuidv4();
+  storage.set(deviceIdKey, id);
   return id;
 }
 

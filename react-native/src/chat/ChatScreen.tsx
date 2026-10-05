@@ -15,6 +15,7 @@ import React, {
   useState,
 } from 'react';
 import { GiftedChat } from 'react-native-gifted-chat';
+import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
 import {
   Dimensions,
   Image,
@@ -27,7 +28,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from '@react-native-community/blur';
+import { BlurView } from 'expo-blur';
 import {
   activateKeepAwake,
   deactivateKeepAwake,
@@ -49,7 +50,7 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import { getAgentAvatarUrl } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
-import { ChatStatus, FileInfo } from '../types/Chat.ts';
+import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
@@ -83,6 +84,9 @@ type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 
 /** 键盘弹出时输入栏与键盘顶边保留的间距 */
 const KEYBOARD_GAP = 8;
+
+/** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
+const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
 
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
@@ -378,13 +382,14 @@ function ChatScreen(): React.JSX.Element {
           {/* Pane 1: 聊天列表 */}
           <View style={slideStyle.pane}>
             <GiftedChat
-              messageContainerRef={scroll.flatListRef}
-              keyboardShouldPersistTaps="never"
+              messagesContainerRef={
+                // 库声明不接纳空值引用，创建引用时初始值必为空，此处仅收窄空值差异
+                scroll.flatListRef as React.RefObject<AnimatedList<ChatMessage>>
+              }
               messages={messages}
               user={{ _id: 1 }}
-              alignTop={false}
-              inverted={true}
-              isKeyboardInternallyHandled={false}
+              isAlignedTop={false}
+              isInverted={true}
               minInputToolbarHeight={0}
               minComposerHeight={0}
               renderChatEmpty={() => (
@@ -408,20 +413,24 @@ function ChatScreen(): React.JSX.Element {
                     isLastAIMessage={isLastAIMessage}
                     onReasoningToggle={scroll.handleReasoningToggle}
                     messageIndex={messageIndex}
-                    flatListRef={scroll.flatListRef}
                     agentId={currentAgentId}
                     serverAddress={serverAddressRef.current}
                   />
                 );
               }}
-              listViewProps={{
+              listProps={{
+                // 会话消息上万，收紧虚拟化窗口，减少常驻挂载行数，降低每次消息更新的重渲染量
+                initialNumToRender: 12,
+                maxToRenderPerBatch: 12,
+                windowSize: 11,
                 contentContainerStyle: styles.contentContainer,
                 contentInset: { top: 2 },
+                keyboardShouldPersistTaps: 'never',
                 onLayout: (layoutEvent: LayoutChangeEvent) => {
                   scroll.containerHeightRef.current =
                     layoutEvent.nativeEvent.layout.height;
                 },
-                onScrollEvent: scroll.handleScroll,
+                onScroll: scroll.handleScroll,
                 onContentSizeChange: (_width: number, height: number) => {
                   scroll.contentHeightRef.current = height;
                 },
@@ -439,8 +448,20 @@ function ChatScreen(): React.JSX.Element {
                     }
                   : {}),
               }}
-              scrollToBottom={true}
-              scrollToBottomComponent={() => <CustomScrollToBottomComponent />}
+              renderDay={
+                // 隐藏不同日期消息之间的日期分隔条
+                () => null
+              }
+              keyboardAvoidingViewProps={
+                // 库内置键盘避让与页面外层的官方避让重复，关闭库内置这份
+                { enabled: false }
+              }
+              isDayAnimationEnabled={
+                // 日期浮动胶囊在每次消息更新时全量扫描所有消息，上万条会话下堵塞 JS 线程，这里关闭
+                false
+              }
+              isScrollToBottomEnabled={true}
+              scrollToBottomComponent={renderScrollToBottom}
               scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
@@ -481,7 +502,7 @@ function ChatScreen(): React.JSX.Element {
             colors={colors}
           />
         )}
-        {/* BlurView 只覆盖输入框区域 */}
+        {/* BlurView 只覆盖输入框区域，Android 需显式启用实验模糊实现 */}
         <BlurView
           style={{
             paddingBottom:
@@ -489,8 +510,9 @@ function ChatScreen(): React.JSX.Element {
                 ? Math.max(keyboardHeight + KEYBOARD_GAP, insets.bottom)
                 : insets.bottom + (keyboardHeight > 0 ? KEYBOARD_GAP : 0),
           }}
-          blurType="light"
-          blurAmount={15}
+          tint="light"
+          intensity={40}
+          experimentalBlurMethod="dimezisBlurView"
         >
           <FloatingInputBar
             textInputRef={textInputViewRef}

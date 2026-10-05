@@ -8,11 +8,9 @@ import React, {
   useMemo,
   useRef,
   useState,
-  RefObject,
 } from 'react';
 import {
   Dimensions,
-  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -51,7 +49,6 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
     animated: boolean
   ) => void;
   messageIndex?: number;
-  flatListRef?: RefObject<FlatList<ChatMessage>>;
   agentId: string;
   serverAddress: string;
 }

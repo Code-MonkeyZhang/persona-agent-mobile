@@ -7,7 +7,7 @@ import { Platform, Keyboard, LayoutAnimation, TextInput } from 'react-native';
 import { logger } from '../../lib/logger';
 
 export function useKeyboardLayout(
-  textInputViewRef: React.RefObject<TextInput>,
+  textInputViewRef: React.RefObject<TextInput | null>,
   scrollToBottom: () => void
 ) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);

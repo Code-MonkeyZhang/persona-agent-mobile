@@ -28,7 +28,7 @@ interface CompanionContentProps {
  * 陪伴内容展示层：背景图、角色立绘。
  * 作为滑动容器的右侧 pane 渲染，所有状态由 ChatScreen 通过 props 驱动。
  */
-const CompanionContent = React.memo(function CompanionContent({
+const CompanionContent = React.memo(function ({
   agentId,
   serverAddr,
   hasAssets,

@@ -3,7 +3,7 @@
  * @description Agent Server 的客户端封装，提供 HTTP 请求（获取 Agent/会话列表等）
  *              和 WebSocket 连接（流式接收 AI 回复）两种通信方式。
  */
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { stripLastTextThought } from '../chat/util/thought-utils';
@@ -749,7 +749,7 @@ export function convertToChatMessages(
     }
     const finalThoughts = stripLastTextThought(pendingThoughts);
     result.push({
-      _id: uuid.v4(),
+      _id: uuidv4(),
       text: pendingContent,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       createdAt: new Date(sessionCreatedAt + result.length * 1000),
@@ -820,7 +820,7 @@ export function convertToChatMessages(
       flushPending();
       const text = typeof msg.content === 'string' ? msg.content : '';
       result.push({
-        _id: uuid.v4(),
+        _id: uuidv4(),
         text,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: BOT_ID, name: agentName, avatar },
@@ -829,7 +829,7 @@ export function convertToChatMessages(
       // 用户消息原地显示从不结组，插话因此排在整轮回复之前
       const text = typeof msg.content === 'string' ? msg.content : '';
       result.push({
-        _id: uuid.v4(),
+        _id: uuidv4(),
         text,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: 1 },

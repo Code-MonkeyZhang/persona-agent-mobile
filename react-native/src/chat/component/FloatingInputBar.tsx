@@ -16,7 +16,7 @@ import { CustomChatFooter } from './CustomChatFooter.tsx';
 
 /** 浮动输入框 Props */
 interface FloatingInputBarProps {
-  textInputRef: React.RefObject<TextInput>;
+  textInputRef: React.RefObject<TextInput | null>;
   onSend: (text: string) => void;
   onStop?: () => void;
   selectedFiles: FileInfo[];

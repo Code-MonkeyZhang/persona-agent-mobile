@@ -23,9 +23,6 @@ import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
-import TrackPlayer from 'react-native-track-player';
-import { ensurePlaybackListener } from './stores/voiceStore';
-import { getAudioPlayer } from './lib/audio-player';
 import { logger } from './lib/logger';
 import './i18n/index.ts';
 import i18n, { detectLanguage } from './i18n/index.ts';
@@ -172,16 +169,6 @@ const App = () => {
     logger.init();
     configureErrorHandling();
     logger.debug('[App] error handling configured');
-    const setupPromise = TrackPlayer.setupPlayer();
-    getAudioPlayer().init(setupPromise);
-    setupPromise
-      .then(() => {
-        ensurePlaybackListener();
-        logger.info('[App] TrackPlayer setup ok');
-      })
-      .catch((e) => {
-        logger.error('[App] TrackPlayer setup failed:', e);
-      });
 
     /** 刷新设备名缓存并启动冷连接 */
     refreshDeviceName();

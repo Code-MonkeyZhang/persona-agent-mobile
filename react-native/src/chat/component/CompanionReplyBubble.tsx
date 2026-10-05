@@ -15,7 +15,7 @@ const createBubbleStyles = (colors: ColorScheme) =>
     },
     inner: {
       borderRadius: 24,
-      backgroundColor: colors.surfaceTranslucent,
+      backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.overlayLight,
       overflow: 'hidden',
