@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- The audio library declares allowBackup=true, so the app value must win the manifest merge. -->
+    <!-- Some third-party libraries declare allowBackup=true, so the app value must win the manifest merge. -->
     <application
         android:name="com.persona.agent.MainApplication"
         android:allowBackup="false"
