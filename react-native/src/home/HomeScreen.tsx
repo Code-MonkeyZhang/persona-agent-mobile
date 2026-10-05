@@ -82,7 +82,7 @@ interface HomeListHeaderProps {
  * 列表头部：聊天入口卡、工具与技能入口、会话区标题。
  * 经 memo 固化，会话行展开态变化不再触发这块头部重渲染，滑动动画不被 JS 线程挤帧。
  */
-const HomeListHeader = React.memo(function HomeListHeader({
+const HomeListHeader = React.memo(function ({
   preview,
   onOpenChat,
 }: HomeListHeaderProps) {
@@ -514,8 +514,7 @@ const HomeScreen: React.FC = () => {
             );
           })}
         </ScrollView>
-        <View style={styles.divider} />
-        {/* 分隔线下方状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        {/* 状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
         <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
@@ -535,10 +534,14 @@ const HomeScreen: React.FC = () => {
           />
         )}
         ListHeaderComponent={
-          <HomeListHeader
-            preview={chatEntryPreview}
-            onOpenChat={openChatSession}
-          />
+          <>
+            {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
+            <View style={styles.divider} />
+            <HomeListHeader
+              preview={chatEntryPreview}
+              onOpenChat={openChatSession}
+            />
+          </>
         }
         ListEmptyComponent={
           <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
