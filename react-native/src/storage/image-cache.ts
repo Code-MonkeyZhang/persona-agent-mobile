@@ -119,6 +119,17 @@ export class ImageCache {
     return work;
   }
 
+  /**
+   * 清除失败哨兵，让下一次 resolve 重新尝试下载。
+   * 哨兵是会话级记忆，排队下载的重试节奏靠它解除失败锁定。
+   */
+  clearFailure(source: string): void {
+    const key = parseHashKey(source);
+    if (key && this.memo.get(key) === FAILED) {
+      this.memo.delete(key);
+    }
+  }
+
   /** 未命中路径的完整流程：扫目录、下载、校验、落盘 */
   private async fetchToFile(
     source: string,

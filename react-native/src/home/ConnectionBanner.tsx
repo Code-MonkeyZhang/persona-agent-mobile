@@ -69,6 +69,7 @@ const ConnectionBanner: React.FC = () => {
   const status = useConnectionStore((s) => s.status);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
   const syncState = useMirrorStore((s) => s.syncState);
+  const imageSyncState = useMirrorStore((s) => s.imageSyncState);
   const styles = createStyles(colors);
 
   const [flashPhase, setFlashPhase] = useState<FlashPhase>('gone');
@@ -77,9 +78,12 @@ const ConnectionBanner: React.FC = () => {
   const enterProgress = useSharedValue(0);
   const collapseProgress = useSharedValue(0);
 
+  /** 文本镜像与图片排队任一在途即为同步态 */
+  const syncing = syncState === 'syncing' || imageSyncState === 'syncing';
+
   const kind: BannerKind =
     status === 'connected'
-      ? syncState === 'syncing'
+      ? syncing
         ? 'syncing'
         : 'flash'
       : status === 'connecting' || status === 'reconnecting'
@@ -90,19 +94,18 @@ const ConnectionBanner: React.FC = () => {
 
   /** 上一次的连接状态，用来区分真实落进已连接与带着已连接状态挂载 */
   const prevStatusRef = useRef(status);
-  /** 上一次的同步进度，用来识别 syncing 到 ready 的完成跃迁 */
-  const prevSyncRef = useRef(syncState);
+  /** 上一次的同步态，用来识别 syncing 到 ready 的完成跃迁 */
+  const prevSyncRef = useRef(syncing);
 
   // 只在亲眼看到状态从非连接变成已连接时亮一次绿条，亮满两秒转收起
   // 页面切换重新挂载时如果连接早就是好的，不重播；中途断连立刻复位让位红蓝条
-  // 首次同步在途同样复位让位同步蓝条，完成跃迁时再亮起并换已同步文案
+  // 两层同步任一在途同样复位让位同步蓝条，全部就绪的跃迁时刻再亮起并换已同步文案
   useEffect(() => {
-    const fromSyncing =
-      prevSyncRef.current === 'syncing' && syncState === 'ready';
-    prevSyncRef.current = syncState;
+    const fromSyncing = prevSyncRef.current && !syncing;
+    prevSyncRef.current = syncing;
     const wasConnected = prevStatusRef.current === 'connected';
     prevStatusRef.current = status;
-    if (status !== 'connected' || syncState === 'syncing') {
+    if (status !== 'connected' || syncing) {
       setFlashPhase('gone');
       return;
     }
@@ -122,7 +125,7 @@ const ConnectionBanner: React.FC = () => {
       CONNECTED_FLASH_MS
     );
     return () => clearTimeout(timer);
-  }, [status, syncState, collapseProgress]);
+  }, [status, syncing, collapseProgress]);
 
   /** 收起动画完成回调，UI 线程的动画完成信号经 runOnJS 回到 JS 线程摘除绿条 */
   const onCollapseFinished = useCallback(() => {

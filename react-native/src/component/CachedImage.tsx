@@ -7,43 +7,8 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Image, type ImageStyle, type StyleProp } from 'react-native';
-import RNFS from 'react-native-fs';
-import { ImageCache, parseHashKey } from '../storage/image-cache.ts';
-import { logger } from '../lib/logger';
-
-/** RNFS 实现的图片缓存单例，目录在 Documents 下且只增不清 */
-const imageCache = new ImageCache(`${RNFS.DocumentDirectoryPath}/image-cache`, {
-  mkdir: (path) => RNFS.mkdir(path).catch(() => undefined),
-  readDir: async (path) => (await RNFS.readDir(path)).map((item) => item.name),
-  unlink: (path) => RNFS.unlink(path),
-  moveFile: (from, to) => RNFS.moveFile(from, to),
-  sha256: (path) => RNFS.hash(path, 'sha256'),
-  download: (url, toFile) =>
-    new Promise<{ statusCode: number; contentType?: string }>(
-      (resolve, reject) => {
-        let statusCode = 0;
-        let contentType: string | undefined;
-        const job = RNFS.downloadFile({
-          fromUrl: url,
-          toFile,
-          background: false,
-          connectionTimeout: 15_000,
-          readTimeout: 30_000,
-          begin: (res) => {
-            statusCode = res.statusCode;
-            const headers = res.headers as Record<string, string>;
-            for (const name of Object.keys(headers)) {
-              if (name.toLowerCase() === 'content-type') {
-                contentType = headers[name];
-              }
-            }
-          },
-        });
-        job.promise.then(() => resolve({ statusCode, contentType }), reject);
-      }
-    ),
-  log: (message) => logger.info(`[ImageCache] ${message}`),
-});
+import { parseHashKey } from '../storage/image-cache.ts';
+import { imageCache } from '../storage/image-cache-rn.ts';
 
 /** CachedImage 的 Props，与 Image 的常用子集对齐，source 换成字符串地址 */
 export interface CachedImageProps {
