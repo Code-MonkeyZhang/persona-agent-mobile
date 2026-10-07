@@ -5,10 +5,16 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Keyboard } from 'react-native';
-import { fetchPoses } from '../../api/server-api';
+import {
+  fetchPoses,
+  notePoseAssets,
+  type PoseAssets,
+} from '../../api/server-api';
 import {
   saveCompanionOpen,
   getCompanionOpen,
+  savePosesAssets,
+  getPosesAssets,
 } from '../../storage/StorageUtils';
 import { logger } from '../../lib/logger';
 
@@ -23,7 +29,7 @@ export function useCompanionMode(
   /** 背景图加载失败标记 */
   const [bgError, setBgError] = useState(false);
 
-  /** Agent 切换时请求 pose 列表，判断是否有陪伴资源 */
+  /** Agent 切换时请求 pose 清单，成功落 MMKV，失败回退本地清单保证断网可用 */
   useEffect(() => {
     if (!agentId || !serverAddressRef.current) {
       return;
@@ -33,13 +39,22 @@ export function useCompanionMode(
     setBgError(false);
     logger.info(`[Companion] fetchPoses agentId=${agentId}`);
     fetchPoses(agentId, serverAddressRef.current)
-      .then((poses) => {
-        logger.info(`[Companion] poses loaded: ${poses.length}`);
+      .then((assets: PoseAssets) => {
+        savePosesAssets(agentId, assets);
         if (!cancelled) {
-          setHasAssets(poses.length > 0);
+          setHasAssets(assets.poses.length > 0);
         }
       })
       .catch(() => {
+        const cached = getPosesAssets(agentId);
+        if (cached) {
+          notePoseAssets(agentId, cached);
+          if (!cancelled) {
+            setHasAssets(cached.poses.length > 0);
+          }
+          logger.info('[Companion] poses loaded from local cache');
+          return;
+        }
         logger.error('[Companion] fetchPoses failed');
         if (!cancelled) {
           setHasAssets(false);

@@ -259,6 +259,8 @@ export interface AgentInfo {
   skillNames: string[];
   defaultWorkspacePath?: string;
   voiceId?: string;
+  /** 头像内容哈希，路由层按文件现算，URL 构造器据此拼 h 查询串 */
+  avatarHash?: string;
   /** 上下文压缩阈值（百分比 1–100） */
   compressionThreshold: number;
   /** 记忆整理（Dream）间隔（分钟） */
@@ -380,20 +382,6 @@ export interface VoiceOption {
 }
 
 /**
- * 拼接 Agent 头像图片的 HTTP 地址。
- * 服务器在 `GET /api/agents/:agentId/avatar` 返回 256x256 PNG。
- * @param agentId Agent ID
- * @param serverAddress 服务器地址
- * @returns 头像图片的完整 URL
- */
-export function getAgentAvatarUrl(
-  agentId: string,
-  serverAddress: string
-): string {
-  return `${serverAddress}/api/agents/${agentId}/avatar`;
-}
-
-/**
  * 计算指定 Agent 的常驻聊天会话 ID。
  * 每个 Agent 恰好有一个常驻会话，ID 形如 `chat-{agentId}`，全局唯一。
  */
@@ -407,44 +395,101 @@ export function isChatSession(sessionId: string): boolean {
 }
 
 /**
- * 获取指定 Agent 可用的姿态列表。
- * 服务器在 GET /api/agents/:id/assets/pose 返回 { poses: string[] }。
+ * 拼接 Agent 头像图片的 HTTP 地址。
+ * 服务器在 `GET /api/agents/:agentId/avatar` 返回 256x256 PNG。
+ * 登记表有头像哈希时拼上 h 查询串，服务端按 h 分流 immutable 响应头，
+ * 图片缓存模块以 h 为缓存键，网络地址只承担一次性传输。
+ * @param agentId Agent ID
+ * @param serverAddress 服务器地址
+ * @returns 头像图片的完整 URL
+ */
+export function getAgentAvatarUrl(
+  agentId: string,
+  serverAddress: string
+): string {
+  const path = `/api/agents/${agentId}/avatar`;
+  return withHashParam(serverAddress, path);
+}
+
+/** 图片内容哈希登记表，键为不含主机与查询串的图片路径，网络地址变化不失效 */
+const hashRegistry = new Map<string, string>();
+
+/** 图片路径拼上登记表里的哈希，未登记时返回裸地址由服务端 no-cache 防御兜底 */
+function withHashParam(serverAddress: string, path: string): string {
+  const hash = hashRegistry.get(path);
+  return hash ? `${serverAddress}${path}?h=${hash}` : `${serverAddress}${path}`;
+}
+
+/** 登记多个 agent 的头像哈希，网络拉取与离线回退共用 */
+export function noteAgentHashes(agents: AgentInfo[]): void {
+  for (const agent of agents) {
+    if (agent.avatarHash) {
+      hashRegistry.set(`/api/agents/${agent.id}/avatar`, agent.avatarHash);
+    }
+  }
+}
+
+/** 立绘与背景资源清单，服务端按文件现算内容哈希下发 */
+export interface PoseAssets {
+  poses: Array<{ name: string; hash: string }>;
+  /** 背景图哈希，无背景时为空串 */
+  backgroundHash: string;
+}
+
+/** 登记指定 agent 的立绘与背景哈希，网络拉取与 MMKV 离线回退共用 */
+export function notePoseAssets(agentId: string, assets: PoseAssets): void {
+  for (const pose of assets.poses) {
+    hashRegistry.set(
+      `/api/agents/${agentId}/assets/pose/${pose.name}`,
+      pose.hash
+    );
+  }
+  if (assets.backgroundHash) {
+    hashRegistry.set(
+      `/api/agents/${agentId}/assets/background`,
+      assets.backgroundHash
+    );
+  }
+}
+
+/**
+ * 获取指定 Agent 的姿态与背景资源清单。
+ * 服务器在 GET /api/agents/:id/assets/pose 返回带内容哈希的对象数组。
  */
 export async function fetchPoses(
   agentId: string,
   serverAddress: string
-): Promise<string[]> {
+): Promise<PoseAssets> {
   const url = `${serverAddress}/api/agents/${agentId}/assets/pose`;
   const responseText = await httpGet(url);
-  const data = JSON.parse(responseText) as { poses: string[] };
-  return data.poses;
+  const data = JSON.parse(responseText) as PoseAssets;
+  notePoseAssets(agentId, data);
+  return data;
 }
 
 /**
  * 拼接 Agent 指定姿态的图片 URL。
- * 服务器在 GET /api/agents/:id/assets/pose/:name 返回图片流。
+ * 登记表有哈希时拼上 h 查询串，姿态名不做编码变形，登记与查表共用同一键。
  */
 export function getPoseImageUrl(
   agentId: string,
   poseName: string,
   serverAddress: string
 ): string {
-  // URL 保持稳定以命中平台 HTTP 缓存，pose 切换靠路径里的 poseName 区分
-  return `${serverAddress}/api/agents/${agentId}/assets/pose/${encodeURIComponent(
-    poseName
-  )}`;
+  const path = `/api/agents/${agentId}/assets/pose/${poseName}`;
+  return withHashParam(serverAddress, path);
 }
 
 /**
  * 拼接 Agent 背景图片 URL。
- * 服务器在 GET /api/agents/:id/assets/background 返回图片流。
+ * 登记表有哈希时拼上 h 查询串，缓存键与网络地址解耦。
  */
 export function getBackgroundImageUrl(
   agentId: string,
   serverAddress: string
 ): string {
-  // URL 保持稳定以命中平台 HTTP 缓存
-  return `${serverAddress}/api/agents/${agentId}/assets/background`;
+  const path = `/api/agents/${agentId}/assets/background`;
+  return withHashParam(serverAddress, path);
 }
 
 /**
@@ -463,6 +508,7 @@ export async function fetchAgents(serverAddress: string): Promise<AgentInfo[]> {
       .map((a) => `${a.id}(${a.name})`)
       .join(', ')}`
   );
+  noteAgentHashes(data.agents);
   return data.agents;
 }
 
@@ -504,6 +550,20 @@ export async function updateAgent(
 }
 
 /**
+ * 把服务端下发的相对图标地址补全为绝对地址。
+ * 已安装商品的图标走本机服务路由，地址以斜杠开头，远程回退网址原样保留。
+ */
+function withAbsoluteLogoUrl<T extends { logoUrl?: string }>(
+  item: T,
+  serverAddress: string
+): T {
+  if (item.logoUrl && item.logoUrl.startsWith('/')) {
+    return { ...item, logoUrl: serverAddress + item.logoUrl };
+  }
+  return item;
+}
+
+/**
  * 获取服务器上所有 MCP 服务器列表（含连接状态和工具信息）。
  */
 export async function fetchMcpServers(
@@ -512,7 +572,9 @@ export async function fetchMcpServers(
   const url = `${serverAddress}/api/mcp`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { servers: McpServerInfo[] };
-  return data.servers;
+  return data.servers.map((server) =>
+    withAbsoluteLogoUrl(server, serverAddress)
+  );
 }
 
 /**
@@ -530,7 +592,7 @@ export async function getMcpServer(
   logger.info(
     `${TAG} getMcpServer → ${name} status=${data.server.status} tools=${data.server.toolCount}`
   );
-  return data.server;
+  return withAbsoluteLogoUrl(data.server, serverAddress);
 }
 
 /**
@@ -562,7 +624,7 @@ export async function fetchSkills(serverAddress: string): Promise<SkillInfo[]> {
   const url = `${serverAddress}/api/skills`;
   const responseText = await httpGet(url);
   const data = JSON.parse(responseText) as { skills: SkillInfo[] };
-  return data.skills;
+  return data.skills.map((skill) => withAbsoluteLogoUrl(skill, serverAddress));
 }
 
 /**
@@ -578,7 +640,7 @@ export async function getSkill(
   logger.info(
     `${TAG} getSkill → ${name} contentLength=${data.skill.content.length}`
   );
-  return data.skill;
+  return withAbsoluteLogoUrl(data.skill, serverAddress);
 }
 
 /**

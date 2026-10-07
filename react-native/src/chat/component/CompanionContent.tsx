@@ -4,8 +4,9 @@
  * 所有数据通过 props 传入，内部不做任何 WebSocket 或 API 调用。
  */
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import CachedImage from '../../component/CachedImage';
 import {
   getBackgroundImageUrl,
   getPoseImageUrl,
@@ -48,8 +49,8 @@ const CompanionContent = React.memo(function ({
   return (
     <View style={styles.container}>
       {showBackground && (
-        <Image
-          source={{ uri: getBackgroundImageUrl(agentId, serverAddr) }}
+        <CachedImage
+          source={getBackgroundImageUrl(agentId, serverAddr)}
           style={StyleSheet.absoluteFillObject}
           onLoad={() => logger.info('[Companion] background loaded')}
           onError={() => {
@@ -62,8 +63,8 @@ const CompanionContent = React.memo(function ({
 
       {showPose && (
         <View style={styles.poseLayer} pointerEvents="none">
-          <Image
-            source={{ uri: getPoseImageUrl(agentId, currentPose, serverAddr) }}
+          <CachedImage
+            source={getPoseImageUrl(agentId, currentPose, serverAddr)}
             style={StyleSheet.absoluteFillObject}
             onLoad={() => logger.info(`[Companion] pose ${currentPose} loaded`)}
             onError={() => {

@@ -4,8 +4,9 @@
  * 所有需要展示 Agent 头像的地方都应使用此组件，避免重复加载和逻辑分散。
  */
 import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { User } from 'lucide-react-native';
+import CachedImage from '../../component/CachedImage';
 import { getAgentAvatarUrl } from '../../api/server-api';
 import { logger } from '../../lib/logger';
 import { useTheme } from '../../theme';
@@ -25,7 +26,7 @@ export interface AgentAvatarProps {
  *
  * 内部封装了 URL 构建、加载失败回退、agentId 切换时重置错误状态等逻辑，
  * 并通过 React.memo 确保相同 agentId + serverAddress 时不重复渲染，
- * 配合 ChatScreen 中的 Image.prefetch 预加载可避免逐条消息重复请求头像。
+ * 图片经 CachedImage 按内容哈希落盘，重复挂载不再发起网络请求。
  */
 const AgentAvatar: React.FC<AgentAvatarProps> = ({
   agentId,
@@ -54,8 +55,8 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
 
   if (canLoad && !avatarError) {
     return (
-      <Image
-        source={{ uri: getAgentAvatarUrl(agentId, serverAddress) }}
+      <CachedImage
+        source={getAgentAvatarUrl(agentId, serverAddress)}
         style={baseStyle}
         onError={() => {
           logger.warn(`[AgentAvatar] load failed, agentId=${agentId}`);

@@ -18,7 +18,6 @@ import { GiftedChat } from 'react-native-gifted-chat';
 import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
 import {
   Dimensions,
-  Image,
   Keyboard,
   LayoutChangeEvent,
   Pressable,
@@ -47,7 +46,6 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
-import { getAgentAvatarUrl } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
@@ -168,17 +166,6 @@ function ChatScreen(): React.JSX.Element {
     }
     return sessionTitles[activeSessionId] ?? route.params?.title ?? '';
   }, [activeSessionId, sessionTitles, route.params?.title, t]);
-
-  /** 预加载 Agent 头像 */
-  useEffect(() => {
-    if (!currentAgentId || !serverAddressRef.current) {
-      return;
-    }
-    const url = getAgentAvatarUrl(currentAgentId, serverAddressRef.current);
-    Image.prefetch(url)
-      .then(() => logger.debug(`[ChatScreen] avatar prefetched: ${url}`))
-      .catch((err) => logger.warn('[ChatScreen] avatar prefetch failed:', err));
-  }, [currentAgentId]);
 
   const handleToggleVoice = useCallback(() => {
     toggleVoice();
