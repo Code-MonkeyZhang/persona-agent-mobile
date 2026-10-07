@@ -95,7 +95,9 @@
     "server": "服务器",
     "settings": "设置",
     "delete": "删除",
-    "startChat": "开始聊天"
+    "startChat": "开始聊天",
+    "syncing": "正在同步会话",
+    "syncDone": "已同步"
   },
   "nav": {
     "titleTools": "工具",

@@ -8,6 +8,7 @@ import type { ChatMessage } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { stripLastTextThought } from '../chat/util/thought-utils';
 import { logger } from '../lib/logger';
+import type { SessionChange } from '../storage/sync-shapes.ts';
 
 /** 日志标签前缀 */
 const TAG = '[ServerApi]';
@@ -101,6 +102,11 @@ export type ServerMessage =
       type: 'pending_input_changed';
       sessionId: string;
       pending: PendingInput[];
+    }
+  | {
+      /** 变更流推送，服务端向全部在线客户端广播，镜像库据此增量回放 */
+      type: 'change';
+      change: SessionChange;
     };
 
 /**
@@ -155,9 +161,13 @@ function httpRequest(
   });
 }
 
-/** HTTP GET，默认 30 秒超时。 */
-function httpGet(url: string): Promise<string> {
-  return httpRequest('GET', url, { timeout: 30000 });
+/**
+ * HTTP GET，默认 30 秒超时。
+ * @param url 完整请求地址
+ * @param timeout 超时毫秒数，首次镜像等大响应可单独调大
+ */
+export function httpGet(url: string, timeout?: number): Promise<string> {
+  return httpRequest('GET', url, { timeout: timeout ?? 30000 });
 }
 
 /**
@@ -723,7 +733,7 @@ interface ServerToolCall {
   };
 }
 
-interface ServerChatMessage {
+export interface ServerChatMessage {
   /** @persona/shared Message 联合的简化投影，保留 role/content/thinking/tool_calls */
   role:
     | 'user'

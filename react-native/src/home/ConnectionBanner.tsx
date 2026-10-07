@@ -1,10 +1,11 @@
 /**
  * @file home/ConnectionBanner.tsx
- * @description Home 与 Chat 两页共用的连接态条，四态直映链路。
+ * @description Home 与 Chat 两页共用的连接态条，五态直映链路。
  *   - 红条连接失败，点本体以当前地址立即重连，右端箭头独立进 Server 改地址
  *   - 蓝条未填地址引导进 Server，点本体与点箭头等价
  *   - 蓝条连接中与重连中转圈过渡，重连由 ws-client 自动进行，不可点
- *   - 绿条已连接亮两秒后压高收起，动画回调摘除并配兜底定时器双保险，重挂载不重播
+ *   - 蓝条正在同步转圈持续在位，首次全量同步完成前不让位绿条
+ *   - 绿条已连接或已同步亮两秒后压高收起，动画回调摘除并配兜底定时器双保险，重挂载不重播
  *   - 进场与收起动画由 reanimated 在 UI 线程驱动，新架构下 JS 驱动布局动画会掉帧留残影
  *   组件自取导航与连接态，两页宿主直接挂载即可，无需传回调。
  */
@@ -29,6 +30,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
+import { useMirrorStore } from '../stores/mirrorStore.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import { logger } from '../lib/logger';
 
@@ -58,7 +60,7 @@ const BANNER_PAD_V = 8;
 type FlashPhase = 'shown' | 'collapsing' | 'gone';
 
 /** 横幅的视觉分档，同档内的文字切换不重播进场动画 */
-type BannerKind = 'flash' | 'transient' | 'noAddress' | 'failed';
+type BannerKind = 'flash' | 'syncing' | 'transient' | 'noAddress' | 'failed';
 
 const ConnectionBanner: React.FC = () => {
   const { colors } = useTheme();
@@ -66,16 +68,20 @@ const ConnectionBanner: React.FC = () => {
   const navigation = useNavigation<BannerNavigation>();
   const status = useConnectionStore((s) => s.status);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
+  const syncState = useMirrorStore((s) => s.syncState);
   const styles = createStyles(colors);
 
   const [flashPhase, setFlashPhase] = useState<FlashPhase>('gone');
+  const [flashDone, setFlashDone] = useState(false);
 
   const enterProgress = useSharedValue(0);
   const collapseProgress = useSharedValue(0);
 
   const kind: BannerKind =
     status === 'connected'
-      ? 'flash'
+      ? syncState === 'syncing'
+        ? 'syncing'
+        : 'flash'
       : status === 'connecting' || status === 'reconnecting'
       ? 'transient'
       : serverAddress
@@ -84,28 +90,39 @@ const ConnectionBanner: React.FC = () => {
 
   /** 上一次的连接状态，用来区分真实落进已连接与带着已连接状态挂载 */
   const prevStatusRef = useRef(status);
+  /** 上一次的同步进度，用来识别 syncing 到 ready 的完成跃迁 */
+  const prevSyncRef = useRef(syncState);
 
   // 只在亲眼看到状态从非连接变成已连接时亮一次绿条，亮满两秒转收起
   // 页面切换重新挂载时如果连接早就是好的，不重播；中途断连立刻复位让位红蓝条
+  // 首次同步在途同样复位让位同步蓝条，完成跃迁时再亮起并换已同步文案
   useEffect(() => {
+    const fromSyncing =
+      prevSyncRef.current === 'syncing' && syncState === 'ready';
+    prevSyncRef.current = syncState;
     const wasConnected = prevStatusRef.current === 'connected';
     prevStatusRef.current = status;
-    if (status !== 'connected') {
+    if (status !== 'connected' || syncState === 'syncing') {
       setFlashPhase('gone');
       return;
     }
-    if (wasConnected) {
+    if (wasConnected && !fromSyncing) {
       return;
     }
     collapseProgress.value = 0;
-    logger.debug('[ConnectionBanner] green banner shown');
+    logger.debug(
+      `[ConnectionBanner] green banner shown: ${
+        fromSyncing ? 'synced' : 'connected'
+      }`
+    );
+    setFlashDone(fromSyncing);
     setFlashPhase('shown');
     const timer = setTimeout(
       () => setFlashPhase('collapsing'),
       CONNECTED_FLASH_MS
     );
     return () => clearTimeout(timer);
-  }, [status, collapseProgress]);
+  }, [status, syncState, collapseProgress]);
 
   /** 收起动画完成回调，UI 线程的动画完成信号经 runOnJS 回到 JS 线程摘除绿条 */
   const onCollapseFinished = useCallback(() => {
@@ -176,15 +193,34 @@ const ConnectionBanner: React.FC = () => {
     navigation.navigate('Server');
   }, [navigation]);
 
-  // 绿条内容，亮起与收起两段渲染共用
+  // 绿条内容，亮起与收起两段渲染共用，完成跃迁后文案换已同步
   const flashContent = (
     <>
       <Check size={18} color={colors.success} />
       <Text style={[styles.text, { color: colors.success }]}>
-        {t('home.connected')}
+        {t(flashDone ? 'home.syncDone' : 'home.connected')}
       </Text>
     </>
   );
+
+  // 同步蓝条，首次全量同步在途时持续在位，视觉与连接中蓝条同款
+  if (kind === 'syncing') {
+    return (
+      <Animated.View
+        style={[
+          styles.container,
+          styles.banner,
+          styles.bannerTransient,
+          enterStyle,
+        ]}
+      >
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.text, { color: colors.primary }]}>
+          {t('home.syncing')}
+        </Text>
+      </Animated.View>
+    );
+  }
 
   if (kind === 'flash') {
     if (flashPhase === 'gone') {

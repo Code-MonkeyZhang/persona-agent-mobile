@@ -2,7 +2,7 @@
  * @file stores/chatStore.ts
  * @description 会话仓库：按 sessionId 分片保存消息、生成状态与陪伴姿态。
  *   - WS 事件处理在模块加载时注册一次永不注销，事件按消息携带的 sessionId 写入对应分片
- *   - 发送链路与重连自愈收敛于此，页面卸载重建后数据与流式回合不丢
+ *   - 发送链路与追平补拉收敛于此，页面卸载重建后数据与流式回合不丢
  *   - 生成期间消息流无占位气泡，轮次步骤进轮次缓冲，turn_complete 到达组装整轮气泡
  *   - 忙时插话进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染
  *   - 页面只是订阅者，ChatScreen 不再持有消息状态
@@ -19,12 +19,16 @@ import {
   convertToChatMessages,
   chatSessionIdFor,
   type PendingInput,
+  type ServerChatMessage,
 } from '../api/server-api.ts';
 import {
   getServerAddress,
   getServerAgentId,
   saveLastConversation,
 } from '../storage/StorageUtils.ts';
+import { cacheDb } from '../storage/cache-db.ts';
+import { toServerChatMessages } from '../storage/sync-shapes.ts';
+import { useMirrorStore } from '../stores/mirrorStore.ts';
 import { getFileTypeSummary, isAllFileReady } from '../chat/util/FileUtils.ts';
 import {
   cycleToThoughts,
@@ -35,7 +39,6 @@ import {
   extractPreview,
   NEW_CHAT_SESSION,
 } from './sessionStore.ts';
-import { useConnectionStore } from './connectionStore.ts';
 import { useVoiceStore } from './voiceStore.ts';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
@@ -157,27 +160,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const address = getServerAddress();
-      const session = await fetchSessionMessages(address, agentId, sessionId);
-      updateSlice(sessionId, (slice) => ({
-        ...slice,
-        messages: convertToChatMessages(
-          session.messages,
-          session.createdAt,
-          get().agentName,
-          getAgentAvatarUrl(agentId, address)
-        ),
-        pose: session.currentPose ?? 'default',
-        poseError: false,
-      }));
+      const view = await loadSessionView(sessionId, agentId, address);
+      if (view) {
+        lastRefreshedAt[sessionId] = view.updatedAt;
+        updateSlice(sessionId, (slice) => ({
+          ...slice,
+          messages: convertToChatMessages(
+            view.messages,
+            view.createdAt,
+            get().agentName,
+            getAgentAvatarUrl(agentId, address)
+          ),
+          pose: view.currentPose ?? 'default',
+          poseError: false,
+        }));
+        logger.info(
+          `${TAG} session loaded=${sessionId}, messages=${
+            view.messages.length
+          }, pose=${view.currentPose ?? 'default'}`
+        );
+      }
       // 加载期间已切走则不抢订阅，避免迟到的加载覆盖新会话的订阅
       if (useChatStore.getState().displayedSessionId === sessionId) {
         wsClient.subscribe(sessionId);
       }
-      logger.info(
-        `${TAG} session loaded=${sessionId}, messages=${
-          session.messages.length
-        }, pose=${session.currentPose ?? 'default'}`
-      );
     } catch (e) {
       logger.error(
         `${TAG} loadSession failed: ${
@@ -301,6 +307,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       delete sessions[sessionId];
       return { ...state, sessions };
     });
+    delete lastRefreshedAt[sessionId];
     logger.info(`${TAG} session removed: ${sessionId}`);
   },
 
@@ -392,8 +399,44 @@ function adoptSessionId(sessionId: string): void {
 }
 
 /**
- * 从磁盘重新拉取指定会话的消息列表。
- * 武装刷新与重连自愈场景使用，扫描规则保证渲染顺序与实时链路一致。
+ * 读取会话的渲染视图，镜像优先，镜像未命中走网络兜底。
+ * 两条路径产出同形数据，convertToChatMessages 无感知数据来源。
+ */
+async function loadSessionView(
+  sessionId: string,
+  agentId: string,
+  address: string
+): Promise<{
+  updatedAt: number;
+  createdAt: number;
+  currentPose?: string;
+  messages: ServerChatMessage[];
+} | null> {
+  const mirrored = cacheDb.getSession(sessionId);
+  if (mirrored) {
+    return {
+      updatedAt: mirrored.updatedAt,
+      createdAt: mirrored.createdAt,
+      currentPose: mirrored.currentPose,
+      messages: toServerChatMessages(mirrored.messages),
+    };
+  }
+  const session = await fetchSessionMessages(address, agentId, sessionId);
+  return {
+    updatedAt: session.updatedAt,
+    createdAt: session.createdAt,
+    currentPose: session.currentPose,
+    messages: session.messages,
+  };
+}
+
+/** 各会话最近一次落盘刷新时的 updatedAt，相同值跳过重扫 */
+const lastRefreshedAt: Record<string, number> = {};
+
+/**
+ * 从本地重读指定会话的消息列表。
+ * 武装刷新与追平补拉场景使用，扫描规则保证渲染顺序与实时链路一致。
+ * 入口先做更新时间预检查，会话无变化且本地已有消息时零成本返回。
  */
 async function refreshFromDisk(sessionId: string): Promise<void> {
   if (!sessionId) {
@@ -401,16 +444,37 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
   }
   const agentId = getServerAgentId();
   const address = getServerAddress();
-  if (!agentId || !address) {
+  if (!agentId) {
     return;
   }
   try {
-    const session = await fetchSessionMessages(address, agentId, sessionId);
-    updateSlice(sessionId, (slice) => ({
-      ...slice,
+    // 廉价预检查，更新时间未变且本地已有消息时直接返回，追平信号触发但会话无变化时零开销
+    const current = useChatStore.getState().sessions[sessionId];
+    if (current && current.messages.length > 0) {
+      const updatedAt = cacheDb.getSessionUpdatedAt(sessionId);
+      if (updatedAt !== null && updatedAt === lastRefreshedAt[sessionId]) {
+        logger.debug(`${TAG} refresh skipped, session=${sessionId} unchanged`);
+        return;
+      }
+    }
+    const view = await loadSessionView(sessionId, agentId, address);
+    if (!view) {
+      return;
+    }
+    const slice = useChatStore.getState().sessions[sessionId];
+    if (
+      slice &&
+      slice.messages.length > 0 &&
+      lastRefreshedAt[sessionId] === view.updatedAt
+    ) {
+      return;
+    }
+    lastRefreshedAt[sessionId] = view.updatedAt;
+    updateSlice(sessionId, (prev) => ({
+      ...prev,
       messages: convertToChatMessages(
-        session.messages,
-        session.createdAt,
+        view.messages,
+        view.createdAt,
         useChatStore.getState().agentName,
         getAgentAvatarUrl(agentId, address)
       ),
@@ -669,17 +733,21 @@ function registerWsHandler(): void {
 
 registerWsHandler();
 
-/** 监听重连版本号，空闲会话从磁盘补拉最新消息，运行中的会话交给轮次机制收敛 */
-let lastReconnectVersion = 0;
-useConnectionStore.subscribe((state) => {
-  if (state.reconnectVersion > lastReconnectVersion) {
-    lastReconnectVersion = state.reconnectVersion;
-    const sid = useChatStore.getState().displayedSessionId;
-    if (useChatStore.getState().sessions[sid]?.status === ChatStatus.Running) {
-      logger.info(`${TAG} reconnect detected, running session kept live`);
-      return;
-    }
-    logger.info(`${TAG} reconnect detected, refreshing messages`);
-    refreshFromDisk(sid);
+/** 监听追平完成计数，重连或冷启动追平后空闲的当前会话补拉一次，运行中的交给轮次机制收敛 */
+let lastCatchUpVersion = 0;
+useMirrorStore.subscribe((state) => {
+  if (state.catchUpVersion === lastCatchUpVersion) {
+    return;
   }
+  lastCatchUpVersion = state.catchUpVersion;
+  const sid = useChatStore.getState().displayedSessionId;
+  if (!sid || sid === NEW_CHAT_SESSION) {
+    return;
+  }
+  if (useChatStore.getState().sessions[sid]?.status === ChatStatus.Running) {
+    logger.info(`${TAG} catch-up done, running session kept live`);
+    return;
+  }
+  logger.info(`${TAG} catch-up done, refreshing messages`);
+  refreshFromDisk(sid);
 });

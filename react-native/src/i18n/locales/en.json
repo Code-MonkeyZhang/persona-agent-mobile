@@ -95,7 +95,9 @@
     "server": "Server",
     "settings": "Settings",
     "delete": "Delete",
-    "startChat": "Start chatting"
+    "startChat": "Start chatting",
+    "syncing": "Syncing sessions",
+    "syncDone": "Synced"
   },
   "nav": {
     "titleTools": "Tools",

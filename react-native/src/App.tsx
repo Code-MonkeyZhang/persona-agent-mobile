@@ -21,6 +21,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
+import { setupSync } from './storage/sync-setup.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import { logger } from './lib/logger';
@@ -170,7 +171,8 @@ const App = () => {
     configureErrorHandling();
     logger.debug('[App] error handling configured');
 
-    /** 刷新设备名缓存并启动冷连接 */
+    /** 刷新设备名缓存并启动冷连接，镜像同步链路一并装配 */
+    setupSync();
     refreshDeviceName();
     useConnectionStore.getState().coldStart();
 

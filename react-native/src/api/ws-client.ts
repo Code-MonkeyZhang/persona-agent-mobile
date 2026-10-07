@@ -16,6 +16,7 @@ import type {
   SpeakErrorReason,
   PendingInput,
 } from './server-api.ts';
+import type { SessionChange } from '../storage/sync-shapes.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { getDeviceId, getCachedDeviceName } from '../utils/DeviceUtils.ts';
@@ -76,6 +77,8 @@ let pongReceived = true;
 let subscribedSessionId: string | null = null;
 /** 当前注册的事件型消息处理器 */
 let currentHandler: WsEventHandler | null = null;
+/** 当前注册的同步消息处理器，镜像引擎在装配时注册 */
+let currentSyncHandler: ((change: SessionChange) => void) | null = null;
 /** 区分主动断开和网络断开，只有网络断开才重连 */
 let isIntentionalDisconnect = false;
 
@@ -150,6 +153,14 @@ export function isConnected(): boolean {
 export function registerHandler(handler: WsEventHandler): void {
   currentHandler = handler;
   logger.info(`${TAG} handler registered`);
+}
+
+/** 注册同步消息处理器，镜像引擎装配时调用一次 */
+export function registerSyncHandler(
+  handler: (change: SessionChange) => void
+): void {
+  currentSyncHandler = handler;
+  logger.info(`${TAG} sync handler registered`);
 }
 
 /**
@@ -319,6 +330,13 @@ function handleMessage(msg: ServerMessage): void {
         `${TAG} speak_error, reason=${msg.reason} message=${msg.message}`
       );
       currentHandler?.onSpeakError(msg.sessionId, msg.reason, msg.message);
+      break;
+
+    case 'change':
+      logger.debug(
+        `${TAG} change, seq=${msg.change.seq} kind=${msg.change.kind}`
+      );
+      currentSyncHandler?.(msg.change);
       break;
   }
 }

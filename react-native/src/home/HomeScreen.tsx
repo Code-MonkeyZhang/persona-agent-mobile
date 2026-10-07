@@ -44,9 +44,10 @@ import {
   chatSessionIdFor,
   deleteSession,
   fetchAgents,
-  fetchSessions,
   isChatSession,
+  noteAgentHashes,
 } from '../api/server-api.ts';
+import { cacheDb } from '../storage/cache-db.ts';
 import {
   getLastConversation,
   getServerAddress,
@@ -62,6 +63,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useAppPanelStore } from '../stores/appPanelStore';
 import { useChatStore } from '../stores/chatStore';
+import { useMirrorStore } from '../stores/mirrorStore';
 import { Chat } from '../types/Chat.ts';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
@@ -174,7 +176,7 @@ const HomeScreen: React.FC = () => {
   const sessionTitles = useSessionStore((s) => s.sessionTitles);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveSessionId = useSessionStore((s) => s.setActiveSessionId);
-  const homeRefreshVersion = useSessionStore((s) => s.homeRefreshVersion);
+  const mirrorVersion = useMirrorStore((s) => s.version);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
   const connectionStatus = useConnectionStore((s) => s.status);
   const reconnectVersion = useConnectionStore((s) => s.reconnectVersion);
@@ -188,34 +190,23 @@ const HomeScreen: React.FC = () => {
     t('home.startChat');
 
   // ==================== 列表与卡片拉取 ====================
-  /** 从服务器拉取会话列表，常驻聊天会话只取其预览不进列表 */
-  const handleUpdateHistory = useCallback(async () => {
-    const address = getServerAddress();
+  /** 从镜像库读会话列表，常驻聊天会话只取其预览不进列表，数据源不依赖网络 */
+  const handleUpdateHistory = useCallback(() => {
     const agentId = getServerAgentId();
-    if (!address || !agentId) {
+    if (!agentId) {
       return;
     }
-    try {
-      const sessions = await fetchSessions(address, agentId);
-      // 迟到的响应已不属于当前 agent 时丢弃，避免覆盖切换后的列表
-      if (getServerAgentId() !== agentId) {
-        return;
-      }
-      const chatList: Chat[] = sessions
-        .filter((s) => !isChatSession(s.id))
-        .map((s) => ({
-          id: s.id,
-          title: s.title,
-          updatedAt: s.updatedAt,
-          createdAt: s.createdAt,
-        }));
-      setChatHistory(chatList);
-      setChatLastMessage(
-        sessions.find((s) => isChatSession(s.id))?.lastMessage
-      );
-    } catch (e) {
-      logger.error(`[Home] fetchSessions failed: ${e}`);
-    }
+    const sessions = cacheDb.listSessions(agentId);
+    const chatList: Chat[] = sessions
+      .filter((s) => !isChatSession(s.id))
+      .map((s) => ({
+        id: s.id,
+        title: s.title,
+        updatedAt: s.updatedAt,
+        createdAt: s.createdAt,
+      }));
+    setChatHistory(chatList);
+    setChatLastMessage(sessions.find((s) => isChatSession(s.id))?.lastMessage);
   }, []);
 
   // ==================== agent 初始化与启动恢复 ====================
@@ -231,30 +222,19 @@ const HomeScreen: React.FC = () => {
   }, [insets.top, insets.bottom]);
 
   /**
-   * 拉取 agent 列表并确定当前 agent，首次拉取成功时执行启动恢复，
-   * 恢复上次会话或兜底到常驻聊天。
+   * 确定当前 agent 并执行一次启动恢复，网络成功与离线回退共用。
+   * 上次 Agent 还在且会话非空则恢复上次会话，否则兜底到常驻聊天。
    */
-  const loadAgents = useCallback(async () => {
-    const address = getServerAddress();
-    if (!address) {
-      return;
-    }
-    try {
-      const fetchedAgents = await fetchAgents(address);
-      if (fetchedAgents.length === 0) {
-        return;
-      }
-      setAgents(fetchedAgents);
-
+  const settleCurrentAgent = useCallback(
+    (list: AgentInfo[]) => {
       let agentId = getServerAgentId();
-      if (!agentId || !fetchedAgents.some((a) => a.id === agentId)) {
-        agentId = fetchedAgents[0].id;
+      if (!agentId || !list.some((a) => a.id === agentId)) {
+        agentId = list[0].id;
       }
       saveServerAgentId(agentId);
       setCurrentAgentId(agentId);
       logger.info(`[Home] agents loaded, using agentId=${agentId}`);
 
-      // 启动恢复：上次 Agent 还在且会话非空则恢复上次会话，否则兜底到常驻聊天
       if (!hasRestoredRef.current) {
         hasRestoredRef.current = true;
         const lastConv = getLastConversation();
@@ -270,36 +250,62 @@ const HomeScreen: React.FC = () => {
           `[Home] restore session: agentId=${agentId} sessionId=${targetSession}`
         );
       }
-    } catch (e) {
-      logger.error(
-        `[Home] loadAgents failed: ${e instanceof Error ? e.message : e}`
-      );
-    }
-  }, [setActiveSessionId]);
+    },
+    [setActiveSessionId]
+  );
 
   /**
-   * 数据拉取触发器。
-   * - 连接版本递增：连接建立或重连成功后重拉全部，覆盖冷启动隧道未就绪的场景
-   * - 刷新触发器递增：回合结束后重拉列表与卡片
-   * - 当前 agent 变化：切换后重拉列表与卡片
-   * 首次连接建立前不拉取，避免隧道未就绪时的无效请求
+   * 拉取 agent 列表，成功落镜像库供离线回退。
+   * 拉取失败时读缓存副本并重新登记头像哈希，离线也能出头像条。
+   */
+  const loadAgents = useCallback(async () => {
+    const address = getServerAddress();
+    if (!address) {
+      return;
+    }
+    try {
+      const fetchedAgents = await fetchAgents(address);
+      if (fetchedAgents.length === 0) {
+        return;
+      }
+      setAgents(fetchedAgents);
+      cacheDb.putAgents(fetchedAgents).catch((e: unknown) => {
+        logger.warn(`[Home] putAgents failed: ${e}`);
+      });
+      settleCurrentAgent(fetchedAgents);
+    } catch (e) {
+      logger.error(
+        `[Home] loadAgents failed: ${
+          e instanceof Error ? e.message : e
+        }, fallback to cache`
+      );
+      const cached = cacheDb.listAgents();
+      if (cached.length === 0) {
+        return;
+      }
+      noteAgentHashes(cached);
+      setAgents(cached);
+      settleCurrentAgent(cached);
+    }
+  }, [settleCurrentAgent]);
+
+  /**
+   * 数据刷新触发器。
+   * - 连接版本递增：连接建立或重连成功后重拉 agent 列表，覆盖冷启动隧道未就绪的场景
+   * - 镜像版本递增：快照装载与变更回放后重读会话列表
+   * - 当前 agent 变化：切换后重读会话列表
    */
   useEffect(() => {
     if (reconnectVersion === 0) {
       return;
     }
-    logger.info(
-      `[Home] data reload triggered, connVersion=${reconnectVersion}`
-    );
     loadAgents();
+  }, [reconnectVersion, loadAgents]);
+
+  useEffect(() => {
+    logger.info(`[Home] session list reload, mirrorVersion=${mirrorVersion}`);
     handleUpdateHistory();
-  }, [
-    reconnectVersion,
-    homeRefreshVersion,
-    currentAgentId,
-    loadAgents,
-    handleUpdateHistory,
-  ]);
+  }, [mirrorVersion, currentAgentId, handleUpdateHistory]);
 
   /** 返回焦点时重拉 agent 列表，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
   const firstFocusRef = useRef(true);
