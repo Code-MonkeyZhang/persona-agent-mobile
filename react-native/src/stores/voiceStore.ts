@@ -60,6 +60,9 @@ export async function writeAudioFile(audio: ArrayBuffer): Promise<string> {
   return filePath;
 }
 
+/** RN 运行时提供 btoa，类型层面局部声明，避免依赖 DOM 库 */
+declare const btoa: (data: string) => string;
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';

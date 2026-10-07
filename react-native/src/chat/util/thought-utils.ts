@@ -18,6 +18,15 @@ import type { ToolCall, WsToolResult } from '../../api/server-api';
 import type { ColorScheme } from '../../theme/colors';
 
 /**
+ * 从 URL 提取主机名，去掉凭据与端口。
+ * RN 的类型环境不带 WHATWG URL 全局，用正则承担同一职责。
+ */
+function hostnameFromUrl(url: string): string {
+  const matched = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/?#]+@)?([^/?#:]+)/i.exec(url);
+  return matched ? matched[1] : url;
+}
+
+/**
  * 将一个 step_complete 事件转换为 Thought 数组。
  * 顺序为 thinking → text → tool_use，每个 step 的批次追加到已有 steps 末尾。
  */
@@ -173,11 +182,7 @@ export function getToolFriendlyFormat(
 
     case 'WebFetch': {
       if (typeof toolInput.url === 'string') {
-        try {
-          return new URL(toolInput.url).hostname.replace('www.', '');
-        } catch {
-          return toolInput.url;
-        }
+        return hostnameFromUrl(toolInput.url).replace('www.', '');
       }
       return '';
     }
