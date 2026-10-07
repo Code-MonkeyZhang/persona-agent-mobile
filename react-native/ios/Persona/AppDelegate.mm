@@ -17,6 +17,9 @@
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
 
+  // The scene delegate creates the only visible React root, so the base class must skip its automatic window to avoid running a second hidden app instance.
+  self.automaticallyLoadReactNativeWindow = NO;
+
   // Call super to initialize React Native, the visible window is created by SceneDelegate
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
