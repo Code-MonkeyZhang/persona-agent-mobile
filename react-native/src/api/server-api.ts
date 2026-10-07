@@ -104,6 +104,12 @@ export type ServerMessage =
       pending: PendingInput[];
     }
   | {
+      /** 普通用户消息落盘广播，空闲订阅端据此追加用户气泡并切入生成态 */
+      type: 'user_message';
+      sessionId: string;
+      content: string;
+    }
+  | {
       /** 变更流推送，服务端向全部在线客户端广播，镜像库据此增量回放 */
       type: 'change';
       change: SessionChange;

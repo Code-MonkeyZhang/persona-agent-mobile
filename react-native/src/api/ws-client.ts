@@ -6,7 +6,7 @@
  *
  * 消息路由规则：
  *   - 状态型消息（title_updated）直接写 sessionStore，不经 handler
- *   - 事件型消息（step_complete / turn_complete / round_complete / error / speak_ready / speak_error / app_notification / pending_input_changed）携带 sessionId 转给注册的 handler
+ *   - 事件型消息（step_complete / turn_complete / round_complete / error / speak_ready / speak_error / app_notification / pending_input_changed / user_message）携带 sessionId 转给注册的 handler
  *   - connected / pong 在模块内部处理
  */
 import type {
@@ -62,6 +62,8 @@ export interface WsEventHandler {
   onSubscribed(sessionId: string, isGenerating: boolean): void;
   /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
   onAppNotification(sessionId: string, source: string, content: string): void;
+  /** 普通用户消息落盘广播，空闲时据此追加用户气泡并切入生成态 */
+  onUserMessage(sessionId: string, content: string): void;
   /** 待注入缓冲全量同步，忙时插话的灰气泡据此渲染 */
   onPendingChanged(sessionId: string, pending: PendingInput[]): void;
 }
@@ -316,6 +318,13 @@ function handleMessage(msg: ServerMessage): void {
         `${TAG} pending_input_changed, sessionId=${msg.sessionId} count=${msg.pending.length}`
       );
       currentHandler?.onPendingChanged(msg.sessionId, msg.pending);
+      break;
+
+    case 'user_message':
+      logger.info(
+        `${TAG} user_message, sessionId=${msg.sessionId} contentLen=${msg.content.length}`
+      );
+      currentHandler?.onUserMessage(msg.sessionId, msg.content);
       break;
 
     case 'speak_ready':

@@ -3,6 +3,7 @@
  * @description 会话仓库：按 sessionId 分片保存消息、生成状态与陪伴姿态。
  *   - WS 事件处理在模块加载时注册一次永不注销，事件按消息携带的 sessionId 写入对应分片
  *   - 发送链路与追平补拉收敛于此，页面卸载重建后数据与流式回合不丢
+ *   - 远端用户消息经 user_message 事件实时追加并切入生成态，回声由运行态守卫拦截
  *   - 生成期间消息流无占位气泡，轮次步骤进轮次缓冲，turn_complete 到达组装整轮气泡
  *   - 忙时插话进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染
  *   - 页面只是订阅者，ChatScreen 不再持有消息状态
@@ -255,11 +256,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     // 乐观追加用户消息并切生成态，助手气泡由 turn_complete 从轮次缓冲组装
-    enterGeneratingState(sessionId);
-    updateSlice(sessionId, (slice) => ({
-      ...slice,
-      messages: GiftedChat.append(slice.messages, [message]),
-    }));
+    appendUserBubble(sessionId, message);
 
     try {
       let sid = sessionId;
@@ -373,6 +370,28 @@ function enterGeneratingState(sessionId: string): void {
     pendingContent: '',
     armedDiskRefresh: false,
   }));
+}
+
+/**
+ * 追加一条用户气泡并切入生成态。
+ * 发送的乐观显示与远端用户消息事件共用，消息体由调用方构造。
+ */
+function appendUserBubble(sessionId: string, message: ChatMessage): void {
+  const before =
+    useChatStore.getState().sessions[sessionId]?.messages.length ?? 0;
+  logger.info(
+    `${TAG} appendUserBubble begin, session=${sessionId} before=${before} msgId=${message._id}`
+  );
+  enterGeneratingState(sessionId);
+  updateSlice(sessionId, (slice) => ({
+    ...slice,
+    messages: GiftedChat.append(slice.messages, [message]),
+  }));
+  const after =
+    useChatStore.getState().sessions[sessionId]?.messages.length ?? 0;
+  logger.info(
+    `${TAG} appendUserBubble end, session=${sessionId} after=${after}`
+  );
 }
 
 /**
@@ -697,6 +716,32 @@ function registerWsHandler(): void {
           0,
           60
         )}`
+      );
+    },
+    onUserMessage: (sessionId, content) => {
+      const slice = useChatStore.getState().sessions[sessionId];
+      if (!slice) {
+        logger.debug(
+          `${TAG} user_message ignored, unknown session: ${sessionId}`
+        );
+        return;
+      }
+      // 回声识别，发起端已乐观追加并进入生成态，自己的广播直接跳过
+      if (slice.status === ChatStatus.Running) {
+        logger.debug(`${TAG} user_message echo skipped, session=${sessionId}`);
+        return;
+      }
+      appendUserBubble(sessionId, {
+        text: content,
+        user: { _id: 1 },
+        createdAt: new Date(),
+        _id: uuidv4(),
+      });
+      useSessionStore
+        .getState()
+        .updateSessionPreview(sessionId, extractPreview(content));
+      logger.info(
+        `${TAG} user_message appended, session=${sessionId} contentLen=${content.length}`
       );
     },
     onPendingChanged: (sessionId, pending) => {
