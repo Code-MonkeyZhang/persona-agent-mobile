@@ -138,6 +138,8 @@ export class CacheDb {
       const db = this.ensureDb();
       db.execute('DELETE FROM messages');
       db.execute('DELETE FROM sessions');
+      // 老服务端的快照可能不带 agents 载荷，缺失时按空清单处理
+      await this.replaceAgents(db, snapshot.agents ?? []);
       const tuples: Array<[string, (string | number)[]]> = [];
       let messageCount = 0;
       for (const session of snapshot.sessions) {
@@ -272,6 +274,10 @@ export class CacheDb {
         await execute('DELETE FROM sessions WHERE id = ?', [sessionId]);
         return;
       }
+      case 'agents_invalidated': {
+        // 表层无需改动，配置重拉由装配层在回放后触发
+        return;
+      }
       default:
         logger.warn(`${TAG} unknown change kind ${change.kind}`);
     }
@@ -350,26 +356,30 @@ export class CacheDb {
     };
   }
 
-  /** agent 列表整体替换，离线回退的数据源 */
+  /** agent 表整体替换，快照装载与网络刷新共用 */
+  private async replaceAgents(db: DB, agents: AgentInfo[]): Promise<void> {
+    await db.executeBatch([
+      ['DELETE FROM agents'],
+      ...agents.map(
+        (agent) =>
+          [
+            'INSERT INTO agents (id, data) VALUES (?, ?)',
+            [agent.id, JSON.stringify(agent)],
+          ] as [string, (string | number)[]]
+      ),
+    ]);
+    logger.info(`${TAG} agents replaced: ${agents.length}`);
+  }
+
+  /** agent 列表整体替换，网络刷新经此落镜像 */
   putAgents(agents: AgentInfo[]): Promise<void> {
     return this.enqueueWrite(async () => {
-      const db = this.ensureDb();
-      await db.executeBatch([
-        ['DELETE FROM agents'],
-        ...agents.map(
-          (agent) =>
-            [
-              'INSERT INTO agents (id, data) VALUES (?, ?)',
-              [agent.id, JSON.stringify(agent)],
-            ] as [string, (string | number)[]]
-        ),
-      ]);
-      logger.info(`${TAG} agents replaced: ${agents.length}`);
+      await this.replaceAgents(this.ensureDb(), agents);
       this.notify();
     });
   }
 
-  /** 缓存的 agent 列表，离线回退用 */
+  /** 缓存的 agent 列表，冷启动与界面重读的数据源 */
   listAgents(): AgentInfo[] {
     const rows = this.ensureDb().executeSync('SELECT data FROM agents').rows;
     return rows.map(

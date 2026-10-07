@@ -9,6 +9,7 @@ import type { SessionChange, SyncSnapshot } from '../src/storage/sync-shapes';
 function snapshot(latestSeq: number): SyncSnapshot {
   return {
     latestSeq,
+    agents: [],
     sessions: [
       {
         id: 'chat-a',

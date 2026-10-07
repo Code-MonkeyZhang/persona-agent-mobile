@@ -4,11 +4,15 @@
  *   开库、组装引擎、注册 WS 同步监听、连接建立触发追平、
  *   追平进度按游标与结果写入 mirrorStore 的同步三态、
  *   写后通知经去抖递增镜像版本号驱动界面重读。
+ *   agent 清单刷新器的单例也装配在此，
+ *   失效事件经序号护栏触发清单重拉。
  *   App 启动时调用一次 setupSync，界面层只消费 mirrorStore 与镜像读接口。
  */
 import { cacheDb } from './cache-db.ts';
 import { SyncEngine } from './sync-engine.ts';
 import { fetchSyncChanges, fetchSyncSnapshot } from '../api/sync-api.ts';
+import { AgentsSync } from './agents-sync.ts';
+import { fetchAgents } from '../api/server-api.ts';
 import * as wsClient from '../api/ws-client.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
@@ -21,6 +25,14 @@ const TAG = '[SyncSetup]';
 const NOTIFY_DEBOUNCE_MS = 300;
 
 let engine: SyncEngine | null = null;
+
+/** agent 清单刷新器单例，装配层与界面层共用 */
+export const agentsSync = new AgentsSync({
+  fetchAgents,
+  putAgents: (agents) => cacheDb.putAgents(agents),
+  getServerAddress,
+  log: (message) => logger.info(`[AgentsSync] ${message}`),
+});
 
 /**
  * 装配镜像同步链路，幂等，App 启动时调用一次。
@@ -36,7 +48,19 @@ export function setupSync(): void {
       fetchSyncChanges(getServerAddress(), since, limit),
     getCursor: async () => cacheDb.getCursor(),
     applySnapshot: (snapshot) => cacheDb.applySnapshot(snapshot),
-    applyChanges: (changes) => cacheDb.applyChanges(changes),
+    applyChanges: async (changes) => {
+      await cacheDb.applyChanges(changes);
+      // 回放完成后扫失效事件，通过序号护栏的触发整份重拉
+      for (const change of changes) {
+        if (
+          change.kind === 'agents_invalidated' &&
+          agentsSync.consumeInvalidation(change.seq)
+        ) {
+          logger.info(`${TAG} agents invalidated, seq=${change.seq}`);
+          agentsSync.refresh();
+        }
+      }
+    },
     log: (message) => logger.info(`${TAG} ${message}`),
     onCatchUpStart: (cursor) => {
       if (cursor === 0) {

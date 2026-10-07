@@ -6,6 +6,7 @@
  *   session-view.ts、preview.ts，服务端接口变化时需手工同步。
  *   附带镜像 Message 到本地 ServerChatMessage 的投影，镜像读路径与 HTTP 详情接口同形。
  */
+import type { AgentInfo } from '../api/server-api.ts';
 
 /** 模型配置，对齐 shared 的 ModelConfig */
 export interface ModelConfig {
@@ -120,6 +121,8 @@ export interface SnapshotSession extends SessionMeta {
 export interface SyncSnapshot {
   latestSeq: number;
   sessions: SnapshotSession[];
+  /** 全部 Agent 清单，配置层的快照载荷，头像哈希随行 */
+  agents: AgentInfo[];
 }
 
 /** 变更事件的种类 */
@@ -128,7 +131,8 @@ export type ChangeKind =
   | 'session_created'
   | 'session_updated'
   | 'session_deleted'
-  | 'turn_end';
+  | 'turn_end'
+  | 'agents_invalidated';
 
 /**
  * 单条变更事件。
@@ -136,6 +140,7 @@ export type ChangeKind =
  * - session_created 与 session_updated 的 data 为完整会话元信息
  * - session_deleted 的 data 为空对象，id 由 sessionId 字段承载
  * - turn_end 的 data 为 { turnEnds }，是边界的完整快照
+ * - agents_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉角色列表
  */
 export interface SessionChange {
   /** 全局递增序号，客户端以此判断自己追平到哪里 */

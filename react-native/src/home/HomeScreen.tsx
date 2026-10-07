@@ -43,11 +43,11 @@ import {
   type AgentInfo,
   chatSessionIdFor,
   deleteSession,
-  fetchAgents,
   isChatSession,
   noteAgentHashes,
 } from '../api/server-api.ts';
 import { cacheDb } from '../storage/cache-db.ts';
+import { agentsSync } from '../storage/sync-setup';
 import {
   getLastConversation,
   getServerAddress,
@@ -157,7 +157,7 @@ const HomeScreen: React.FC = () => {
   const styles = createStyles(colors);
 
   // ==================== 本地状态 ====================
-  /** 竖栏的 agent 列表，挂载时拉取一次 */
+  /** 竖栏的 agent 列表，镜像重读驱动，冷启动即有值 */
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [currentAgentId, setCurrentAgentId] = useState(
     getServerAgentId() || ''
@@ -222,7 +222,7 @@ const HomeScreen: React.FC = () => {
   }, [insets.top, insets.bottom]);
 
   /**
-   * 确定当前 agent 并执行一次启动恢复，网络成功与离线回退共用。
+   * 确定当前 agent 并执行一次启动恢复，镜像重读驱动。
    * 上次 Agent 还在且会话非空则恢复上次会话，否则兜底到常驻聊天。
    */
   const settleCurrentAgent = useCallback(
@@ -255,59 +255,30 @@ const HomeScreen: React.FC = () => {
   );
 
   /**
-   * 拉取 agent 列表，成功落镜像库供离线回退。
-   * 拉取失败时读缓存副本并重新登记头像哈希，离线也能出头像条。
-   */
-  const loadAgents = useCallback(async () => {
-    const address = getServerAddress();
-    if (!address) {
-      return;
-    }
-    try {
-      const fetchedAgents = await fetchAgents(address);
-      if (fetchedAgents.length === 0) {
-        return;
-      }
-      setAgents(fetchedAgents);
-      cacheDb.putAgents(fetchedAgents).catch((e: unknown) => {
-        logger.warn(`[Home] putAgents failed: ${e}`);
-      });
-      settleCurrentAgent(fetchedAgents);
-    } catch (e) {
-      logger.error(
-        `[Home] loadAgents failed: ${
-          e instanceof Error ? e.message : e
-        }, fallback to cache`
-      );
-      const cached = cacheDb.listAgents();
-      if (cached.length === 0) {
-        return;
-      }
-      noteAgentHashes(cached);
-      setAgents(cached);
-      settleCurrentAgent(cached);
-    }
-  }, [settleCurrentAgent]);
-
-  /**
    * 数据刷新触发器。
-   * - 连接版本递增：连接建立或重连成功后重拉 agent 列表，覆盖冷启动隧道未就绪的场景
-   * - 镜像版本递增：快照装载与变更回放后重读会话列表
+   * - 连接版本递增：连接建立或重连成功后刷新 agent 清单，覆盖冷启动隧道未就绪的场景
+   * - 镜像版本递增：快照装载、变更回放与清单刷新后重读 agent 清单与会话列表
    * - 当前 agent 变化：切换后重读会话列表
    */
   useEffect(() => {
     if (reconnectVersion === 0) {
       return;
     }
-    loadAgents();
-  }, [reconnectVersion, loadAgents]);
+    agentsSync.refresh();
+  }, [reconnectVersion]);
 
   useEffect(() => {
-    logger.info(`[Home] session list reload, mirrorVersion=${mirrorVersion}`);
+    logger.info(`[Home] mirror reload, mirrorVersion=${mirrorVersion}`);
+    const cached = cacheDb.listAgents();
+    if (cached.length > 0) {
+      noteAgentHashes(cached);
+      setAgents(cached);
+      settleCurrentAgent(cached);
+    }
     handleUpdateHistory();
-  }, [mirrorVersion, currentAgentId, handleUpdateHistory]);
+  }, [mirrorVersion, currentAgentId, settleCurrentAgent, handleUpdateHistory]);
 
-  /** 返回焦点时重拉 agent 列表，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
+  /** 返回焦点时刷新 agent 清单，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
   const firstFocusRef = useRef(true);
   useFocusEffect(
     useCallback(() => {
@@ -316,8 +287,8 @@ const HomeScreen: React.FC = () => {
         return;
       }
       logger.info('[Home] focus reload agents');
-      loadAgents();
-    }, [loadAgents])
+      agentsSync.refresh();
+    }, [])
   );
 
   /** agent 名称同步进会话仓库，占位气泡与历史消息转换使用 */
