@@ -13,7 +13,7 @@ class NavigationBarModule(reactContext: ReactApplicationContext) : ReactContextB
 
     @ReactMethod
     fun setImmersiveMode(enabled: Boolean) {
-        val activity = currentActivity ?: return
+        val activity = getCurrentActivity() ?: return
 
         activity.runOnUiThread {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -44,7 +44,7 @@ class NavigationBarModule(reactContext: ReactApplicationContext) : ReactContextB
 
     @ReactMethod
     fun resetToDefault() {
-        val activity = currentActivity ?: return
+        val activity = getCurrentActivity() ?: return
 
         activity.runOnUiThread {
             // Trigger MainActivity's updateNavigationBarColor
