@@ -50,7 +50,8 @@ const CachedImage: React.FC<CachedImageProps> = ({
 
   return (
     <Image
-      source={{ uri: localPath ?? source }}
+      /** 安卓的 Image 静默拒绝绘制不带 file scheme 的本地路径，iOS 对两种写法都接受，本地命中统一补前缀。 */
+      source={{ uri: localPath ? `file://${localPath}` : source }}
       style={style}
       resizeMode={resizeMode}
       onLoad={onLoad}
