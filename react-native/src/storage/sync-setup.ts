@@ -69,7 +69,7 @@ export function setupSync(): void {
     fetchSnapshot: () => fetchSyncSnapshot(getServerAddress()),
     fetchChanges: (since, limit) =>
       fetchSyncChanges(getServerAddress(), since, limit),
-    getCursor: async () => cacheDb.getCursor(),
+    getCursor: () => cacheDb.getCursor(),
     applySnapshot: async (snapshot) => {
       await cacheDb.applySnapshot(snapshot);
       // 冷启动快照自带 agent 清单，先登记头像哈希再投喂图片队列

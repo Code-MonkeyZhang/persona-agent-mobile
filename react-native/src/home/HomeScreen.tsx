@@ -191,22 +191,28 @@ const HomeScreen: React.FC = () => {
 
   // ==================== 列表与卡片拉取 ====================
   /** 从镜像库读会话列表，常驻聊天会话只取其预览不进列表，数据源不依赖网络 */
-  const handleUpdateHistory = useCallback(() => {
+  const handleUpdateHistory = useCallback(async () => {
     const agentId = getServerAgentId();
     if (!agentId) {
       return;
     }
-    const sessions = cacheDb.listSessions(agentId);
-    const chatList: Chat[] = sessions
-      .filter((s) => !isChatSession(s.id))
-      .map((s) => ({
-        id: s.id,
-        title: s.title,
-        updatedAt: s.updatedAt,
-        createdAt: s.createdAt,
-      }));
-    setChatHistory(chatList);
-    setChatLastMessage(sessions.find((s) => isChatSession(s.id))?.lastMessage);
+    try {
+      const sessions = await cacheDb.listSessions(agentId);
+      const chatList: Chat[] = sessions
+        .filter((s) => !isChatSession(s.id))
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          updatedAt: s.updatedAt,
+          createdAt: s.createdAt,
+        }));
+      setChatHistory(chatList);
+      setChatLastMessage(
+        sessions.find((s) => isChatSession(s.id))?.lastMessage
+      );
+    } catch (e) {
+      logger.warn(`[Home] session list reload failed: ${e}`);
+    }
   }, []);
 
   // ==================== agent 初始化与启动恢复 ====================
@@ -268,14 +274,20 @@ const HomeScreen: React.FC = () => {
   }, [reconnectVersion]);
 
   useEffect(() => {
-    logger.info(`[Home] mirror reload, mirrorVersion=${mirrorVersion}`);
-    const cached = cacheDb.listAgents();
-    if (cached.length > 0) {
-      noteAgentHashes(cached);
-      setAgents(cached);
-      settleCurrentAgent(cached);
-    }
-    handleUpdateHistory();
+    (async () => {
+      try {
+        logger.info(`[Home] mirror reload, mirrorVersion=${mirrorVersion}`);
+        const cached = await cacheDb.listAgents();
+        if (cached.length > 0) {
+          noteAgentHashes(cached);
+          setAgents(cached);
+          settleCurrentAgent(cached);
+        }
+        await handleUpdateHistory();
+      } catch (e) {
+        logger.warn(`[Home] mirror reload failed: ${e}`);
+      }
+    })();
   }, [mirrorVersion, currentAgentId, settleCurrentAgent, handleUpdateHistory]);
 
   /** 返回焦点时刷新 agent 清单，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */

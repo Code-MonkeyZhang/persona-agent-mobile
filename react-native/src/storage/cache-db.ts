@@ -2,10 +2,11 @@
  * @file storage/cache-db.ts
  * @description 移动端本地镜像库，服务端正本的只读镜像。
  *   op-sqlite 开库，schema 与桌面端同构四张表，读接口产出与 HTTP 接口同形的数据。
+ *   全部查询走 execute 异步版本在后台线程执行，不占 JS 线程。
  *   写入口只收快照与变更流两类服务端事实，外加 agent 列表的离线副本。
  *   全部写操作串行走模块内的写队列，调用方无需关心与同步引擎的交错。
  */
-import { open, type DB } from '@op-engineering/op-sqlite';
+import { open, type DB, type QueryResult } from '@op-engineering/op-sqlite';
 import type { AgentInfo } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 import {
@@ -79,15 +80,18 @@ export class CacheDb {
   /** 写操作完成后的通知回调，界面层订阅后重读镜像 */
   private readonly listeners = new Set<() => void>();
 
-  /** 惰性开库建表，WAL 模式让读写互不阻塞 */
+  /**
+   * 惰性开库建表，WAL 模式让读写互不阻塞。
+   * PRAGMA 与建表走 executeSync，仅首个调用承担，保证排队的异步查询执行前表已就绪。
+   */
   private ensureDb(): DB {
     if (this.db) {
       return this.db;
     }
     const db = open({ name: 'persona-cache' });
-    db.execute('PRAGMA journal_mode = WAL');
+    db.executeSync('PRAGMA journal_mode = WAL');
     for (const sql of DDL) {
-      db.execute(sql);
+      db.executeSync(sql);
     }
     logger.info(`${TAG} opened persona-cache, ${DDL.length} ddl statements`);
     this.db = db;
@@ -117,16 +121,17 @@ export class CacheDb {
   }
 
   /** 当前变更流游标，零表示尚未镜像 */
-  getCursor(): number {
-    const row = this.ensureDb().executeSync(
+  async getCursor(): Promise<number> {
+    const result = await this.ensureDb().execute(
       'SELECT value FROM kv WHERE key = ?',
       [CURSOR_KEY]
-    ).rows[0] as { value: string } | undefined;
+    );
+    const row = result.rows[0] as { value: string } | undefined;
     return row ? Number(row.value) : 0;
   }
 
-  private setCursor(value: number): void {
-    this.ensureDb().executeSync(
+  private async setCursor(value: number): Promise<void> {
+    await this.ensureDb().execute(
       'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       [CURSOR_KEY, String(value)]
     );
@@ -135,9 +140,10 @@ export class CacheDb {
   /** 全量快照整体入库，先清空再分块装载，游标推进到快照序号 */
   applySnapshot(snapshot: SyncSnapshot): Promise<void> {
     return this.enqueueWrite(async () => {
+      const startedAt = Date.now();
       const db = this.ensureDb();
-      db.execute('DELETE FROM messages');
-      db.execute('DELETE FROM sessions');
+      await db.execute('DELETE FROM messages');
+      await db.execute('DELETE FROM sessions');
       // 老服务端的快照可能不带 agents 载荷，缺失时按空清单处理
       await this.replaceAgents(db, snapshot.agents ?? []);
       const tuples: Array<[string, (string | number)[]]> = [];
@@ -170,9 +176,13 @@ export class CacheDb {
       for (let i = 0; i < tuples.length; i += SNAPSHOT_CHUNK) {
         await db.executeBatch(tuples.slice(i, i + SNAPSHOT_CHUNK));
       }
-      this.setCursor(snapshot.latestSeq);
+      await this.setCursor(snapshot.latestSeq);
       logger.info(
-        `${TAG} snapshot applied: ${snapshot.sessions.length} sessions ${messageCount} messages latestSeq=${snapshot.latestSeq}`
+        `${TAG} snapshot applied: ${
+          snapshot.sessions.length
+        } sessions ${messageCount} messages latestSeq=${
+          snapshot.latestSeq
+        } took=${Date.now() - startedAt}ms`
       );
       this.notify();
     });
@@ -181,8 +191,9 @@ export class CacheDb {
   /** 按序回放变更流，游标之前的事件跳过，消息按行号幂等 */
   applyChanges(changes: SessionChange[]): Promise<void> {
     return this.enqueueWrite(async () => {
+      const startedAt = Date.now();
       const db = this.ensureDb();
-      let cursor = this.getCursor();
+      let cursor = await this.getCursor();
       let applied = 0;
       await db.transaction(async (tx) => {
         for (const change of changes) {
@@ -194,11 +205,15 @@ export class CacheDb {
           applied++;
         }
         if (applied > 0) {
-          this.setCursor(cursor);
+          await this.setCursor(cursor);
         }
       });
       if (applied > 0) {
-        logger.info(`${TAG} applied ${applied} changes, cursor=${cursor}`);
+        logger.info(
+          `${TAG} applied ${applied} changes, cursor=${cursor} took=${
+            Date.now() - startedAt
+          }ms`
+        );
         this.notify();
       }
     });
@@ -209,7 +224,7 @@ export class CacheDb {
     execute: (
       query: string,
       params?: Array<string | number | null>
-    ) => Promise<unknown>,
+    ) => Promise<QueryResult>,
     change: SessionChange
   ): Promise<void> {
     const sessionId = change.sessionId;
@@ -255,10 +270,10 @@ export class CacheDb {
       case 'turn_end': {
         if (!sessionId) return;
         const payload = change.data as { turnEnds?: number[] };
-        const row = this.ensureDb().executeSync(
-          'SELECT meta FROM sessions WHERE id = ?',
-          [sessionId]
-        ).rows[0] as { meta: string } | undefined;
+        const result = await execute('SELECT meta FROM sessions WHERE id = ?', [
+          sessionId,
+        ]);
+        const row = result.rows[0] as { meta: string } | undefined;
         if (!row) return;
         const blob = JSON.parse(row.meta) as SessionBlob;
         blob.turnEnds = payload.turnEnds;
@@ -284,61 +299,69 @@ export class CacheDb {
   }
 
   /** 某角色的会话元信息列表，updatedAt 排序与服务端一致，chat 会话预览现算 */
-  listSessions(agentId: string): SessionMeta[] {
-    const rows = this.ensureDb().executeSync(
+  async listSessions(agentId: string): Promise<SessionMeta[]> {
+    const result = await this.ensureDb().execute(
       'SELECT id, agent_id, updated_at, meta FROM sessions WHERE agent_id = ? ORDER BY updated_at DESC',
       [agentId]
-    ).rows as unknown as Array<{
+    );
+    const rows = result.rows as unknown as Array<{
       id: string;
       agent_id: string;
       updated_at: number;
       meta: string;
     }>;
-    return rows.map((row) => {
+    const sessions: SessionMeta[] = [];
+    for (const row of rows) {
       const blob = JSON.parse(row.meta) as SessionBlob;
       const meta: SessionMeta = { ...blob, updatedAt: row.updated_at };
       if (row.id.startsWith('chat')) {
-        meta.lastMessage = this.chatPreview(row.id);
+        meta.lastMessage = await this.chatPreview(row.id);
       }
-      return meta;
-    });
+      sessions.push(meta);
+    }
+    return sessions;
   }
 
   /** 从消息尾部提取聊天会话预览 */
-  private chatPreview(sessionId: string): string | undefined {
-    const rows = this.ensureDb().executeSync(
+  private async chatPreview(sessionId: string): Promise<string | undefined> {
+    const result = await this.ensureDb().execute(
       `SELECT data FROM messages WHERE session_id = ? AND role IN ('user', 'assistant') ORDER BY seq DESC LIMIT 20`,
       [sessionId]
-    ).rows as unknown as Array<{ data: string }>;
+    );
+    const rows = result.rows as unknown as Array<{ data: string }>;
     const tail = rows.map((r) => JSON.parse(r.data) as Message).reverse();
     return deriveSessionPreview(tail);
   }
 
   /** 会话更新时间单行查询，全量重读前的廉价预检查用 */
-  getSessionUpdatedAt(id: string): number | null {
-    const row = this.ensureDb().executeSync(
+  async getSessionUpdatedAt(id: string): Promise<number | null> {
+    const result = await this.ensureDb().execute(
       'SELECT updated_at FROM sessions WHERE id = ?',
       [id]
-    ).rows[0] as unknown as { updated_at: number } | undefined;
+    );
+    const row = result.rows[0] as unknown as { updated_at: number } | undefined;
     return row?.updated_at ?? null;
   }
 
   /** 完整会话，messages 混入轮次边界条目，与 HTTP 详情接口同形 */
-  getSession(id: string): MirrorSession | null {
-    const row = this.ensureDb().executeSync(
+  async getSession(id: string): Promise<MirrorSession | null> {
+    const startedAt = Date.now();
+    const metaResult = await this.ensureDb().execute(
       'SELECT id, agent_id, updated_at, meta FROM sessions WHERE id = ?',
       [id]
-    ).rows[0] as unknown as
+    );
+    const row = metaResult.rows[0] as unknown as
       | { id: string; agent_id: string; updated_at: number; meta: string }
       | undefined;
     if (!row) {
       return null;
     }
     const blob = JSON.parse(row.meta) as SessionBlob;
-    const messageRows = this.ensureDb().executeSync(
+    const messageResult = await this.ensureDb().execute(
       'SELECT seq, role, data FROM messages WHERE session_id = ? ORDER BY seq',
       [id]
-    ).rows as unknown as Array<{
+    );
+    const messageRows = messageResult.rows as unknown as Array<{
       seq: number;
       role: string;
       data: string;
@@ -349,6 +372,11 @@ export class CacheDb {
       message.seq = messageRow.seq;
       messages.push(message);
     }
+    logger.info(
+      `${TAG} session read, id=${id} messages=${messages.length} took=${
+        Date.now() - startedAt
+      }ms`
+    );
     return {
       ...blob,
       updatedAt: row.updated_at,
@@ -380,9 +408,9 @@ export class CacheDb {
   }
 
   /** 缓存的 agent 列表，冷启动与界面重读的数据源 */
-  listAgents(): AgentInfo[] {
-    const rows = this.ensureDb().executeSync('SELECT data FROM agents').rows;
-    return rows.map(
+  async listAgents(): Promise<AgentInfo[]> {
+    const result = await this.ensureDb().execute('SELECT data FROM agents');
+    return result.rows.map(
       (r) => JSON.parse((r as { data: string }).data) as AgentInfo
     );
   }
