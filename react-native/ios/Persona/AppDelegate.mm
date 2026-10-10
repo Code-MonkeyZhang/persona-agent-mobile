@@ -2,8 +2,7 @@
 #import "RCTNetworkingPatch.h"
 
 #import <React/RCTBundleURLProvider.h>
-#import <React/RCTRootView.h>
-#import <React/RCTBridge.h>
+#import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
 
 @implementation AppDelegate
 
@@ -13,13 +12,16 @@
   [RCTNetworkingPatch setupNetworkingPatch];
 
   self.moduleName = @"Persona";
+  self.dependencyProvider = [RCTAppDependencyProvider new];
   // You can add your custom initial props in the dictionary below.
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
 
-  // For scene-based architecture, we don't call super here to avoid window conflicts
-  // The window will be created in SceneDelegate instead
-  return YES;
+  // The scene delegate creates the only visible React root, so the base class must skip its automatic window to avoid running a second hidden app instance.
+  self.automaticallyLoadReactNativeWindow = NO;
+
+  // Call super to initialize React Native, the visible window is created by SceneDelegate
+  return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
 
 // MARK: UISceneSession Lifecycle
@@ -34,27 +36,6 @@
     // Called when the user discards a scene session.
     // If any sessions were discarded while the application was not running, this will be called shortly after application:didFinishLaunchingWithOptions.
     // Use this method to release any resources that were specific to the discarded scenes, as they will not return.
-}
-
-// Method to create root view controller for scene-based architecture
-- (UIViewController *)createRootViewController
-{
-  // Create React Native root view
-  RCTBridge *bridge = [self createBridgeWithDelegate:self launchOptions:{}];
-  RCTRootView *rootView = [[RCTRootView alloc] initWithBridge:bridge moduleName:self.moduleName initialProperties:self.initialProps];
-  
-  // Configure root view appearance
-  if (@available(iOS 13.0, *)) {
-    rootView.backgroundColor = [UIColor systemBackgroundColor];
-  } else {
-    rootView.backgroundColor = [UIColor whiteColor];
-  }
-  
-  // Create and configure view controller
-  UIViewController *rootViewController = [UIViewController new];
-  rootViewController.view = rootView;
-  
-  return rootViewController;
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge

@@ -6,7 +6,8 @@
     "error": "错误：{{message}}",
     "shareImageTitle": "AI 图片",
     "stop": "停止生成",
-    "generating": "正在生成"
+    "generating": "正在生成",
+    "loadEarlier": "加载更早的消息"
   },
   "settings": {
     "vibration": "震动",
@@ -95,7 +96,9 @@
     "server": "服务器",
     "settings": "设置",
     "delete": "删除",
-    "startChat": "开始聊天"
+    "startChat": "开始聊天",
+    "syncing": "正在同步会话",
+    "syncDone": "已同步"
   },
   "nav": {
     "titleTools": "工具",

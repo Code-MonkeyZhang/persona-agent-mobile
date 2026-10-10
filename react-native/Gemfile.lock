@@ -95,7 +95,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  activesupport (>= 6.1.7.5, < 7.1.0)
+  activesupport (>= 6.1.7.5, < 7.3.0)
   cocoapods (>= 1.13, < 1.17)
 
 RUBY VERSION

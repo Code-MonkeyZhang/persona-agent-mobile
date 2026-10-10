@@ -41,6 +41,8 @@
 	<string>Persona Agent uses the microphone to record audio when you capture videos, so the AI assistant can review both the video and its sound.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Persona Agent uses your photo library so you can attach existing photos and videos to your conversation for the AI assistant to analyze and summarize.</string>
+	<key>RCTNewArchEnabled</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

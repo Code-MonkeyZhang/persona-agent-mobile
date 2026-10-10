@@ -1,23 +1,9 @@
 import { MMKV } from 'react-native-mmkv';
 import { Model } from '../types/Chat.ts';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
+import type { PoseAssets } from '../api/server-api.ts';
 
 export const storage = new MMKV();
-
-const initializeStorage = () => {
-  const key = 'encryption_key';
-  let encryptionKey = storage.getString(key);
-  if (!encryptionKey) {
-    encryptionKey = uuid.v4();
-    storage.set(key, encryptionKey);
-  }
-
-  return new MMKV({
-    id: 'persona',
-    encryptionKey: encryptionKey,
-  });
-};
-export const encryptStorage = initializeStorage();
 
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
@@ -28,6 +14,7 @@ const companionOpenKey = keyPrefix + 'companionOpen';
 const lastConversationKey = keyPrefix + 'lastConversation';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
+const posesAssetsPrefix = keyPrefix + 'posesAssets/';
 
 export function saveHapticEnabled(enabled: boolean) {
   storage.set(hapticEnabledKey, enabled);
@@ -115,11 +102,12 @@ export function getLastConversation(): LastConversation | null {
  * deviceId 永久不变，用于服务端设备注册和在线检测。
  */
 export function getDeviceId(): string {
-  let id = storage.getString(deviceIdKey);
-  if (!id) {
-    id = uuid.v4();
-    storage.set(deviceIdKey, id);
+  const existing = storage.getString(deviceIdKey);
+  if (existing) {
+    return existing;
   }
+  const id = uuidv4();
+  storage.set(deviceIdKey, id);
   return id;
 }
 
@@ -131,4 +119,22 @@ export function saveDeviceName(name: string) {
 /** 获取缓存的设备名，未设置时返回空字符串 */
 export function getSavedDeviceName(): string {
   return storage.getString(deviceNameKey) ?? '';
+}
+
+/** 保存指定 agent 的立绘与背景清单，断网时地址数据从这读 */
+export function savePosesAssets(agentId: string, assets: PoseAssets) {
+  storage.set(posesAssetsPrefix + agentId, JSON.stringify(assets));
+}
+
+/** 读取指定 agent 的立绘与背景清单，未设置或损坏时返回 null */
+export function getPosesAssets(agentId: string): PoseAssets | null {
+  const raw = storage.getString(posesAssetsPrefix + agentId);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as PoseAssets;
+  } catch {
+    return null;
+  }
 }

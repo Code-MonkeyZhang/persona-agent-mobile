@@ -3,18 +3,16 @@
  * @description 聊天消息列表的滚动控制：自动滚底、Reasoning 展开时位置保持、用户滚动检测。
  */
 import { useState, useRef, useCallback } from 'react';
-import {
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-} from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
+import type { ScrollEvent } from 'react-native-reanimated';
 import type { ChatMessage } from '../../types/Chat';
 import { ChatStatus } from '../../types/Chat';
 
 export function useChatScroll(
   chatStatusRef: React.MutableRefObject<ChatStatus>
 ) {
-  const flatListRef = useRef<FlatList<ChatMessage>>(null);
+  const flatListRef = useRef<AnimatedList<ChatMessage>>(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
@@ -39,13 +37,14 @@ export function useChatScroll(
     []
   );
 
-  /** 记录当前滚动偏移量 */
-  const handleScroll = useCallback(
-    (scrollEvent: NativeSyntheticEvent<NativeScrollEvent>) => {
-      currentScrollOffsetRef.current = scrollEvent.nativeEvent.contentOffset.y;
-    },
-    []
-  );
+  /**
+   * 记录当前滚动偏移量。
+   * gifted-chat v3 列表经 reanimated 派发 onScroll，
+   * 事件为官方 ScrollEvent 形态，contentOffset 位于顶层。
+   */
+  const handleScroll = useCallback((scrollEvent: ScrollEvent) => {
+    currentScrollOffsetRef.current = scrollEvent.contentOffset.y;
+  }, []);
 
   /** 用户手动拖拽滚动时标记 userScrolled，暂停自动滚底 */
   const handleUserScroll = useCallback(

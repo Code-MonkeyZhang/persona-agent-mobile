@@ -1,23 +1,9 @@
 /**
  * @file CustomMessageComponent.tsx
- * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、操作按钮、附件）
+ * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、性能指标行、附件）
  */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  RefObject,
-} from 'react';
-import {
-  Dimensions,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import Share from 'react-native-share';
 import { MessageProps } from 'react-native-gifted-chat';
 import { CustomMarkdownRenderer } from './markdown/CustomMarkdownRenderer.tsx';
@@ -25,7 +11,6 @@ import { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
 import { ChatStatus, PressMode, ChatMessage } from '../../types/Chat.ts';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
-import Clipboard from '@react-native-clipboard/clipboard';
 import {
   CustomFileListComponent,
   DisplayMode,
@@ -36,7 +21,6 @@ import { CustomTokenizer } from './markdown/CustomTokenizer.ts';
 import Markdown from './markdown/Markdown.tsx';
 import { State, TapGestureHandler } from 'react-native-gesture-handler';
 import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
-import { Check, Copy } from 'lucide-react-native';
 import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
 import AgentAvatar from './AgentAvatar.tsx';
@@ -50,8 +34,6 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
     height: number,
     animated: boolean
   ) => void;
-  messageIndex?: number;
-  flatListRef?: RefObject<FlatList<ChatMessage>>;
   agentId: string;
   serverAddress: string;
 }
@@ -69,7 +51,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [copied, setCopied] = useState(false);
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
@@ -77,11 +58,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const toggleButtons = useCallback(() => {
     setForceShowButtons((prev) => !prev);
   }, []);
-
-  const handleCopy = useCallback(() => {
-    const copyText = currentMessage?.text.trim() || '';
-    Clipboard.setString(copyText);
-  }, [currentMessage?.text]);
 
   const userName = currentMessage?.user?.name ?? 'AI';
 
@@ -121,16 +97,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const handleShowButton = useCallback(() => {
     toggleButtons();
   }, [toggleButtons]);
-
-  useEffect(() => {
-    if (copied) {
-      const timer = setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [copied]);
 
   const messageContent = useMemo(() => {
     if (!currentMessage) {
@@ -178,39 +144,22 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     styles.questionTextQueued,
   ]);
 
+  /** 回合结束后的性能指标行，宿主按显隐门槛条件渲染 */
   const messageActionButtons = useMemo(() => {
-    const metricsText = currentMessage?.metrics
-      ? `latency ${currentMessage.metrics.latencyMs}s | ${currentMessage.metrics.speed} tok/s`
-      : null;
+    if (!currentMessage?.metrics) {
+      return null;
+    }
+    const metrics = currentMessage.metrics;
     return (
       <View style={styles.actionButtonsContainer}>
-        <View style={styles.actionButtonInnerContainer}>
-          <TouchableOpacity
-            onPress={() => {
-              handleCopy();
-              setCopied(true);
-            }}
-            style={styles.actionButton}
-          >
-            {copied ? (
-              <Check size={19} color={colors.textSecondary} />
-            ) : (
-              <Copy size={19} color={colors.textSecondary} />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {metricsText && <Text style={styles.metricsText}>{metricsText}</Text>}
+        <Text style={styles.metricsText}>
+          {`latency ${metrics.latencyMs}s | ${metrics.speed} tok/s`}
+        </Text>
       </View>
     );
   }, [
-    handleCopy,
-    copied,
     currentMessage?.metrics,
-    colors.textSecondary,
     styles.actionButtonsContainer,
-    styles.actionButtonInnerContainer,
-    styles.actionButton,
     styles.metricsText,
   ]);
 
@@ -315,17 +264,10 @@ const createStyles = (colors: ColorScheme) =>
     actionButtonsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-end',
       marginLeft: -8,
       marginTop: -2,
       marginBottom: 4,
-    },
-    actionButtonInnerContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    actionButton: {
-      padding: 8,
     },
     metricsText: {
       ...typography.body,
@@ -346,15 +288,19 @@ const customMarkedStyles: MarkedStyles = {
   paragraph: { paddingVertical: 6 },
 };
 
-/** 导出组件并自定义 memo 比较函数，仅在消息内容、状态、索引、头像等关键属性变化时才重新渲染 */
+/**
+ * 导出组件并自定义 memo 比较函数，仅在消息内容、性能指标、Agent 标识等关键属性变化时重渲染。
+ * chatStatus 只影响末条 AI 消息的性能指标行显隐，非末行不参与比较，追加消息不再触发全行重渲染。
+ */
 export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
   return (
     prevProps.currentMessage?.text === nextProps.currentMessage?.text &&
     prevProps.currentMessage?.image === nextProps.currentMessage?.image &&
     prevProps.currentMessage?.steps === nextProps.currentMessage?.steps &&
-    prevProps.chatStatus === nextProps.chatStatus &&
+    prevProps.currentMessage?.metrics === nextProps.currentMessage?.metrics &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
-    prevProps.messageIndex === nextProps.messageIndex &&
+    (!prevProps.isLastAIMessage ||
+      prevProps.chatStatus === nextProps.chatStatus) &&
     prevProps.agentId === nextProps.agentId &&
     prevProps.serverAddress === nextProps.serverAddress
   );

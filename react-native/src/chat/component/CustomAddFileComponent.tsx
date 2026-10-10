@@ -12,11 +12,7 @@ import {
   launchImageLibrary,
 } from 'react-native-image-picker';
 import { FileInfo, FileType } from '../../types/Chat.ts';
-import {
-  pick,
-  types,
-  DocumentPickerResponse,
-} from 'react-native-document-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { saveFile } from '../util/FileUtils.ts';
 import {
   createVideoThumbnail,
@@ -41,7 +37,9 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
 
   /** 处理 DocumentPicker 返回的文件：校验格式、压缩、保存 */
   const processFiles = useCallback(
-    async (pickResults: DocumentPickerResponse[]): Promise<FileInfo[]> => {
+    async (
+      pickResults: DocumentPicker.DocumentPickerAsset[]
+    ): Promise<FileInfo[]> => {
       const files: FileInfo[] = [];
       await Promise.all(
         pickResults.map(async (pickResult) => {
@@ -176,14 +174,18 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       });
   };
 
-  /** 从文件系统选文件 */
+  /** 从文件系统选文件，copyToCacheDirectory 关闭保持 content uri 直传，避免大文件双重复制 */
   const handleChooseFiles = async () => {
     try {
-      const pickResults = await pick({
-        allowMultiSelection: true,
-        type: [types.allFiles],
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        type: ['*/*'],
+        copyToCacheDirectory: false,
       });
-      const files = await processFiles(pickResults);
+      if (result.canceled) {
+        return;
+      }
+      const files = await processFiles(result.assets ?? []);
       if (files.length > 0) {
         onFileSelected(files);
       }

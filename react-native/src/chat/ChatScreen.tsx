@@ -14,20 +14,19 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { GiftedChat } from 'react-native-gifted-chat';
+import { GiftedChat, type MessageProps } from 'react-native-gifted-chat';
+import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
 import {
   Dimensions,
-  Image,
   Keyboard,
   LayoutChangeEvent,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from '@react-native-community/blur';
+import { BlurView } from 'expo-blur';
 import {
   activateKeepAwake,
   deactivateKeepAwake,
@@ -47,9 +46,8 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
-import { getAgentAvatarUrl } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
-import { ChatStatus, FileInfo } from '../types/Chat.ts';
+import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
@@ -64,7 +62,10 @@ import { useAppPanelStore } from '../stores/appPanelStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
-import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
+import {
+  keyboardAvoidanceOf,
+  useKeyboardLayout,
+} from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
 import Animated, {
   useAnimatedStyle,
@@ -81,6 +82,13 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 
+/** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
+const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
+
+/** 消息窗口的初始与扩展尺寸，列表更新成本随总条数线性放大，窗口化后稳定在常数级 */
+const MESSAGE_WINDOW_BASE = 300;
+const MESSAGE_WINDOW_STEP = 300;
+
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -95,7 +103,8 @@ function ChatScreen(): React.JSX.Element {
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
-  const [fibWrapperHeight, setFibWrapperHeight] = useState(130);
+  const [inputBarHeight, setInputBarHeight] = useState(96);
+  const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
@@ -120,14 +129,23 @@ function ChatScreen(): React.JSX.Element {
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
+
+  // 窗口化的可见消息，完整数组留在 store 作事实源
+  const [windowCount, setWindowCount] = useState(MESSAGE_WINDOW_BASE);
+  const visibleMessages = useMemo(
+    () => messages.slice(0, windowCount),
+    [messages, windowCount]
+  );
+
   const currentPose = sessionSlice?.pose ?? 'default';
   const poseError = sessionSlice?.poseError ?? false;
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardHeight, showKeyboard } = useKeyboardLayout(
+  const { keyboardBottomStyle, keyboardHeight } = useKeyboardLayout(
     textInputViewRef,
-    scroll.scrollToBottom
+    scroll.scrollToBottom,
+    insets.bottom
   );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
 
@@ -160,17 +178,6 @@ function ChatScreen(): React.JSX.Element {
     }
     return sessionTitles[activeSessionId] ?? route.params?.title ?? '';
   }, [activeSessionId, sessionTitles, route.params?.title, t]);
-
-  /** 预加载 Agent 头像 */
-  useEffect(() => {
-    if (!currentAgentId || !serverAddressRef.current) {
-      return;
-    }
-    const url = getAgentAvatarUrl(currentAgentId, serverAddressRef.current);
-    Image.prefetch(url)
-      .then(() => logger.debug(`[ChatScreen] avatar prefetched: ${url}`))
-      .catch((err) => logger.warn('[ChatScreen] avatar prefetch failed:', err));
-  }, [currentAgentId]);
 
   const handleToggleVoice = useCallback(() => {
     toggleVoice();
@@ -235,13 +242,13 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
     setSelectedFiles([]);
+    setWindowCount(MESSAGE_WINDOW_BASE);
 
     // NEW_CHAT_SESSION 表示新建聊天
     if (activeSessionId === NEW_CHAT_SESSION) {
       trigger(HapticFeedbackTypes.impactMedium);
       logger.info('[ChatScreen] startNewChat');
       useChatStore.getState().activateSession(NEW_CHAT_SESSION);
-      showKeyboard();
       return;
     }
 
@@ -257,13 +264,9 @@ function ChatScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, scroll, showKeyboard]);
+  }, [activeSessionId, scroll]);
 
-  // ==================== 键盘 & 屏幕 ====================
-  useEffect(() => {
-    showKeyboard();
-  }, [showKeyboard]);
-
+  // ==================== 屏幕 ====================
   useEffect(() => {
     const updateDimensions = () => {
       setScreenDimensions(Dimensions.get('window'));
@@ -284,6 +287,7 @@ function ChatScreen(): React.JSX.Element {
       chatStatus === ChatStatus.Running &&
       messages.length > prevMessageCountRef.current
     ) {
+      setWindowCount(MESSAGE_WINDOW_BASE);
       scroll.scrollToBottom();
     }
     prevMessageCountRef.current = messages.length;
@@ -302,6 +306,7 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       scroll.setUserScrolled(false);
+      setWindowCount(MESSAGE_WINDOW_BASE);
       trigger(HapticFeedbackTypes.impactMedium);
       scroll.scrollToBottom();
       if (files.length > 0) {
@@ -342,12 +347,18 @@ function ChatScreen(): React.JSX.Element {
 
   const styles = createStyles(colors);
 
+  // 底部浮层总高度，输入栏本体加避让量加陪伴气泡，供列表占位与回底按钮定位，事件时刻一次跳变
+  const overlayHeight =
+    inputBarHeight +
+    companionBubbleHeight +
+    keyboardAvoidanceOf(keyboardHeight, insets.bottom);
+
   const scrollStyle = StyleSheet.create({
     scrollToBottomContainerStyle: {
       width: 30,
       height: 30,
       right: 16,
-      bottom: fibWrapperHeight + 44,
+      bottom: overlayHeight + 44,
     },
   });
 
@@ -362,13 +373,57 @@ function ChatScreen(): React.JSX.Element {
       height: '100%',
     },
     chatFooterSpacer: {
-      height: fibWrapperHeight,
+      height: overlayHeight,
     },
   });
 
   // 最新 AI 消息用于陪伴气泡与操作按钮判定，生成期间无占位气泡，运行态直接由 chatStatus 表达
   const lastAgentMessage = messages.find((m) => m.user._id === BOT_ID) ?? null;
   const isThinking = chatStatus === ChatStatus.Running;
+
+  /** 传给 GiftedChat 的渲染函数引用固定，避免 ChatScreen 渲染时穿透列表内部缓存 */
+  const renderChatEmpty = useCallback(
+    () => <EmptyChatComponent isLoadingMessages={isLoadingMessages} />,
+    [isLoadingMessages]
+  );
+  const chatFooterSpacerStyle = slideStyle.chatFooterSpacer;
+  const renderChatFooter = useCallback(
+    () => <View style={chatFooterSpacerStyle} />,
+    [chatFooterSpacerStyle]
+  );
+  const renderInputToolbar = useCallback(() => null, []);
+  const renderMessage = useCallback(
+    (props: MessageProps<ChatMessage>) => {
+      const isLastAIMessage =
+        props.currentMessage?._id === lastAgentMessage?._id &&
+        props.currentMessage?.user._id !== 1;
+      return (
+        <CustomMessageComponent
+          {...props}
+          chatStatus={chatStatus}
+          isLastAIMessage={isLastAIMessage}
+          onReasoningToggle={scroll.handleReasoningToggle}
+          agentId={currentAgentId}
+          serverAddress={serverAddressRef.current}
+        />
+      );
+    },
+    [
+      lastAgentMessage,
+      chatStatus,
+      scroll.handleReasoningToggle,
+      currentAgentId,
+      serverAddressRef,
+    ]
+  );
+
+  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位
+  const companionBubbleVisible = companion.companionOpen && !!lastAgentMessage;
+  useEffect(() => {
+    if (!companionBubbleVisible) {
+      setCompanionBubbleHeight(0);
+    }
+  }, [companionBubbleVisible]);
 
   return (
     <View style={styles.container}>
@@ -380,50 +435,45 @@ function ChatScreen(): React.JSX.Element {
           {/* Pane 1: 聊天列表 */}
           <View style={slideStyle.pane}>
             <GiftedChat
-              messageContainerRef={scroll.flatListRef}
-              keyboardShouldPersistTaps="never"
-              messages={messages}
+              messagesContainerRef={
+                // 库声明不接纳空值引用，创建引用时初始值必为空，此处仅收窄空值差异
+                scroll.flatListRef as React.RefObject<AnimatedList<ChatMessage>>
+              }
+              messages={visibleMessages}
+              loadEarlierMessagesProps={{
+                isAvailable: messages.length > windowCount,
+                isLoading: false,
+                onPress: () => {
+                  const next = windowCount + MESSAGE_WINDOW_STEP;
+                  setWindowCount(next);
+                  logger.info(
+                    `[ChatScreen] window expanded, from=${windowCount} to=${next} total=${messages.length}`
+                  );
+                },
+                label: t('chat.loadEarlier'),
+              }}
               user={{ _id: 1 }}
-              alignTop={false}
-              inverted={true}
-              isKeyboardInternallyHandled={false}
+              isAlignedTop={false}
+              isInverted={true}
               minInputToolbarHeight={0}
               minComposerHeight={0}
-              renderChatEmpty={() => (
-                <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
-              )}
-              renderChatFooter={() => (
-                <View style={slideStyle.chatFooterSpacer} />
-              )}
-              renderInputToolbar={() => null}
-              renderMessage={(props) => {
-                const messageIndex = messages.findIndex(
-                  (msg) => msg._id === props.currentMessage?._id
-                );
-                const isLastAIMessage =
-                  props.currentMessage?._id === lastAgentMessage?._id &&
-                  props.currentMessage?.user._id !== 1;
-                return (
-                  <CustomMessageComponent
-                    {...props}
-                    chatStatus={chatStatus}
-                    isLastAIMessage={isLastAIMessage}
-                    onReasoningToggle={scroll.handleReasoningToggle}
-                    messageIndex={messageIndex}
-                    flatListRef={scroll.flatListRef}
-                    agentId={currentAgentId}
-                    serverAddress={serverAddressRef.current}
-                  />
-                );
-              }}
-              listViewProps={{
+              renderChatEmpty={renderChatEmpty}
+              renderChatFooter={renderChatFooter}
+              renderInputToolbar={renderInputToolbar}
+              renderMessage={renderMessage}
+              listProps={{
+                // 会话消息上万，收紧虚拟化窗口，减少常驻挂载行数，降低每次消息更新的重渲染量
+                initialNumToRender: 12,
+                maxToRenderPerBatch: 12,
+                windowSize: 11,
                 contentContainerStyle: styles.contentContainer,
                 contentInset: { top: 2 },
+                keyboardShouldPersistTaps: 'never',
                 onLayout: (layoutEvent: LayoutChangeEvent) => {
                   scroll.containerHeightRef.current =
                     layoutEvent.nativeEvent.layout.height;
                 },
-                onScrollEvent: scroll.handleScroll,
+                onScroll: scroll.handleScroll,
                 onContentSizeChange: (_width: number, height: number) => {
                   scroll.contentHeightRef.current = height;
                 },
@@ -441,8 +491,20 @@ function ChatScreen(): React.JSX.Element {
                     }
                   : {}),
               }}
-              scrollToBottom={true}
-              scrollToBottomComponent={() => <CustomScrollToBottomComponent />}
+              renderDay={
+                // 隐藏不同日期消息之间的日期分隔条
+                () => null
+              }
+              keyboardAvoidingViewProps={
+                // 库内置键盘避让与页面外层的官方避让重复，关闭库内置这份
+                { enabled: false }
+              }
+              isDayAnimationEnabled={
+                // 日期浮动胶囊在每次消息更新时全量扫描所有消息，上万条会话下堵塞 JS 线程，这里关闭
+                false
+              }
+              isScrollToBottomEnabled={true}
+              scrollToBottomComponent={renderScrollToBottom}
               scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
@@ -464,46 +526,53 @@ function ChatScreen(): React.JSX.Element {
         </Animated.View>
       </View>
       {/* FIB 容器：绝对定位浮在内容上方 */}
-      <View
-        style={styles.fibWrapper}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h > 0 && h !== fibWrapperHeight) {
-            setFibWrapperHeight(h);
-          }
-        }}
-      >
+      <View style={styles.fibWrapper}>
         {/* 陪伴回复气泡 */}
-        {companion.companionOpen && lastAgentMessage && (
-          <CompanionReplyBubble
-            messageKey={lastAgentMessage._id as string}
-            text={lastAgentMessage.text}
-            isThinking={isThinking}
-            thinkingText={t('chat.thinking')}
-            colors={colors}
-          />
+        {companionBubbleVisible && lastAgentMessage && (
+          <View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && h !== companionBubbleHeight) {
+                setCompanionBubbleHeight(h);
+              }
+            }}
+          >
+            <CompanionReplyBubble
+              messageKey={lastAgentMessage._id as string}
+              text={lastAgentMessage.text}
+              isThinking={isThinking}
+              thinkingText={t('chat.thinking')}
+              colors={colors}
+            />
+          </View>
         )}
-        {/* BlurView 只覆盖输入框区域 */}
-        <BlurView
-          style={{
-            paddingBottom:
-              Platform.OS === 'ios'
-                ? Math.max(keyboardHeight, insets.bottom)
-                : insets.bottom,
-          }}
-          blurType="light"
-          blurAmount={15}
-        >
-          <FloatingInputBar
-            textInputRef={textInputViewRef}
-            onSend={handleSend}
-            onStop={handleStop}
-            selectedFiles={selectedFiles}
-            chatStatus={chatStatus}
-            onFileSelected={handleNewFileSelected}
-            onFileUpdated={handleFileUpdated}
+        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，Android 需显式启用实验模糊实现 */}
+        <Animated.View style={keyboardBottomStyle}>
+          <BlurView
+            style={StyleSheet.absoluteFill}
+            tint="light"
+            intensity={40}
+            experimentalBlurMethod="dimezisBlurView"
           />
-        </BlurView>
+          <View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && h !== inputBarHeight) {
+                setInputBarHeight(h);
+              }
+            }}
+          >
+            <FloatingInputBar
+              textInputRef={textInputViewRef}
+              onSend={handleSend}
+              onStop={handleStop}
+              selectedFiles={selectedFiles}
+              chatStatus={chatStatus}
+              onFileSelected={handleNewFileSelected}
+              onFileUpdated={handleFileUpdated}
+            />
+          </View>
+        </Animated.View>
       </View>
     </View>
   );

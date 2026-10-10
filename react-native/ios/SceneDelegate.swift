@@ -1,4 +1,5 @@
 import UIKit
+import React
 
 @available(iOS 13.0, *)
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -7,28 +8,39 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        
+
         // Get the shared AppDelegate instance to access React Native components
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else {
             fatalError("AppDelegate not found")
         }
-        
+
         // Create the window for this scene
         window = UIWindow(windowScene: windowScene)
-        
-        // Get the root view controller from AppDelegate
-        let rootViewController = appDelegate.createRootViewController()
-        
+
+        // Use RCTAppDelegate's rootViewFactory to create the root view on the new architecture
+        let rootView = appDelegate.rootViewFactory().view(
+            withModuleName: appDelegate.moduleName ?? "Persona",
+            initialProperties: appDelegate.initialProps as? [String: Any],
+            launchOptions: nil
+        )
+
+        // Configure root view appearance
+        rootView.backgroundColor = UIColor.systemBackground
+
+        // Create and configure view controller
+        let rootViewController = UIViewController()
+        rootViewController.view = rootView
+
         // Set the root view controller and make the window visible
         window?.rootViewController = rootViewController
         window?.makeKeyAndVisible()
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
-        // Called as the scene is being released by the system.
+        // Called as the scene is being released.
         // This occurs shortly after the scene enters the background, or when its session is discarded.
         // Release any resources associated with this scene that can be re-created the next time the scene connects.
-        // The scene may re-connect later, as its session was not necessarily discarded (see `application:didDiscardSceneSessions` instead).
+        // The scene may re-connect later, as its session was not necessarily discarded.
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {

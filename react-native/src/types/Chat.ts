@@ -77,7 +77,7 @@ export interface ChatMessage extends IMessage {
   pendingId?: string;
 }
 
-interface ChatUser extends User {}
+export type ChatUser = User;
 
 export interface Metrics {
   latencyMs: string;

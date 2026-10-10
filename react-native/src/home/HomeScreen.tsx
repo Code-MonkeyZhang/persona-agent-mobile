@@ -43,10 +43,11 @@ import {
   type AgentInfo,
   chatSessionIdFor,
   deleteSession,
-  fetchAgents,
-  fetchSessions,
   isChatSession,
+  noteAgentHashes,
 } from '../api/server-api.ts';
+import { cacheDb } from '../storage/cache-db.ts';
+import { agentsSync } from '../storage/sync-setup';
 import {
   getLastConversation,
   getServerAddress,
@@ -62,6 +63,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useAppPanelStore } from '../stores/appPanelStore';
 import { useChatStore } from '../stores/chatStore';
+import { useMirrorStore } from '../stores/mirrorStore';
 import { Chat } from '../types/Chat.ts';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
@@ -82,7 +84,7 @@ interface HomeListHeaderProps {
  * 列表头部：聊天入口卡、工具与技能入口、会话区标题。
  * 经 memo 固化，会话行展开态变化不再触发这块头部重渲染，滑动动画不被 JS 线程挤帧。
  */
-const HomeListHeader = React.memo(function HomeListHeader({
+const HomeListHeader = React.memo(function ({
   preview,
   onOpenChat,
 }: HomeListHeaderProps) {
@@ -155,7 +157,7 @@ const HomeScreen: React.FC = () => {
   const styles = createStyles(colors);
 
   // ==================== 本地状态 ====================
-  /** 竖栏的 agent 列表，挂载时拉取一次 */
+  /** 竖栏的 agent 列表，镜像重读驱动，冷启动即有值 */
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [currentAgentId, setCurrentAgentId] = useState(
     getServerAgentId() || ''
@@ -174,7 +176,7 @@ const HomeScreen: React.FC = () => {
   const sessionTitles = useSessionStore((s) => s.sessionTitles);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveSessionId = useSessionStore((s) => s.setActiveSessionId);
-  const homeRefreshVersion = useSessionStore((s) => s.homeRefreshVersion);
+  const mirrorVersion = useMirrorStore((s) => s.version);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
   const connectionStatus = useConnectionStore((s) => s.status);
   const reconnectVersion = useConnectionStore((s) => s.reconnectVersion);
@@ -188,19 +190,14 @@ const HomeScreen: React.FC = () => {
     t('home.startChat');
 
   // ==================== 列表与卡片拉取 ====================
-  /** 从服务器拉取会话列表，常驻聊天会话只取其预览不进列表 */
+  /** 从镜像库读会话列表，常驻聊天会话只取其预览不进列表，数据源不依赖网络 */
   const handleUpdateHistory = useCallback(async () => {
-    const address = getServerAddress();
     const agentId = getServerAgentId();
-    if (!address || !agentId) {
+    if (!agentId) {
       return;
     }
     try {
-      const sessions = await fetchSessions(address, agentId);
-      // 迟到的响应已不属于当前 agent 时丢弃，避免覆盖切换后的列表
-      if (getServerAgentId() !== agentId) {
-        return;
-      }
+      const sessions = await cacheDb.listSessions(agentId);
       const chatList: Chat[] = sessions
         .filter((s) => !isChatSession(s.id))
         .map((s) => ({
@@ -214,7 +211,7 @@ const HomeScreen: React.FC = () => {
         sessions.find((s) => isChatSession(s.id))?.lastMessage
       );
     } catch (e) {
-      logger.error(`[Home] fetchSessions failed: ${e}`);
+      logger.warn(`[Home] session list reload failed: ${e}`);
     }
   }, []);
 
@@ -231,30 +228,19 @@ const HomeScreen: React.FC = () => {
   }, [insets.top, insets.bottom]);
 
   /**
-   * 拉取 agent 列表并确定当前 agent，首次拉取成功时执行启动恢复，
-   * 恢复上次会话或兜底到常驻聊天。
+   * 确定当前 agent 并执行一次启动恢复，镜像重读驱动。
+   * 上次 Agent 还在且会话非空则恢复上次会话，否则兜底到常驻聊天。
    */
-  const loadAgents = useCallback(async () => {
-    const address = getServerAddress();
-    if (!address) {
-      return;
-    }
-    try {
-      const fetchedAgents = await fetchAgents(address);
-      if (fetchedAgents.length === 0) {
-        return;
-      }
-      setAgents(fetchedAgents);
-
+  const settleCurrentAgent = useCallback(
+    (list: AgentInfo[]) => {
       let agentId = getServerAgentId();
-      if (!agentId || !fetchedAgents.some((a) => a.id === agentId)) {
-        agentId = fetchedAgents[0].id;
+      if (!agentId || !list.some((a) => a.id === agentId)) {
+        agentId = list[0].id;
       }
       saveServerAgentId(agentId);
       setCurrentAgentId(agentId);
       logger.info(`[Home] agents loaded, using agentId=${agentId}`);
 
-      // 启动恢复：上次 Agent 还在且会话非空则恢复上次会话，否则兜底到常驻聊天
       if (!hasRestoredRef.current) {
         hasRestoredRef.current = true;
         const lastConv = getLastConversation();
@@ -270,38 +256,41 @@ const HomeScreen: React.FC = () => {
           `[Home] restore session: agentId=${agentId} sessionId=${targetSession}`
         );
       }
-    } catch (e) {
-      logger.error(
-        `[Home] loadAgents failed: ${e instanceof Error ? e.message : e}`
-      );
-    }
-  }, [setActiveSessionId]);
+    },
+    [setActiveSessionId]
+  );
 
   /**
-   * 数据拉取触发器。
-   * - 连接版本递增：连接建立或重连成功后重拉全部，覆盖冷启动隧道未就绪的场景
-   * - 刷新触发器递增：回合结束后重拉列表与卡片
-   * - 当前 agent 变化：切换后重拉列表与卡片
-   * 首次连接建立前不拉取，避免隧道未就绪时的无效请求
+   * 数据刷新触发器。
+   * - 连接版本递增：连接建立或重连成功后刷新 agent 清单，覆盖冷启动隧道未就绪的场景
+   * - 镜像版本递增：快照装载、变更回放与清单刷新后重读 agent 清单与会话列表
+   * - 当前 agent 变化：切换后重读会话列表
    */
   useEffect(() => {
     if (reconnectVersion === 0) {
       return;
     }
-    logger.info(
-      `[Home] data reload triggered, connVersion=${reconnectVersion}`
-    );
-    loadAgents();
-    handleUpdateHistory();
-  }, [
-    reconnectVersion,
-    homeRefreshVersion,
-    currentAgentId,
-    loadAgents,
-    handleUpdateHistory,
-  ]);
+    agentsSync.refresh();
+  }, [reconnectVersion]);
 
-  /** 返回焦点时重拉 agent 列表，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
+  useEffect(() => {
+    (async () => {
+      try {
+        logger.info(`[Home] mirror reload, mirrorVersion=${mirrorVersion}`);
+        const cached = await cacheDb.listAgents();
+        if (cached.length > 0) {
+          noteAgentHashes(cached);
+          setAgents(cached);
+          settleCurrentAgent(cached);
+        }
+        await handleUpdateHistory();
+      } catch (e) {
+        logger.warn(`[Home] mirror reload failed: ${e}`);
+      }
+    })();
+  }, [mirrorVersion, currentAgentId, settleCurrentAgent, handleUpdateHistory]);
+
+  /** 返回焦点时刷新 agent 清单，让桌面端的改名改配等修改回到移动端即可见，首焦已由连接触发器覆盖 */
   const firstFocusRef = useRef(true);
   useFocusEffect(
     useCallback(() => {
@@ -310,8 +299,8 @@ const HomeScreen: React.FC = () => {
         return;
       }
       logger.info('[Home] focus reload agents');
-      loadAgents();
-    }, [loadAgents])
+      agentsSync.refresh();
+    }, [])
   );
 
   /** agent 名称同步进会话仓库，占位气泡与历史消息转换使用 */
@@ -514,8 +503,7 @@ const HomeScreen: React.FC = () => {
             );
           })}
         </ScrollView>
-        <View style={styles.divider} />
-        {/* 分隔线下方状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        {/* 状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
         <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
@@ -535,10 +523,14 @@ const HomeScreen: React.FC = () => {
           />
         )}
         ListHeaderComponent={
-          <HomeListHeader
-            preview={chatEntryPreview}
-            onOpenChat={openChatSession}
-          />
+          <>
+            {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
+            <View style={styles.divider} />
+            <HomeListHeader
+              preview={chatEntryPreview}
+              onOpenChat={openChatSession}
+            />
+          </>
         }
         ListEmptyComponent={
           <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
@@ -581,11 +573,7 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.card,
-      shadowColor: colors.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
+      boxShadow: `0px 4px 10px ${colors.shadow}`,
     },
     /** agent 横向条 */
     agentStrip: {

@@ -28,7 +28,7 @@ interface CollapsedThoughtProcessProps {
 }
 
 /** 单个思考步骤的时间线节点 */
-const ThoughtItem = memo(function ThoughtItem({
+const ThoughtItem = memo(function ({
   thought,
   isLast,
   colors,

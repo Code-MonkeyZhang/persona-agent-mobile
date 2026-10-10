@@ -280,15 +280,13 @@ export class CustomMarkdownRenderer
           <TableWrapper style={headerTableStyle}>
             {header.map((headerCol, index) => {
               if (React.isValidElement(headerCol[0])) {
-                headerCol[0] = React.cloneElement(
-                  headerCol[0] as ReactElement<TextProps>,
-                  {
-                    style: {
-                      ...headerCol[0].props.style,
-                      fontWeight: '500',
-                    },
-                  }
-                );
+                const headerCell = headerCol[0] as ReactElement<TextProps>;
+                headerCol[0] = React.cloneElement(headerCell, {
+                  style: {
+                    ...headerCell.props.style,
+                    fontWeight: '500',
+                  },
+                });
               }
               return (
                 <Cell

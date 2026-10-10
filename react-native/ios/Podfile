@@ -1,7 +1,22 @@
+# Workaround: the xcodeproj gem does not know Xcode 26 project object version 70
+require 'xcodeproj'
+unless Xcodeproj::Constants::COMPATIBILITY_VERSION_BY_OBJECT_VERSION.key?(70)
+  versions = Xcodeproj::Constants::COMPATIBILITY_VERSION_BY_OBJECT_VERSION.dup
+  versions[70] = 'Xcode 26.0'
+  Xcodeproj::Constants.send(:remove_const, :COMPATIBILITY_VERSION_BY_OBJECT_VERSION)
+  Xcodeproj::Constants::COMPATIBILITY_VERSION_BY_OBJECT_VERSION = versions.freeze
+end
+
 # Resolve react_native_pods.rb with node to allow for hoisting
 require Pod::Executable.execute_command('node', ['-p',
   'require.resolve(
     "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+# Resolve the Expo autolinking script with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "expo/scripts/autolinking.rb",
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
@@ -16,6 +31,8 @@ end
 
 target 'Persona' do
   config = use_native_modules!
+
+  use_expo_modules!
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -36,13 +53,12 @@ target 'Persona' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
-    # Fix Swift version mismatch - use Swift 5.0 for pods that don't support Swift 6.0
+    # Pin pods without Swift 6 support to Swift 5, all other pods follow their podspec defaults
+    swift5_pods = ['react-native-compressor', 'react-native-keyboard-controller', 'KeyboardController', 'ReactNativeCameraKit']
     installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        if ['react-native-compressor', 'SwiftAudioEx', 'react-native-track-player', 'ReactNativeCameraKit'].include?(target.name)
+      if swift5_pods.include?(target.name)
+        target.build_configurations.each do |config|
           config.build_settings['SWIFT_VERSION'] = '5.0'
-        else
-          config.build_settings['SWIFT_VERSION'] = '6.0'
         end
       end
     end

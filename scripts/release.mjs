@@ -10,18 +10,25 @@ const rnDir = resolve(rootDir, "react-native");
 const semverRegex = /^\d+\.\d+\.\d+$/;
 const buildRegex = /^\d+$/;
 
-const version = process.argv[2];
-const build = process.argv[3];
+const isTagStep = process.argv[2] === "tag";
+const version = isTagStep ? process.argv[3] : process.argv[2];
+const build = isTagStep ? process.argv[4] : process.argv[3];
 
 if (!version || !semverRegex.test(version) || !build || !buildRegex.test(build)) {
   console.error(
-    "Usage: node scripts/release.mjs <version> <build>\nExample: node scripts/release.mjs 1.0.3 4",
+    "Usage:\n" +
+      "  Step 1: node scripts/release.mjs <version> <build>\n" +
+      "  Step 2: node scripts/release.mjs tag <version> <build>\n" +
+      "Example:\n" +
+      "  node scripts/release.mjs 1.0.6 8\n" +
+      "  node scripts/release.mjs tag 1.0.6 8",
   );
   process.exit(1);
 }
 
 const tag = `v${version}-${build}`;
 const commitMessage = `release: Persona v${version} (build ${build})`;
+const prTitle = `chore: release Persona v${version} (build ${build})`;
 
 function run(cmd, options) {
   const exitOnError = options?.exitOnError ?? true;
@@ -36,104 +43,159 @@ function run(cmd, options) {
   }
 }
 
-console.log(`\n🚀 Preparing release ${tag}\n`);
-
-const branch = run("git branch --show-current");
-if (branch !== "main") {
-  console.error(`Error: Current branch is "${branch}", expected "main".`);
-  process.exit(1);
+function assertTagAbsent() {
+  const remoteTag = run(`git ls-remote --tags origin ${tag}`, { exitOnError: false });
+  const localTag = run(`git tag -l ${tag}`, { exitOnError: false });
+  if (remoteTag || localTag) {
+    console.error(`Error: Tag ${tag} already exists.`);
+    process.exit(1);
+  }
 }
 
-const status = run("git status --porcelain");
-if (status) {
-  console.error("Error: Working tree is not clean. Commit or stash your changes first.");
-  process.exit(1);
-}
+async function bumpStep() {
+  console.log(`\n🚀 Step 1: preparing release ${tag} on dev\n`);
 
-const existingTag = run(`git tag -l ${tag}`, { exitOnError: false });
-if (existingTag) {
-  console.error(`Error: Tag ${tag} already exists.`);
-  process.exit(1);
-}
+  const branch = run("git branch --show-current");
+  if (branch !== "dev") {
+    console.error(`Error: Current branch is "${branch}", expected "dev".`);
+    process.exit(1);
+  }
 
-const currentCommit = run("git log --oneline -1");
-console.log(`Current HEAD: ${currentCommit}\n`);
+  const status = run("git status --porcelain");
+  if (status) {
+    console.error("Error: Working tree is not clean. Commit or stash your changes first.");
+    process.exit(1);
+  }
 
-// Bump react-native/package.json
-const pkgPath = resolve(rnDir, "package.json");
-const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-const oldVersion = pkg.version;
-pkg.version = version;
-writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-console.log(`react-native/package.json: ${oldVersion} → ${version}`);
+  assertTagAbsent();
 
-// Bump iOS pbxproj (both MARKETING_VERSION and CURRENT_PROJECT_VERSION)
-const pbxPath = resolve(rnDir, "ios/Persona.xcodeproj/project.pbxproj");
-let pbx = readFileSync(pbxPath, "utf-8");
-pbx = pbx.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version};`);
-pbx = pbx.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${build};`);
-writeFileSync(pbxPath, pbx);
-console.log(`iOS: MARKETING_VERSION → ${version}, CURRENT_PROJECT_VERSION → ${build}`);
+  const currentCommit = run("git log --oneline -1");
+  console.log(`Current HEAD: ${currentCommit}\n`);
 
-// Bump Android build.gradle (kept in sync even though this release is iOS-only)
-const gradlePath = resolve(rnDir, "android/app/build.gradle");
-let gradle = readFileSync(gradlePath, "utf-8");
-gradle = gradle.replace(/versionCode \d+/, `versionCode ${build}`);
-gradle = gradle.replace(/versionName "[^"]*"/, `versionName "${version}"`);
-writeFileSync(gradlePath, gradle);
-console.log(`Android: versionCode → ${build}, versionName → ${version}`);
+  // Bump react-native/package.json
+  const pkgPath = resolve(rnDir, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  const oldVersion = pkg.version;
+  pkg.version = version;
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  console.log(`react-native/package.json: ${oldVersion} → ${version}`);
 
-console.log("");
-console.log("About to release:\n");
-console.log(`  1. Commit: "${commitMessage}"`);
-console.log(`  2. Tag:    ${tag}`);
-console.log(`  3. Push:   origin/main (with tags)`);
-console.log(`\nCI will build and upload to App Store Connect (TestFlight).\n`);
+  // Bump iOS pbxproj (both MARKETING_VERSION and CURRENT_PROJECT_VERSION)
+  const pbxPath = resolve(rnDir, "ios/Persona.xcodeproj/project.pbxproj");
+  let pbx = readFileSync(pbxPath, "utf-8");
+  pbx = pbx.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version};`);
+  pbx = pbx.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${build};`);
+  writeFileSync(pbxPath, pbx);
+  console.log(`iOS: MARKETING_VERSION → ${version}, CURRENT_PROJECT_VERSION → ${build}`);
 
-process.stdout.write("Continue? [y/N] ");
-const answer = await new Promise((res) => {
-  process.stdin.once("data", (data) => res(data.toString().trim()));
-});
+  // Bump Android build.gradle (kept in sync even though the release pipeline is iOS-only)
+  const gradlePath = resolve(rnDir, "android/app/build.gradle");
+  let gradle = readFileSync(gradlePath, "utf-8");
+  gradle = gradle.replace(/versionCode \d+/, `versionCode ${build}`);
+  gradle = gradle.replace(/versionName "[^"]*"/, `versionName "${version}"`);
+  writeFileSync(gradlePath, gradle);
+  console.log(`Android: versionCode → ${build}, versionName → ${version}`);
 
-if (answer.toLowerCase() !== "y") {
-  console.log("\nAborted. Reverting version bump...");
-  run(
-    "git checkout -- react-native/package.json react-native/ios/Persona.xcodeproj/project.pbxproj react-native/android/app/build.gradle",
+  console.log("");
+  console.log("About to:\n");
+  console.log(`  1. Commit: "${commitMessage}"`);
+  console.log(`  2. Push:   origin/dev`);
+  console.log(`  3. Open:   release PR dev → main`);
+  console.log(`\nThen merge the PR on GitHub and run the tag step.\n`);
+
+  process.stdout.write("Continue? [y/N] ");
+  const answer = await new Promise((res) => {
+    process.stdin.once("data", (data) => res(data.toString().trim()));
+  });
+
+  if (answer.toLowerCase() !== "y") {
+    console.log("\nAborted. Reverting version bump...");
+    run(
+      "git checkout -- react-native/package.json react-native/ios/Persona.xcodeproj/project.pbxproj react-native/android/app/build.gradle",
+    );
+    console.log("Version bump reverted.");
+    process.exit(0);
+  }
+
+  const diff = run("git status --porcelain");
+  if (diff) {
+    console.log("\n📦 Committing...");
+    run(
+      "git add react-native/package.json react-native/ios/Persona.xcodeproj/project.pbxproj react-native/android/app/build.gradle",
+    );
+    run(`git commit -m "${commitMessage}"`);
+  } else {
+    console.log("\nℹ️  No version changes (already at target), skipping commit.");
+  }
+
+  console.log("📤 Pushing origin/dev...");
+  const pushResult = run("git push origin dev", { exitOnError: false });
+
+  if (pushResult === null) {
+    console.error("\n❌ Push failed! Rolling back...");
+    if (diff) {
+      run("git reset --hard HEAD~1");
+    }
+    console.error("Local release commit has been removed.");
+    process.exit(1);
+  }
+
+  console.log("\n📥 Opening release PR...");
+  const prResult = run(
+    `gh pr create --base main --head dev --title "${prTitle}" --body "Release ${tag}. Merge with a merge commit, then run the tag step."`,
+    { exitOnError: false },
   );
-  console.log("Version bump reverted.");
+
+  if (prResult === null) {
+    console.log(`\nℹ️  PR creation skipped (one may already exist). Check dev → main on GitHub.`);
+  } else {
+    console.log(`\n📝 PR opened: ${prResult}`);
+  }
+
+  console.log(`\n✅ Step 1 done for ${tag}.`);
+  console.log("Next: merge the PR on GitHub, then run:\n");
+  console.log(`  node scripts/release.mjs tag ${version} ${build}\n`);
   process.exit(0);
 }
 
-const diff = run("git status --porcelain");
-if (diff) {
-  console.log("\n📦 Committing...");
-  run(
-    "git add react-native/package.json react-native/ios/Persona.xcodeproj/project.pbxproj react-native/android/app/build.gradle",
-  );
-  run(`git commit -m "${commitMessage}"`);
-} else {
-  console.log("\nℹ️  No version changes (already at target), skipping commit.");
-}
+async function tagStep() {
+  console.log(`\n🏷️  Step 2: tagging ${tag} on main\n`);
 
-console.log("🏷️  Tagging...");
-run(`git tag ${tag}`);
+  run("git fetch origin main");
 
-console.log("📤 Pushing to origin...");
-const pushResult = run("git push origin main --tags", { exitOnError: false });
+  assertTagAbsent();
 
-if (pushResult === null) {
-  console.error("\n❌ Push failed! Rolling back...");
-  run(`git push origin :refs/tags/${tag}`, { exitOnError: false });
-  run(`git tag -d ${tag}`, { exitOnError: false });
-  if (diff) {
-    run("git reset --hard HEAD~1");
+  const releaseOnMain = run(`git log origin/main --oneline -F --grep="${commitMessage}"`, {
+    exitOnError: false,
+  });
+  if (!releaseOnMain) {
+    console.error(`Error: Release commit "${commitMessage}" is not on origin/main yet.`);
+    console.error("Merge the release PR on GitHub first.");
+    process.exit(1);
   }
-  console.error("Rollback complete. Local commit and tag have been removed.");
-  console.error("Please check your network or permissions and try again.");
-  process.exit(1);
+
+  console.log(`Release commit found on origin/main:`);
+  console.log(`  ${releaseOnMain.split("\n")[0]}\n`);
+
+  run(`git tag ${tag} origin/main`);
+
+  console.log("📤 Pushing tag...");
+  const pushResult = run(`git push origin ${tag}`, { exitOnError: false });
+
+  if (pushResult === null) {
+    console.error("\n❌ Push failed! Rolling back...");
+    run(`git tag -d ${tag}`, { exitOnError: false });
+    process.exit(1);
+  }
+
+  console.log(`\n✅ Done! ${tag} pushed to origin.`);
+  console.log("CI will build and upload to TestFlight. Check progress at:");
+  console.log("https://github.com/Code-MonkeyZhang/persona-agent-mobile/actions\n");
+  process.exit(0);
 }
 
-console.log(`\n✅ Done! ${tag} pushed to origin.`);
-console.log(`CI will build and upload to TestFlight. Check progress at:`);
-console.log(`https://github.com/Code-MonkeyZhang/persona-agent-mobile/actions\n`);
-process.exit(0);
+if (isTagStep) {
+  await tagStep();
+} else {
+  await bumpStep();
+}

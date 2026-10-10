@@ -6,8 +6,9 @@
  *   长相基准是 demo 的 NavDetailShared，页面壳由原生 Stack header 承担故不做壳组件。
  */
 import React, { Fragment, useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Minus, Plus, type LucideIcon } from 'lucide-react-native';
+import CachedImage from '../../component/CachedImage';
 import type { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
 import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import type { McpServerInfo } from '../../api/server-api.ts';
@@ -102,8 +103,8 @@ export function EntityLogo({
   }
   return (
     <View style={[boxStyle, styles.logoBox]}>
-      <Image
-        source={{ uri: src }}
+      <CachedImage
+        source={src}
         style={styles.logoImage}
         resizeMode="contain"
         onError={() => setFailed(true)}

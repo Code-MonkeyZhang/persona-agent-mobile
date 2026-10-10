@@ -5,7 +5,6 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import TrackPlayer, { Event, State } from 'react-native-track-player';
 import RNFS from 'react-native-fs';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
@@ -61,6 +60,9 @@ export async function writeAudioFile(audio: ArrayBuffer): Promise<string> {
   return filePath;
 }
 
+/** RN 运行时提供 btoa，类型层面局部声明，避免依赖 DOM 库 */
+declare const btoa: (data: string) => string;
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -68,27 +70,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
-}
-
-/**
- * lazy 注册 TrackPlayer 播放结束监听器。
- * 必须在 setupPlayer() 之后调用，否则 Native Module 尚未就绪会崩溃。
- */
-let _listenerRegistered = false;
-export function ensurePlaybackListener(): void {
-  if (_listenerRegistered) {
-    return;
-  }
-
-  _listenerRegistered = true;
-  logger.info('[TTS] playback listener registered');
-
-  TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
-    if ('state' in event && event.state === State.Ended) {
-      logger.debug('[TTS] playback ended');
-      useVoiceStore.setState({ isSpeaking: false });
-    }
-  });
 }
 
 export const useVoiceStore = create<VoiceStore>()(
@@ -112,7 +93,6 @@ export const useVoiceStore = create<VoiceStore>()(
        * 文本已由服务端清洗/压缩/翻译，直接合成 → 写文件 → 播放。
        */
       speak: async (data) => {
-        ensurePlaybackListener();
         logger.info(
           `[TTS] speak called, textLen=${data.speakText.length}, voiceId=${data.voiceId}`
         );
@@ -164,3 +144,11 @@ const persisted = getTtsEnabled();
 if (persisted) {
   useVoiceStore.setState({ voiceEnabled: true });
 }
+
+/**
+ * 播放结束回调在模块加载时注册一次，语音播完时复位 isSpeaking。
+ */
+getAudioPlayer().setOnPlaybackEnd(() => {
+  logger.debug('[TTS] playback ended');
+  useVoiceStore.setState({ isSpeaking: false });
+});

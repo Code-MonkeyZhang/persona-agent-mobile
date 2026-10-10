@@ -7,7 +7,6 @@ export interface ColorScheme {
   background: string;
   surface: string;
   surfaceSecondary: string;
-  surfaceTranslucent: string;
   card: string;
   codeBackground: string;
   selectedBackground: string;
@@ -52,7 +51,6 @@ export const lightColors: ColorScheme = {
   background: '#ffffff',
   surface: '#f5f5f5',
   surfaceSecondary: '#f9f9f9',
-  surfaceTranslucent: 'rgba(255, 255, 255, 0.95)',
   card: '#ffffff',
   codeBackground: '#F8F8F8',
   selectedBackground: '#F5F5F5',

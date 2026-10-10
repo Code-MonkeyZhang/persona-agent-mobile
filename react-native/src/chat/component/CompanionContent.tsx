@@ -4,8 +4,9 @@
  * 所有数据通过 props 传入，内部不做任何 WebSocket 或 API 调用。
  */
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import CachedImage from '../../component/CachedImage';
 import {
   getBackgroundImageUrl,
   getPoseImageUrl,
@@ -28,7 +29,7 @@ interface CompanionContentProps {
  * 陪伴内容展示层：背景图、角色立绘。
  * 作为滑动容器的右侧 pane 渲染，所有状态由 ChatScreen 通过 props 驱动。
  */
-const CompanionContent = React.memo(function CompanionContent({
+const CompanionContent = React.memo(function ({
   agentId,
   serverAddr,
   hasAssets,
@@ -48,8 +49,8 @@ const CompanionContent = React.memo(function CompanionContent({
   return (
     <View style={styles.container}>
       {showBackground && (
-        <Image
-          source={{ uri: getBackgroundImageUrl(agentId, serverAddr) }}
+        <CachedImage
+          source={getBackgroundImageUrl(agentId, serverAddr)}
           style={StyleSheet.absoluteFillObject}
           onLoad={() => logger.info('[Companion] background loaded')}
           onError={() => {
@@ -62,8 +63,8 @@ const CompanionContent = React.memo(function CompanionContent({
 
       {showPose && (
         <View style={styles.poseLayer} pointerEvents="none">
-          <Image
-            source={{ uri: getPoseImageUrl(agentId, currentPose, serverAddr) }}
+          <CachedImage
+            source={getPoseImageUrl(agentId, currentPose, serverAddr)}
             style={StyleSheet.absoluteFillObject}
             onLoad={() => logger.info(`[Companion] pose ${currentPose} loaded`)}
             onError={() => {
