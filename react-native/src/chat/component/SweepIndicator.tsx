@@ -17,7 +17,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../../theme/index.ts';
-import { logger } from '../../lib/logger';
 
 /** 单程扫动时长，毫秒 */
 const SWEEP_DURATION_MS = 1800;
@@ -34,10 +33,8 @@ export function SweepIndicator() {
   const styles = createStyles(colors);
 
   useEffect(() => {
-    logger.info('[SweepIndicator] mounted');
     return () => {
       cancelAnimation(translateX);
-      logger.info('[SweepIndicator] unmounted');
     };
   }, [translateX]);
 

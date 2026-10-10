@@ -6,7 +6,8 @@
     "error": "Error: {{message}}",
     "shareImageTitle": "AI Image",
     "stop": "Stop generating",
-    "generating": "Generating"
+    "generating": "Generating",
+    "loadEarlier": "Load earlier messages"
   },
   "settings": {
     "vibration": "Vibration",

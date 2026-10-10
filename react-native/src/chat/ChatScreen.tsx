@@ -14,7 +14,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { GiftedChat } from 'react-native-gifted-chat';
+import { GiftedChat, type MessageProps } from 'react-native-gifted-chat';
 import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
 import {
   Dimensions,
@@ -85,6 +85,10 @@ type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 /** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
 const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
 
+/** 消息窗口的初始与扩展尺寸，列表更新成本随总条数线性放大，窗口化后稳定在常数级 */
+const MESSAGE_WINDOW_BASE = 300;
+const MESSAGE_WINDOW_STEP = 300;
+
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -125,6 +129,14 @@ function ChatScreen(): React.JSX.Element {
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
+
+  // 窗口化的可见消息，完整数组留在 store 作事实源
+  const [windowCount, setWindowCount] = useState(MESSAGE_WINDOW_BASE);
+  const visibleMessages = useMemo(
+    () => messages.slice(0, windowCount),
+    [messages, windowCount]
+  );
+
   const currentPose = sessionSlice?.pose ?? 'default';
   const poseError = sessionSlice?.poseError ?? false;
 
@@ -230,6 +242,7 @@ function ChatScreen(): React.JSX.Element {
       return;
     }
     setSelectedFiles([]);
+    setWindowCount(MESSAGE_WINDOW_BASE);
 
     // NEW_CHAT_SESSION 表示新建聊天
     if (activeSessionId === NEW_CHAT_SESSION) {
@@ -274,6 +287,7 @@ function ChatScreen(): React.JSX.Element {
       chatStatus === ChatStatus.Running &&
       messages.length > prevMessageCountRef.current
     ) {
+      setWindowCount(MESSAGE_WINDOW_BASE);
       scroll.scrollToBottom();
     }
     prevMessageCountRef.current = messages.length;
@@ -292,6 +306,7 @@ function ChatScreen(): React.JSX.Element {
         return;
       }
       scroll.setUserScrolled(false);
+      setWindowCount(MESSAGE_WINDOW_BASE);
       trigger(HapticFeedbackTypes.impactMedium);
       scroll.scrollToBottom();
       if (files.length > 0) {
@@ -366,6 +381,42 @@ function ChatScreen(): React.JSX.Element {
   const lastAgentMessage = messages.find((m) => m.user._id === BOT_ID) ?? null;
   const isThinking = chatStatus === ChatStatus.Running;
 
+  /** 传给 GiftedChat 的渲染函数引用固定，避免 ChatScreen 渲染时穿透列表内部缓存 */
+  const renderChatEmpty = useCallback(
+    () => <EmptyChatComponent isLoadingMessages={isLoadingMessages} />,
+    [isLoadingMessages]
+  );
+  const chatFooterSpacerStyle = slideStyle.chatFooterSpacer;
+  const renderChatFooter = useCallback(
+    () => <View style={chatFooterSpacerStyle} />,
+    [chatFooterSpacerStyle]
+  );
+  const renderInputToolbar = useCallback(() => null, []);
+  const renderMessage = useCallback(
+    (props: MessageProps<ChatMessage>) => {
+      const isLastAIMessage =
+        props.currentMessage?._id === lastAgentMessage?._id &&
+        props.currentMessage?.user._id !== 1;
+      return (
+        <CustomMessageComponent
+          {...props}
+          chatStatus={chatStatus}
+          isLastAIMessage={isLastAIMessage}
+          onReasoningToggle={scroll.handleReasoningToggle}
+          agentId={currentAgentId}
+          serverAddress={serverAddressRef.current}
+        />
+      );
+    },
+    [
+      lastAgentMessage,
+      chatStatus,
+      scroll.handleReasoningToggle,
+      currentAgentId,
+      serverAddressRef,
+    ]
+  );
+
   // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位
   const companionBubbleVisible = companion.companionOpen && !!lastAgentMessage;
   useEffect(() => {
@@ -388,34 +439,28 @@ function ChatScreen(): React.JSX.Element {
                 // 库声明不接纳空值引用，创建引用时初始值必为空，此处仅收窄空值差异
                 scroll.flatListRef as React.RefObject<AnimatedList<ChatMessage>>
               }
-              messages={messages}
+              messages={visibleMessages}
+              loadEarlierMessagesProps={{
+                isAvailable: messages.length > windowCount,
+                isLoading: false,
+                onPress: () => {
+                  const next = windowCount + MESSAGE_WINDOW_STEP;
+                  setWindowCount(next);
+                  logger.info(
+                    `[ChatScreen] window expanded, from=${windowCount} to=${next} total=${messages.length}`
+                  );
+                },
+                label: t('chat.loadEarlier'),
+              }}
               user={{ _id: 1 }}
               isAlignedTop={false}
               isInverted={true}
               minInputToolbarHeight={0}
               minComposerHeight={0}
-              renderChatEmpty={() => (
-                <EmptyChatComponent isLoadingMessages={isLoadingMessages} />
-              )}
-              renderChatFooter={() => (
-                <View style={slideStyle.chatFooterSpacer} />
-              )}
-              renderInputToolbar={() => null}
-              renderMessage={(props) => {
-                const isLastAIMessage =
-                  props.currentMessage?._id === lastAgentMessage?._id &&
-                  props.currentMessage?.user._id !== 1;
-                return (
-                  <CustomMessageComponent
-                    {...props}
-                    chatStatus={chatStatus}
-                    isLastAIMessage={isLastAIMessage}
-                    onReasoningToggle={scroll.handleReasoningToggle}
-                    agentId={currentAgentId}
-                    serverAddress={serverAddressRef.current}
-                  />
-                );
-              }}
+              renderChatEmpty={renderChatEmpty}
+              renderChatFooter={renderChatFooter}
+              renderInputToolbar={renderInputToolbar}
+              renderMessage={renderMessage}
               listProps={{
                 // 会话消息上万，收紧虚拟化窗口，减少常驻挂载行数，降低每次消息更新的重渲染量
                 initialNumToRender: 12,

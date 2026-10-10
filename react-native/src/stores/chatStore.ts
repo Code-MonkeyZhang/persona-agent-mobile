@@ -4,7 +4,7 @@
  *   - WS 事件处理在模块加载时注册一次永不注销，事件按消息携带的 sessionId 写入对应分片
  *   - 发送链路与追平补拉收敛于此，页面卸载重建后数据与流式回合不丢
  *   - 远端用户消息经 user_message 事件实时追加并切入生成态，回声由运行态守卫拦截
- *   - 生成期间消息流无占位气泡，轮次步骤进轮次缓冲，turn_complete 到达组装整轮气泡
+ *   - 生成期间消息流无占位气泡，轮次步骤进响应式 store 外的缓冲，步骤到达零渲染，turn_complete 到达组装整轮气泡
  *   - 忙时插话进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染
  *   - 页面只是订阅者，ChatScreen 不再持有消息状态
  */
@@ -75,14 +75,16 @@ const createPendingMessage = (input: PendingInput): ChatMessage => ({
   pendingId: input.id,
 });
 
+/** 单轮的步骤缓冲，生成期间与界面无关，放在响应式 store 外让步骤到达零渲染 */
+interface TurnBuffer {
+  thoughts: Thought[];
+  content: string;
+}
+
 /** 单个会话的分片状态 */
 interface SessionChatState {
   messages: ChatMessage[];
   status: ChatStatus;
-  /** 当前轮的步骤缓冲，轮末组装成一条助手气泡 */
-  pendingThoughts: Thought[];
-  /** 当前轮的最终回答文本 */
-  pendingContent: string;
   /** 错过步骤事件的轮次由空缓冲武装，回合结束后从磁盘整包重拉 */
   armedDiskRefresh: boolean;
   /** 陪伴立绘当前姿态 */
@@ -94,8 +96,6 @@ interface SessionChatState {
 const createSlice = (): SessionChatState => ({
   messages: EMPTY_MESSAGES,
   status: ChatStatus.Init,
-  pendingThoughts: [],
-  pendingContent: '',
   armedDiskRefresh: false,
   pose: 'default',
   poseError: false,
@@ -330,6 +330,19 @@ function updateSlice(
   });
 }
 
+/** 各会话的轮次缓冲，生成期间只写不渲染，步骤到达不触发任何订阅者更新 */
+const turnBuffers = new Map<string, TurnBuffer>();
+
+/** 取会话的轮次缓冲，没有则新建空缓冲 */
+function getTurnBuffer(sessionId: string): TurnBuffer {
+  let buffer = turnBuffers.get(sessionId);
+  if (!buffer) {
+    buffer = { thoughts: [], content: '' };
+    turnBuffers.set(sessionId, buffer);
+  }
+  return buffer;
+}
+
 /**
  * 把轮次缓冲组装成一条助手消息数组，可能为空。
  * - 最终回答的 content 同时存在于缓冲与最后一条 text thought，组装时移除该 thought 避免重复展示
@@ -337,20 +350,20 @@ function updateSlice(
  * - 缓冲全空时返回空数组，不产空泡
  */
 function assemblePendingBubble(
-  slice: SessionChatState,
+  buffer: TurnBuffer,
   aborted = false
 ): ChatMessage[] {
-  if (!slice.pendingContent && slice.pendingThoughts.length === 0) {
+  if (!buffer.content && buffer.thoughts.length === 0) {
     return [];
   }
-  const finalThoughts = stripLastTextThought(slice.pendingThoughts);
+  const finalThoughts = stripLastTextThought(buffer.thoughts);
   return [
     {
       ...createBotMessage(
         useChatStore.getState().agentName,
         getAgentAvatarUrl(getServerAgentId(), getServerAddress())
       ),
-      text: slice.pendingContent,
+      text: buffer.content,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       aborted: aborted || undefined,
     },
@@ -363,11 +376,10 @@ function assemblePendingBubble(
  * 生成期间界面无占位气泡，运行指示由头部小点承担。
  */
 function enterGeneratingState(sessionId: string): void {
+  turnBuffers.set(sessionId, { thoughts: [], content: '' });
   updateSlice(sessionId, (slice) => ({
     ...slice,
     status: ChatStatus.Running,
-    pendingThoughts: [],
-    pendingContent: '',
     armedDiskRefresh: false,
   }));
 }
@@ -377,21 +389,11 @@ function enterGeneratingState(sessionId: string): void {
  * 发送的乐观显示与远端用户消息事件共用，消息体由调用方构造。
  */
 function appendUserBubble(sessionId: string, message: ChatMessage): void {
-  const before =
-    useChatStore.getState().sessions[sessionId]?.messages.length ?? 0;
-  logger.info(
-    `${TAG} appendUserBubble begin, session=${sessionId} before=${before} msgId=${message._id}`
-  );
   enterGeneratingState(sessionId);
   updateSlice(sessionId, (slice) => ({
     ...slice,
     messages: GiftedChat.append(slice.messages, [message]),
   }));
-  const after =
-    useChatStore.getState().sessions[sessionId]?.messages.length ?? 0;
-  logger.info(
-    `${TAG} appendUserBubble end, session=${sessionId} after=${after}`
-  );
 }
 
 /**
@@ -431,7 +433,7 @@ async function loadSessionView(
   currentPose?: string;
   messages: ServerChatMessage[];
 } | null> {
-  const mirrored = cacheDb.getSession(sessionId);
+  const mirrored = await cacheDb.getSession(sessionId);
   if (mirrored) {
     return {
       updatedAt: mirrored.updatedAt,
@@ -470,7 +472,7 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     // 廉价预检查，更新时间未变且本地已有消息时直接返回，追平信号触发但会话无变化时零开销
     const current = useChatStore.getState().sessions[sessionId];
     if (current && current.messages.length > 0) {
-      const updatedAt = cacheDb.getSessionUpdatedAt(sessionId);
+      const updatedAt = await cacheDb.getSessionUpdatedAt(sessionId);
       if (updatedAt !== null && updatedAt === lastRefreshedAt[sessionId]) {
         logger.debug(`${TAG} refresh skipped, session=${sessionId} unchanged`);
         return;
@@ -510,11 +512,10 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
  * - 消息数大于一（用户消息加回复）时通知会话列表刷新预览
  */
 function finishTurn(sessionId: string): void {
+  turnBuffers.delete(sessionId);
   updateSlice(sessionId, (slice) => ({
     ...slice,
     status: ChatStatus.Init,
-    pendingThoughts: [],
-    pendingContent: '',
     armedDiskRefresh: false,
   }));
   const slice = useChatStore.getState().sessions[sessionId];
@@ -546,12 +547,15 @@ function registerWsHandler(): void {
         toolCalls,
         toolResults
       );
-      // 步骤只进轮次缓冲，界面无中间助手内容，turn_complete 到达时整轮组装
-      updateSlice(sessionId, (prev) => ({
-        ...prev,
-        pendingThoughts: [...prev.pendingThoughts, ...newThoughts],
-        pendingContent: content || prev.pendingContent,
-      }));
+      // 步骤只进 store 外的轮次缓冲，界面无中间助手内容，也不触发订阅者渲染
+      const buffer = getTurnBuffer(sessionId);
+      buffer.thoughts.push(...newThoughts);
+      buffer.content = content || buffer.content;
+      logger.debug(
+        `${TAG} step buffered, session=${sessionId} thoughts=${
+          buffer.thoughts.length
+        } contentLen=${content?.length ?? 0}`
+      );
 
       // 检测 show_pose 指令，切换陪伴立绘
       if (toolCalls && toolCalls.length > 0) {
@@ -582,20 +586,13 @@ function registerWsHandler(): void {
           );
         }
       }
-
-      // 更新会话列表预览为 assistant 最新回复
-      if (content) {
-        useSessionStore
-          .getState()
-          .updateSessionPreview(sessionId, extractPreview(content));
-      }
     },
     onTurnComplete: (sessionId) => {
       const slice = useChatStore.getState().sessions[sessionId];
       if (!slice) {
         return;
       }
-      const bubble = assemblePendingBubble(slice);
+      const bubble = assemblePendingBubble(getTurnBuffer(sessionId));
       // 空缓冲说明重连或恢复错过了本轮步骤事件，武装刷新标志，回合结束后从磁盘整包重拉
       if (bubble.length === 0) {
         updateSlice(sessionId, (prev) => ({
@@ -609,9 +606,11 @@ function registerWsHandler(): void {
       updateSlice(sessionId, (prev) => ({
         ...prev,
         messages: GiftedChat.append(prev.messages, bubble),
-        pendingThoughts: [],
-        pendingContent: '',
       }));
+      // 会话列表预览在轮末一次到位，步骤期间不再逐条更新
+      useSessionStore
+        .getState()
+        .updateSessionPreview(sessionId, extractPreview(bubble[0].text));
       logger.info(
         `${TAG} turn bubble assembled, session=${sessionId} contentLen=${bubble[0].text.length}`
       );
@@ -637,7 +636,7 @@ function registerWsHandler(): void {
         return;
       }
       // 缓冲冲刷成半截气泡再追加错误气泡，与刷新链路的 error 结组口径一致
-      const flushed = assemblePendingBubble(slice);
+      const flushed = assemblePendingBubble(getTurnBuffer(sessionId));
       const errorBubble: ChatMessage = {
         ...createBotMessage(
           useChatStore.getState().agentName,
@@ -658,7 +657,7 @@ function registerWsHandler(): void {
         return;
       }
       // 缓冲冲刷成带中止标记的半截气泡保留部分内容，空缓冲不产泡
-      const flushed = assemblePendingBubble(slice, true);
+      const flushed = assemblePendingBubble(getTurnBuffer(sessionId), true);
       if (flushed.length > 0) {
         updateSlice(sessionId, (prev) => ({
           ...prev,
