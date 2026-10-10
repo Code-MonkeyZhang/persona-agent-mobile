@@ -573,11 +573,7 @@ const createStyles = (colors: ColorScheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.card,
-      shadowColor: colors.shadow,
-      shadowOpacity: 1,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
+      boxShadow: `0px 4px 10px ${colors.shadow}`,
     },
     /** agent 横向条 */
     agentStrip: {
