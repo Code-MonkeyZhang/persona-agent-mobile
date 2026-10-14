@@ -41,6 +41,13 @@ const AppSurface: React.FC = () => {
   const { t } = useTranslation();
   const navigation = useNavigation<AppSurfaceNav>();
   const currentAppId = useAppPanelStore((s) => s.currentAppId);
+  const apps = useAppPanelStore((s) => s.apps);
+
+  // 头部标题用显示名，apps 未就绪时兜底机器键
+  const currentApp = currentAppId
+    ? apps.find((a) => a.name === currentAppId)
+    : undefined;
+  const displayName = currentApp?.displayName ?? currentAppId;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -60,6 +67,7 @@ const AppSurface: React.FC = () => {
           <View style={styles.headerCenter}>
             <AppIcon
               name={currentAppId}
+              label={currentApp?.displayName}
               serverAddress={serverAddress}
               size={28}
             />
@@ -68,7 +76,7 @@ const AppSurface: React.FC = () => {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {currentAppId}
+              {displayName}
             </Text>
           </View>
         ) : null,
@@ -82,7 +90,14 @@ const AppSurface: React.FC = () => {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, currentAppId, colors.text, serverAddress]);
+  }, [
+    navigation,
+    currentAppId,
+    displayName,
+    currentApp?.displayName,
+    colors.text,
+    serverAddress,
+  ]);
 
   if (!currentAppId) {
     return null;

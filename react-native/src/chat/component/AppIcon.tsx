@@ -1,7 +1,7 @@
 /**
  * @file AppIcon.tsx
  * @description Agent App 图标，带首字母回退。
- *   底层渲染首字母大写，上层覆盖 icon.png；加载失败时隐藏图片露出字母。
+ *   底层渲染首字母，优先取 label 显示名、缺省回落 name；上层覆盖 icon.png。
  */
 import * as React from 'react';
 import { useState } from 'react';
@@ -9,12 +9,20 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/index.ts';
 
 interface AppIconProps {
+  /** 机器键，图标走 /apps/:name 反代路径 */
   name: string;
+  /** 显示名，兜底字母从这里取首字，缺省回落 name */
+  label?: string;
   serverAddress: string;
   size: number;
 }
 
-const AppIcon: React.FC<AppIconProps> = ({ name, serverAddress, size }) => {
+const AppIcon: React.FC<AppIconProps> = ({
+  name,
+  label,
+  serverAddress,
+  size,
+}) => {
   const { colors } = useTheme();
   const [iconError, setIconError] = useState(false);
   const borderRadius = size * 0.2;
@@ -37,7 +45,7 @@ const AppIcon: React.FC<AppIconProps> = ({ name, serverAddress, size }) => {
           { fontSize: size * 0.4, color: colors.textTertiary },
         ]}
       >
-        {name.charAt(0).toUpperCase()}
+        {(label ?? name).charAt(0).toUpperCase()}
       </Text>
       {!iconError && (
         <Image

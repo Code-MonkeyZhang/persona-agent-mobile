@@ -324,11 +324,11 @@ export type McpConnectionType = 'stdio' | 'http' | 'oauth';
 /** MCP 服务器信息（对应 GET /api/mcp 返回的单个 server，字段对齐 @persona/shared 全投影） */
 export interface McpServerInfo {
   name: string;
-  /** 安装时落盘的显示名，手动添加的服务缺省，前端回退机器键 */
-  displayName?: string;
-  /** 简介，优先取安装 meta，回退 mcp.json 里的声明 */
+  /** 显示名，服务端兜底机器键后必有值，前端直接使用 */
+  displayName: string;
+  /** 简介，取 mcp.json 条目里的声明 */
   description?: string;
-  /** 安装时落盘的作者 */
+  /** 作者，商城安装时取清单 author */
   author?: string;
   /** 安装时拼好的 logo 地址，前端远程加载 */
   logoUrl?: string;
@@ -356,9 +356,10 @@ export interface McpServerDetail extends McpServerInfo {
   connectionType: McpConnectionType;
 }
 
-/** Agent App 信息（移动端只关心名字，界面与图标走 /apps/:name 反代路径） */
+/** Agent App 信息（界面与图标走 /apps/:name 反代路径，displayName 为显示名） */
 export interface AppInfo {
   name: string;
+  displayName: string;
 }
 
 /** Skill 信息（对应 GET /api/skills 返回的单个 skill，字段对齐 @persona/shared） */
@@ -624,7 +625,7 @@ export async function fetchAgentApps(
     .filter(
       (s) => s.agentApp === true && (s.supportedUI ?? []).includes('mobile')
     )
-    .map((s) => ({ name: s.name }));
+    .map((s) => ({ name: s.name, displayName: s.displayName }));
   logger.info(
     `${TAG} fetchAgentApps → ${apps.length} apps: ${apps
       .map((a) => a.name)

@@ -60,6 +60,8 @@ const AppLauncher: React.FC = () => {
    * 未选过 App（currentAppId 为空）时不显示——网格就是最新状态，无处可回。
    * replace 触发的 beforeRemove 会被上方守卫跳过，currentAppId 得以保留。
    */
+  const currentAppName = apps.find((a) => a.name === currentAppId)?.displayName;
+
   React.useLayoutEffect(() => {
     navigation.setOptions({
       // eslint-disable-next-line react/no-unstable-nested-components
@@ -71,13 +73,14 @@ const AppLauncher: React.FC = () => {
           >
             <AppIcon
               name={currentAppId}
+              label={currentAppName}
               serverAddress={getServerAddress()}
               size={28}
             />
           </TouchableOpacity>
         ) : null,
     });
-  }, [navigation, currentAppId]);
+  }, [navigation, currentAppId, currentAppName]);
 
   const handleSelect = (name: string) => {
     trigger(HapticFeedbackTypes.selection);
@@ -91,13 +94,18 @@ const AppLauncher: React.FC = () => {
       activeOpacity={0.7}
       onPress={() => handleSelect(item.name)}
     >
-      <AppIcon name={item.name} serverAddress={getServerAddress()} size={60} />
+      <AppIcon
+        name={item.name}
+        label={item.displayName}
+        serverAddress={getServerAddress()}
+        size={60}
+      />
       <Text
         style={[styles.appName, { color: colors.text }]}
         numberOfLines={1}
         ellipsizeMode="tail"
       >
-        {item.name}
+        {item.displayName}
       </Text>
     </TouchableOpacity>
   );
