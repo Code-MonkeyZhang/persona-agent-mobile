@@ -2,8 +2,8 @@
  * @file storage/sync-shapes.ts
  * @description 同步链路的数据形状与纯函数，抄录自 persona-agent 仓的 @persona/shared。
  *   移动端是独立 git 仓，与 monorepo 无包共享机制，此文件承担镜像库的形状契约，
- *   抄录时点为 stage 10 施工，来源文件 schema.ts、session.ts、changes.ts、
- *   session-view.ts、preview.ts，服务端接口变化时需手工同步。
+ *   抄录时点为 stage 10 施工加小手机偏好接入，来源文件 schema.ts、session.ts、
+ *   changes.ts、session-view.ts、preview.ts、launcher.ts，服务端接口变化时需手工同步。
  *   附带镜像 Message 到本地 ServerChatMessage 的投影，镜像读路径与 HTTP 详情接口同形。
  */
 import type { AgentInfo } from '../api/server-api.ts';
@@ -123,6 +123,8 @@ export interface SyncSnapshot {
   sessions: SnapshotSession[];
   /** 全部 Agent 清单，配置层的快照载荷，头像哈希随行 */
   agents: AgentInfo[];
+  /** 小手机偏好节，行未写入时对应键缺席 */
+  launcher?: LauncherSnapshot;
 }
 
 /** 变更事件的种类 */
@@ -132,7 +134,8 @@ export type ChangeKind =
   | 'session_updated'
   | 'session_deleted'
   | 'turn_end'
-  | 'agents_invalidated';
+  | 'agents_invalidated'
+  | 'launcher_prefs_updated';
 
 /**
  * 单条变更事件。
@@ -141,6 +144,7 @@ export type ChangeKind =
  * - session_deleted 的 data 为空对象，id 由 sessionId 字段承载
  * - turn_end 的 data 为 { turnEnds }，是边界的完整快照
  * - agents_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉角色列表
+ * - launcher_prefs_updated 的 data 为 LauncherPrefsChangeData，携带整份偏好文档
  */
 export interface SessionChange {
   /** 全局递增序号，客户端以此判断自己追平到哪里 */
@@ -151,6 +155,48 @@ export interface SessionChange {
   /** 按 kind 不同的载荷 */
   data: unknown;
   createdAt: number;
+}
+
+/** 排列文档，稀疏数组元素是应用 id、槽位 id 或显式空位，抄录自 shared 的 launcher.ts */
+export interface LauncherOrderDoc {
+  appOrder: (string | null)[];
+}
+
+/** 自定义壁纸条目，文件按内容哈希寻址，深浅标记由服务端采样写入 */
+export interface WallpaperCustom {
+  id: string;
+  hash: string;
+  thumbHash: string;
+  name?: string;
+  dark: boolean;
+}
+
+/** 壁纸文档，currentId 兼存预设 id 与自定义 id，null 表示默认底 */
+export interface WallpaperDoc {
+  currentId: string | null;
+  customs: WallpaperCustom[];
+}
+
+/** launcher_prefs 表的两行键名 */
+export type LauncherPrefKey = 'appOrder' | 'wallpaper';
+
+/** 单份偏好文档的信封，updatedAt 是服务端毫秒时间戳，last-write-wins 的裁决依据 */
+export interface LauncherPrefEntry<T> {
+  payload: T;
+  updatedAt: number;
+}
+
+/** 全量快照的 launcher 节，行未写入时对应键缺席 */
+export interface LauncherSnapshot {
+  appOrder?: LauncherPrefEntry<LauncherOrderDoc>;
+  wallpaper?: LauncherPrefEntry<WallpaperDoc>;
+}
+
+/** launcher_prefs_updated 变更的载荷，携带整份文档，客户端无需回读 */
+export interface LauncherPrefsChangeData {
+  key: LauncherPrefKey;
+  payload: LauncherOrderDoc | WallpaperDoc;
+  updatedAt: number;
 }
 
 /** 预览文本截断长度上界，UI 层自带 truncate 样式，此处只约束 payload 大小 */

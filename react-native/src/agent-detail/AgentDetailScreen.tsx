@@ -2,10 +2,11 @@
  * @file AgentDetailScreen.tsx
  * @description Agent 详情页。
  *   名字简介与数字配置与系统提示词只读展示，模型与音色与语音语言走底部选择器可改，
+ *   模型选择器只列已配置密钥的供应商，当前默认模型所在组置顶，
  *   写回走 updateAgent 改一项存一项，失败回滚，音色段带真试听。
  *   长相基准是 demo 的 AgentDetailPage，页面壳由原生 Stack header 承担。
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -45,6 +46,7 @@ import { getAudioPlayer } from '../lib/audio-player.ts';
 import { writeAudioFile } from '../stores/voiceStore.ts';
 import {
   ActionSheet,
+  ActionSheetHandle,
   SheetGroupLabel,
   SheetOption,
 } from './component/ActionSheet.tsx';
@@ -89,6 +91,20 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const ttsApiKeyRef = useRef<string | null>(null);
+  const sheetRef = useRef<ActionSheetHandle>(null);
+
+  /** 模型选择器的供应商列表，只留配了密钥的，当前默认模型所在供应商置顶其余按名称排 */
+  const modelProviders = useMemo(() => {
+    const current = agent?.defaultModel.provider;
+    return providers
+      .filter((p) => p.hasAuth)
+      .sort((a, b) => {
+        if (a.id === current || b.id === current) {
+          return a.id === current ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+  }, [providers, agent?.defaultModel.provider]);
 
   useEffect(() => {
     const load = async () => {
@@ -163,6 +179,17 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       items: voices.filter((v) => v.group === 'preset' && v.gender === 'male'),
     },
   ].filter((g) => g.items.length > 0);
+
+  /** 打开底部选择器并留痕 */
+  const openSheet = (kind: Exclude<SheetKind, null>) => {
+    logger.info(`[AgentDetail] open sheet: ${kind}`);
+    setSheet(kind);
+  };
+
+  /** 带动画收起当前选择器，收起完成后 onDismiss 会清掉 sheet 态 */
+  const closeSheet = () => {
+    sheetRef.current?.dismiss();
+  };
 
   /** 乐观写回单项配置，失败还原并弹窗提示 */
   const patch = async (input: AgentUpdateInput) => {
@@ -251,7 +278,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.7}
-            onPress={() => setSheet('model')}
+            onPress={() => openSheet('model')}
           >
             <Text style={styles.rowLabel}>{t('agent.defaultModel')}</Text>
             <Text style={styles.rowValueMono} numberOfLines={1}>
@@ -321,7 +348,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             <TouchableOpacity
               style={styles.voiceRow}
               activeOpacity={0.7}
-              onPress={() => setSheet('voice')}
+              onPress={() => openSheet('voice')}
             >
               <Text style={styles.rowLabel} numberOfLines={1}>
                 {currentVoice ? currentVoice.name : t('agent.voiceNone')}
@@ -332,7 +359,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
           <TouchableOpacity
             style={[styles.row, styles.rowBorder]}
             activeOpacity={0.7}
-            onPress={() => setSheet('lang')}
+            onPress={() => openSheet('lang')}
           >
             <Text style={styles.rowLabel}>{t('agent.voiceLanguage')}</Text>
             <Text style={styles.rowValue}>{currentLangLabel}</Text>
@@ -353,37 +380,50 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         </GroupCard>
       </GroupSection>
 
-      {/* 模型选择器：按供应商分组，选中按供应商加模型双匹配 */}
+      {/* 模型选择器：只列已配置供应商，组名用显示名，组内按字母序 */}
       {sheet === 'model' ? (
         <ActionSheet
+          ref={sheetRef}
           title={t('agent.selectModel')}
           onClose={() => setSheet(null)}
         >
-          {providers.map((provider) => (
-            <View key={provider.id}>
-              <SheetGroupLabel>{provider.id}</SheetGroupLabel>
-              {provider.models.map((model) => (
-                <SheetOption
-                  key={model}
-                  label={model}
-                  selected={
-                    agent.defaultModel.provider === provider.id &&
-                    agent.defaultModel.model === model
-                  }
-                  onPress={() => {
-                    patch({ defaultModel: { provider: provider.id, model } });
-                    setSheet(null);
-                  }}
-                />
-              ))}
-            </View>
-          ))}
+          {modelProviders.length === 0 ? (
+            <Text style={styles.sheetEmptyHint}>
+              {t('agent.noConfiguredModel')}
+            </Text>
+          ) : (
+            modelProviders.map((provider) => (
+              <View key={provider.id}>
+                <SheetGroupLabel>{provider.name}</SheetGroupLabel>
+                {[...provider.models]
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((model) => (
+                    <SheetOption
+                      key={model}
+                      label={model}
+                      mono
+                      selected={
+                        agent.defaultModel.provider === provider.id &&
+                        agent.defaultModel.model === model
+                      }
+                      onPress={() => {
+                        patch({
+                          defaultModel: { provider: provider.id, model },
+                        });
+                        closeSheet();
+                      }}
+                    />
+                  ))}
+              </View>
+            ))
+          )}
         </ActionSheet>
       ) : null}
 
       {/* 音色选择器：克隆组在前，预置按男女分组 */}
       {sheet === 'voice' ? (
         <ActionSheet
+          ref={sheetRef}
           title={t('agent.selectVoice')}
           onClose={() => setSheet(null)}
         >
@@ -397,7 +437,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                   selected={agent.voiceId === voice.id}
                   onPress={() => {
                     patch({ voiceId: voice.id });
-                    setSheet(null);
+                    closeSheet();
                   }}
                 />
               ))}
@@ -406,10 +446,12 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         </ActionSheet>
       ) : null}
 
-      {/* 语言选择器：四项单选，default 写回时清空字段 */}
+      {/* 语言选择器：四项单选走矮档，default 写回时清空字段 */}
       {sheet === 'lang' ? (
         <ActionSheet
+          ref={sheetRef}
           title={t('agent.voiceLanguage')}
+          snapPoint="36%"
           onClose={() => setSheet(null)}
         >
           {LANG_OPTIONS.map((opt) => (
@@ -422,7 +464,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
                   voiceLanguage:
                     opt.value === 'default' ? undefined : opt.value,
                 });
-                setSheet(null);
+                closeSheet();
               }}
             />
           ))}
@@ -457,6 +499,12 @@ const createStyles = (colors: ColorScheme) =>
     emptyText: {
       ...typography.bodyLg,
       color: colors.textSecondary,
+    },
+    sheetEmptyHint: {
+      ...typography.content,
+      color: colors.textTertiary,
+      textAlign: 'center',
+      paddingVertical: 24,
     },
     headerCard: {
       flexDirection: 'row',

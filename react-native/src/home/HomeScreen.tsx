@@ -61,7 +61,6 @@ import { logger } from '../lib/logger';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useVoiceStore } from '../stores/voiceStore';
-import { useAppPanelStore } from '../stores/appPanelStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMirrorStore } from '../stores/mirrorStore';
 import { Chat } from '../types/Chat.ts';
@@ -326,8 +325,6 @@ const HomeScreen: React.FC = () => {
     saveLastConversation(agentId, chatSessionIdFor(agentId));
     setCurrentAgentId(agentId);
     useVoiceStore.getState().stopSpeaking();
-    // Agent 切换后不再恢复上一个 Agent 打开过的 App
-    useAppPanelStore.getState().setCurrentAppId(null);
     // 进入新 Agent 的常驻聊天会话身份，列表与卡片由 effect 重新拉取
     setActiveSessionId(chatSessionIdFor(agentId));
   };

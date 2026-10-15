@@ -115,7 +115,7 @@ const McpDetailScreen: React.FC<Props> = ({ route }) => {
         />
         <View style={styles.headerText}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {server.displayName ?? server.name}
+            {server.displayName}
           </Text>
           {server.author ? (
             <Text style={styles.headerAuthor}>@{server.author}</Text>

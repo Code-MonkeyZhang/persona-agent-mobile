@@ -3,6 +3,8 @@
  * @description 会话同步引擎，照搬桌面端实现。
  *   缓存库与服务端正本之间的单向追平器。冷启动游标为零先拉快照整体入库，
  *   之后分页拉变更流到服务端最新序号，推送模式下按序回放 WS 推来的单条变更。
+ *   自愈有两道，镜像来源身份与当前主机不符时作废重建，游标越过服务端头部时同样作废重建，
+ *   前者覆盖换主机与删库重来的场景，后者覆盖同一身份下序号流变短的错位。
  *   断线重连后重新走一遍追平。全部操作进同一条串行队列，
  *   追平的分页批次与推送的单条变更不会交错，游标始终单调前进。
  *   追平失败按指数退避自动重试，连接保持不断也能自愈。
@@ -21,6 +23,14 @@ export interface SyncDeps {
   ) => Promise<{ changes: SessionChange[]; head: number }>;
   /** 读本地缓存游标 */
   getCursor: () => Promise<number>;
+  /** 拉当前连接主机的身份标识 */
+  fetchHostId: () => Promise<string>;
+  /** 读镜像来源主机的身份，未记录返回 null */
+  getSourceHostId: () => Promise<string | null>;
+  /** 记录镜像来源主机的身份 */
+  setSourceHostId: (hostId: string) => Promise<void>;
+  /** 作废本地镜像，游标归零偏好清空，随后走快照整库重建 */
+  invalidateMirror: () => Promise<void>;
   /** 快照整体入库 */
   applySnapshot: (snapshot: SyncSnapshot) => Promise<void>;
   /** 变更批量回放入库 */
@@ -100,18 +110,25 @@ export class SyncEngine {
     return this.queue;
   }
 
-  /** 追平主流程：先镜像再分页拉平 */
+  /** 追平主流程：先认身份，再镜像，最后分页拉平 */
   private async catchUp(): Promise<void> {
     let cursor = await this.deps.getCursor();
     this.deps.onCatchUpStart?.(cursor);
 
-    if (cursor === 0) {
-      const snapshot = await this.deps.fetchSnapshot();
-      await this.deps.applySnapshot(snapshot);
-      cursor = snapshot.latestSeq;
+    const hostId = await this.deps.fetchHostId();
+    const owner = await this.deps.getSourceHostId();
+    // 来源已记录且与当前主机不符，镜像属于别的序号流，作废重建
+    if (cursor > 0 && owner !== null && owner !== hostId) {
       this.deps.log(
-        `Mirrored snapshot: ${snapshot.sessions.length} sessions latestSeq=${cursor}`
+        `Mirror owner ${owner} differs from host ${hostId}, re-mirroring`
       );
+      await this.deps.invalidateMirror();
+      cursor = await this.mirrorSnapshot();
+    } else if (cursor === 0) {
+      cursor = await this.mirrorSnapshot();
+    }
+    if (owner !== hostId) {
+      await this.deps.setSourceHostId(hostId);
     }
 
     for (;;) {
@@ -119,12 +136,31 @@ export class SyncEngine {
         cursor,
         PAGE_LIMIT
       );
+      // 游标越过服务端头部，序号流已错位，作废重建后重新对表
+      if (cursor > head) {
+        this.deps.log(
+          `Cursor ${cursor} beyond server head ${head}, re-mirroring`
+        );
+        await this.deps.invalidateMirror();
+        cursor = await this.mirrorSnapshot();
+        continue;
+      }
       if (changes.length === 0) break;
       await this.deps.applyChanges(changes);
       cursor = changes[changes.length - 1].seq;
       if (head <= cursor) break;
     }
     this.deps.onCatchUpSuccess?.();
+  }
+
+  /** 拉快照整体入库，返回快照时刻的最新序号，冷启动与两类错位共用 */
+  private async mirrorSnapshot(): Promise<number> {
+    const snapshot = await this.deps.fetchSnapshot();
+    await this.deps.applySnapshot(snapshot);
+    this.deps.log(
+      `Mirrored snapshot: ${snapshot.sessions.length} sessions latestSeq=${snapshot.latestSeq}`
+    );
+    return snapshot.latestSeq;
   }
 
   /**

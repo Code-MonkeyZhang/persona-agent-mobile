@@ -1,0 +1,41 @@
+name: Release Android
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-*'
+
+jobs:
+  release-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: '17'
+
+      - name: Install JS dependencies
+        run: cd react-native && npm i
+
+      - name: Build release APK
+        run: |
+          cd react-native/android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            react-native/android/app/build/outputs/apk/release/*.apk
+          prerelease: true
+          generate_release_notes: true

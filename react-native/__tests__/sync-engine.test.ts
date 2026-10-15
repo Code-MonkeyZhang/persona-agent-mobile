@@ -1,7 +1,7 @@
 /**
  * @file __tests__/sync-engine.test.ts
  * @description 同步引擎的单测，依赖全注入替身，覆盖快照追平、分页拉平、
- *   推送回放、串行排队、失败不阻断与退避重试六条主路径。
+ *   推送回放、串行排队、失败不阻断、退避重试与两道镜像自愈的主路径。
  */
 import { SyncEngine, type SyncDeps } from '../src/storage/sync-engine';
 import type { SessionChange, SyncSnapshot } from '../src/storage/sync-shapes';
@@ -37,6 +37,10 @@ function makeDeps() {
   const applied: number[][] = [];
   const snapshots: number[] = [];
   const logs: string[] = [];
+  const owners: string[] = [];
+  let invalidations = 0;
+  let hostId = 'host-a';
+  let owner: string | null = null;
   let changesBySince: Record<
     number,
     { changes: SessionChange[]; head: number }
@@ -47,8 +51,17 @@ function makeDeps() {
       return snapshot(10);
     },
     fetchChanges: async (since) =>
-      changesBySince[since] ?? { changes: [], head: 0 },
+      changesBySince[since] ?? { changes: [], head: since },
     getCursor: async () => (snapshots.length > 0 ? 10 : 0),
+    fetchHostId: async () => hostId,
+    getSourceHostId: async () => owner,
+    setSourceHostId: async (id) => {
+      owner = id;
+      owners.push(id);
+    },
+    invalidateMirror: async () => {
+      invalidations += 1;
+    },
     applySnapshot: async (snap) => {
       snapshots.push(snap.latestSeq);
     },
@@ -62,6 +75,11 @@ function makeDeps() {
     applied,
     snapshots,
     logs,
+    owners,
+    invalidations: () => invalidations,
+    setOwner: (value: string | null) => {
+      owner = value;
+    },
     setChanges: (map: typeof changesBySince) => {
       changesBySince = map;
     },
@@ -218,4 +236,49 @@ test('追平回调携带游标并触发成功信号，界面侧据此驱动同�
   await drain();
   expect(calls).toBe(1);
   expect(starts).toEqual([0]);
+});
+
+test('镜像来源与当前主机不符时作废重镜像并记录新身份', async () => {
+  const { deps, snapshots, owners, invalidations, setOwner, logs } = makeDeps();
+  setOwner('host-old');
+  const engine = new SyncEngine({
+    ...deps,
+    getCursor: async () => 10,
+  });
+  engine.sync();
+  await drain();
+  expect(invalidations()).toBe(1);
+  expect(owners).toEqual(['host-a']);
+  expect(snapshots).toEqual([1, 10]);
+  expect(logs.some((line) => line.includes('differs from host'))).toBe(true);
+});
+
+test('游标越过服务端头部时作废重镜像并对表新序号', async () => {
+  const { deps, applied, owners, invalidations, setChanges, logs } = makeDeps();
+  setChanges({ 10: { changes: [], head: 5 } });
+  const engine = new SyncEngine({
+    ...deps,
+    getCursor: async () => 10,
+    fetchSnapshot: async () => snapshot(5),
+  });
+  engine.sync();
+  await drain();
+  expect(invalidations()).toBe(1);
+  expect(applied).toEqual([]);
+  expect(owners).toEqual(['host-a']);
+  expect(logs.some((line) => line.includes('beyond server head'))).toBe(true);
+});
+
+test('旧库未记录镜像来源时沿用游标只补记身份不作废', async () => {
+  const { deps, applied, owners, invalidations, setChanges } = makeDeps();
+  setChanges({ 10: { changes: [change(11)], head: 11 } });
+  const engine = new SyncEngine({
+    ...deps,
+    getCursor: async () => 10,
+  });
+  engine.sync();
+  await drain();
+  expect(invalidations()).toBe(0);
+  expect(applied).toEqual([[11]]);
+  expect(owners).toEqual(['host-a']);
 });

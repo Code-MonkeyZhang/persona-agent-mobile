@@ -2,13 +2,13 @@ import * as React from 'react';
 import { useState } from 'react';
 import {
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Vibrate, VibrateOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
@@ -37,7 +37,7 @@ function SettingsScreen(): React.JSX.Element {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container}>
         <View style={styles.card}>
-          {/* 震动开关 */}
+          {/* 震动开关，设备级偏好走本地 MMKV */}
           <View style={styles.row}>
             {hapticEnabled ? (
               <Vibrate size={19} color={colors.text} />

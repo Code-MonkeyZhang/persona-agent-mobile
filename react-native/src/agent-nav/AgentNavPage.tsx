@@ -91,7 +91,7 @@ function ToolRow({
       />
       <View style={styles.rowContent}>
         <Text style={styles.rowTitle} numberOfLines={1}>
-          {server.displayName ?? server.name}
+          {server.displayName}
         </Text>
         <View style={styles.subLine}>
           <StatusBadge color={meta.color} label={t(meta.labelKey)} />

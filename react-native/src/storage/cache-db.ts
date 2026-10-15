@@ -24,6 +24,9 @@ const TAG = '[CacheDb]';
 /** 缓存 kv 里的变更流游标键 */
 const CURSOR_KEY = 'sync_cursor';
 
+/** 缓存 kv 里的镜像来源主机键，与桌面端 cache-db 同名同义 */
+const SOURCE_HOST_KEY = 'source_host_id';
+
 /** 快照装载的 executeBatch 分块上限，万级消息分批提交避免单次载荷过大 */
 const SNAPSHOT_CHUNK = 1000;
 
@@ -135,6 +138,31 @@ export class CacheDb {
       'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
       [CURSOR_KEY, String(value)]
     );
+  }
+
+  /** 镜像来源主机的身份，未记录返回 null，同步引擎凭它识别换主机 */
+  async getSourceHostId(): Promise<string | null> {
+    const result = await this.ensureDb().execute(
+      'SELECT value FROM kv WHERE key = ?',
+      [SOURCE_HOST_KEY]
+    );
+    const row = result.rows[0] as { value: string } | undefined;
+    return row ? row.value : null;
+  }
+
+  /** 记录镜像来源主机的身份 */
+  async setSourceHostId(hostId: string): Promise<void> {
+    await this.enqueueWrite(() =>
+      this.ensureDb().execute(
+        'INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        [SOURCE_HOST_KEY, hostId]
+      )
+    );
+  }
+
+  /** 游标归零作废镜像，同步引擎随后走快照路径整库重建 */
+  async resetCursor(): Promise<void> {
+    await this.enqueueWrite(() => this.setCursor(0));
   }
 
   /** 全量快照整体入库，先清空再分块装载，游标推进到快照序号 */
@@ -291,6 +319,10 @@ export class CacheDb {
       }
       case 'agents_invalidated': {
         // 表层无需改动，配置重拉由装配层在回放后触发
+        return;
+      }
+      case 'launcher_prefs_updated': {
+        // 偏好文档由 launcher-prefs 层处理，表层只推进游标
         return;
       }
       default:
