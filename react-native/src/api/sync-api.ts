@@ -1,8 +1,8 @@
 /**
  * @file api/sync-api.ts
- * @description 镜像同步的两个 HTTP 包装。
- *   snapshot 拉冷启动全量镜像，changes 按游标增量追平，响应形状与服务端路由对齐。
- *   snapshot 的超时单独调大，首次镜像的数据量随历史增长。
+ * @description 镜像同步的三个 HTTP 包装。
+ *   snapshot 拉冷启动全量镜像，changes 按游标增量追平，handshake 取主机身份供镜像归属识别，
+ *   响应形状与服务端路由对齐。snapshot 的超时单独调大，首次镜像的数据量随历史增长。
  */
 import { httpGet } from './server-api.ts';
 import type { SessionChange, SyncSnapshot } from '../storage/sync-shapes.ts';
@@ -45,4 +45,18 @@ export async function fetchSyncChanges(
     `${serverAddress}/api/changes?since=${since}&limit=${limit}`
   );
   return JSON.parse(responseText) as { changes: SessionChange[]; head: number };
+}
+
+/**
+ * 拉当前连接主机的身份标识。
+ * @param serverAddress 服务器地址
+ * @returns 主机身份 hostId，同步引擎凭它识别镜像归属
+ */
+export async function fetchHostId(serverAddress: string): Promise<string> {
+  const responseText = await httpGet(`${serverAddress}/api/handshake`);
+  const data = JSON.parse(responseText) as { hostId?: string };
+  if (!data.hostId) {
+    throw new Error('handshake response missing hostId');
+  }
+  return data.hostId;
 }

@@ -8,7 +8,12 @@ import type { ChatMessage } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { stripLastTextThought } from '../chat/util/thought-utils';
 import { logger } from '../lib/logger';
-import type { SessionChange } from '../storage/sync-shapes.ts';
+import type {
+  SessionChange,
+  LauncherOrderDoc,
+  LauncherPrefEntry,
+  WallpaperDoc,
+} from '../storage/sync-shapes.ts';
 
 /** 日志标签前缀 */
 const TAG = '[ServerApi]';
@@ -632,6 +637,104 @@ export async function fetchAgentApps(
       .join(', ')}`
   );
   return apps;
+}
+
+/**
+ * 提交小手机排列文档，返回带服务端时间戳的信封。
+ */
+export async function putLauncherOrder(
+  serverAddress: string,
+  appOrder: (string | null)[]
+): Promise<LauncherPrefEntry<LauncherOrderDoc>> {
+  const url = `${serverAddress}/api/launcher/order`;
+  const responseText = await httpPut(url, { appOrder });
+  return JSON.parse(responseText) as LauncherPrefEntry<LauncherOrderDoc>;
+}
+
+/**
+ * 提交小手机壁纸当前选择，返回带服务端时间戳的信封。
+ */
+export async function putLauncherWallpaperCurrent(
+  serverAddress: string,
+  currentId: string | null
+): Promise<LauncherPrefEntry<WallpaperDoc>> {
+  const url = `${serverAddress}/api/launcher/wallpaper`;
+  const responseText = await httpPut(url, { currentId });
+  return JSON.parse(responseText) as LauncherPrefEntry<WallpaperDoc>;
+}
+
+/**
+ * 按内容哈希拼壁纸文件地址，服务端 immutable 强缓存兜底。
+ */
+export function getWallpaperFileUrl(
+  hash: string,
+  serverAddress: string
+): string {
+  return `${serverAddress}/api/launcher/wallpaper/file/${hash}`;
+}
+
+/** multipart 上传的单文件字段，RN FormData 认 uri name type 三件套 */
+export interface UploadFilePart {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+/** 壁纸上传管线的主图与缩略图对 */
+export interface WallpaperUploadPair {
+  image: UploadFilePart;
+  thumb: UploadFilePart;
+}
+
+/**
+ * 上传自定义壁纸，multipart 字段为 image、thumb、name，XHR 直发 FormData。
+ * 这是仓内第一个 FormData 上传，fetch 封装不带进度与超时语义，故单走 XHR。
+ */
+export function uploadLauncherWallpaper(
+  serverAddress: string,
+  pair: WallpaperUploadPair
+): Promise<LauncherPrefEntry<WallpaperDoc>> {
+  const url = `${serverAddress}/api/launcher/wallpaper/image`;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.timeout = 60000;
+    xhr.open('POST', url);
+    const form = new FormData();
+    form.append('image', pair.image);
+    form.append('thumb', pair.thumb);
+    form.append('name', 'wallpaper');
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(
+            JSON.parse(xhr.responseText) as LauncherPrefEntry<WallpaperDoc>
+          );
+        } catch (e) {
+          reject(new Error(`bad response: ${e}`));
+        }
+      } else {
+        reject(new Error(`HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.ontimeout = () => reject(new Error('Request timeout'));
+    logger.info(`${TAG} upload wallpaper → ${url}`);
+    xhr.send(form);
+  });
+}
+
+/**
+ * 删除一条自定义壁纸，正使用时服务端把当前选择置回默认。
+ */
+export async function deleteLauncherWallpaperImage(
+  serverAddress: string,
+  id: string
+): Promise<LauncherPrefEntry<WallpaperDoc>> {
+  const url = `${serverAddress}/api/launcher/wallpaper/image/${encodeURIComponent(
+    id
+  )}`;
+  const responseText = await httpDelete(url);
+  return JSON.parse(responseText) as LauncherPrefEntry<WallpaperDoc>;
 }
 
 /**
