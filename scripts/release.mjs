@@ -88,7 +88,7 @@ async function bumpStep() {
   writeFileSync(pbxPath, pbx);
   console.log(`iOS: MARKETING_VERSION → ${version}, CURRENT_PROJECT_VERSION → ${build}`);
 
-  // Bump Android build.gradle (kept in sync even though the release pipeline is iOS-only)
+  // Bump Android build.gradle (kept in sync with the tag-triggered APK pipeline)
   const gradlePath = resolve(rnDir, "android/app/build.gradle");
   let gradle = readFileSync(gradlePath, "utf-8");
   gradle = gradle.replace(/versionCode \d+/, `versionCode ${build}`);
