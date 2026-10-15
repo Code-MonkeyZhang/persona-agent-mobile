@@ -44,6 +44,7 @@
     "male": "男声",
     "cloned": "克隆音色",
     "selectModel": "选择模型",
+    "noConfiguredModel": "暂无已配置密钥的模型供应商",
     "selectVoice": "选择音色",
     "langDefault": "跟随默认",
     "langZh": "中文",

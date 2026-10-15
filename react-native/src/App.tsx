@@ -2,6 +2,7 @@ import 'react-native-gesture-handler';
 import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StatusBar, AppState, StyleSheet } from 'react-native';
 import ChatScreen from './chat/ChatScreen.tsx';
@@ -148,14 +149,17 @@ const AppWithTheme = () => {
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       {/* 手势根视图：左滑删除等 RNGH 手势组件依赖此包装，原抽屉导航器自带的隐式包装已随抽屉移除 */}
       <GestureHandlerRootView style={styles.flex}>
-        {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
-        <NavigationContainer
-          onStateChange={(_) => {
-            Keyboard.dismiss();
-          }}
-        >
-          <AppNavigator />
-        </NavigationContainer>
+        {/* 底部弹层宿主：ActionSheet 的 BottomSheetModal 依赖此 Provider 渲染遮罩与面板 */}
+        <BottomSheetModalProvider>
+          {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
+          <NavigationContainer
+            onStateChange={(_) => {
+              Keyboard.dismiss();
+            }}
+          >
+            <AppNavigator />
+          </NavigationContainer>
+        </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </>
   );

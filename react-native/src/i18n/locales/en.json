@@ -44,6 +44,7 @@
     "male": "Male",
     "cloned": "Cloned",
     "selectModel": "Select Model",
+    "noConfiguredModel": "No model providers configured yet",
     "selectVoice": "Select Voice",
     "langDefault": "Follow default",
     "langZh": "中文",
