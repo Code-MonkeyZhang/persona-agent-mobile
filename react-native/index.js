@@ -2,6 +2,7 @@
  * @format
  */
 import 'react-native-polyfill-globals/auto';
+import './src/env';
 import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
@@ -10,9 +11,10 @@ import { AppRegistry } from 'react-native';
 import App from './src/App';
 import { name as appName } from './app.json';
 
-// Downgrade Reanimated strict logs to warnings so GiftedChat animations never abort the app.
+// Reanimated strict mode stays off so GiftedChat animations never abort the app.
+// Level is raised to error because GiftedChat passes web-only dependencies on native and no library release fixes it yet.
 configureReanimatedLogger({
-  level: ReanimatedLogLevel.warn,
+  level: ReanimatedLogLevel.error,
   strict: false,
 });
 

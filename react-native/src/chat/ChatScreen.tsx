@@ -546,13 +546,13 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         )}
-        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，Android 需显式启用实验模糊实现 */}
+        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，Android 需显式指定模糊实现 */}
         <Animated.View style={keyboardBottomStyle}>
           <BlurView
             style={StyleSheet.absoluteFill}
             tint="light"
             intensity={40}
-            experimentalBlurMethod="dimezisBlurView"
+            blurMethod="dimezisBlurView"
           />
           <View
             onLayout={(e) => {
