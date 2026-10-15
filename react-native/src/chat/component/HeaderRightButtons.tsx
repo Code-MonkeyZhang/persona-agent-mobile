@@ -1,10 +1,10 @@
 /**
  * @file component/HeaderRightButtons.tsx
- * @description 头部右侧按钮组：陪伴面板开关 + Agent App 工作区入口。
+ * @description 头部右侧按钮组：陪伴面板开关 + 小手机桌面入口。
  */
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { UserRound, LayoutGrid } from 'lucide-react-native';
+import { UserRound, Smartphone } from 'lucide-react-native';
 import { ColorScheme } from '../../theme/index';
 import { CustomHeaderRightButton } from './CustomHeaderRightButton';
 
@@ -34,7 +34,7 @@ export function HeaderRightButtons({
         />
       </CustomHeaderRightButton>
       <CustomHeaderRightButton onPress={onOpenAgentApp}>
-        <LayoutGrid size={24} color={colors.text} />
+        <Smartphone size={24} color={colors.text} />
       </CustomHeaderRightButton>
     </View>
   );

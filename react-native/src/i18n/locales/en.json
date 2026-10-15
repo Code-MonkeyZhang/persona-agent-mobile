@@ -13,6 +13,15 @@
     "vibration": "Vibration",
     "vibrationDesc": "Haptic feedback on interactions"
   },
+  "phone": {
+    "resetLayout": "Reset Layout",
+    "resetLayoutDesc": "Restore default order",
+    "settingsNote": "Wallpaper and layout follow the server across devices",
+    "loading": "Loading apps…",
+    "loadFailed": "Failed to load apps, tap to retry",
+    "emptyHint": "No apps yet, install from the desktop marketplace to see them here",
+    "pageLoadFailed": "Failed to load page, tap to retry"
+  },
   "agent": {
     "title": "Agent Detail",
     "notFound": "Agent not found",
@@ -57,10 +66,21 @@
     "noAssetTitle": "This agent has no companion avatar",
     "noAssetHint": "Add expression images in assets/pose/ to enable"
   },
-  "appPanel": {
-    "title": "Agent Apps",
-    "empty": "No apps available",
-    "error": "Failed to load, tap to retry"
+  "wallpaper": {
+    "title": "Wallpaper",
+    "default": "Default",
+    "presets": "Presets",
+    "customs": "Custom",
+    "upload": "Upload wallpaper",
+    "empty": "No custom wallpapers yet",
+    "tooSmall": "Image is too small, pick one with a short side of at least 720",
+    "uploadFailed": "Upload failed",
+    "deleteFailed": "Delete failed",
+    "dawn": "Dawn",
+    "coast": "Coast",
+    "lavender": "Lavender",
+    "sunset": "Sunset",
+    "night": "Night"
   },
   "server": {
     "placeholder": "https://xxx.trycloudflare.com",

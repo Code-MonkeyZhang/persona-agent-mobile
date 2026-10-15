@@ -58,7 +58,6 @@ import {
   isAllFileReady,
 } from './util/FileUtils.ts';
 import { useVoiceStore } from '../stores/voiceStore';
-import { useAppPanelStore } from '../stores/appPanelStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
@@ -183,18 +182,10 @@ function ChatScreen(): React.JSX.Element {
     toggleVoice();
   }, [toggleVoice]);
 
-  /**
-   * 打开 Agent App 工作区。
-   * 有 currentAppId → 恢复上次 App；空 → 进应用网格（与形态与交互的导航模型一致）。
-   */
+  /** 打开小手机桌面 */
   const handleOpenAgentApp = useCallback(() => {
-    const current = useAppPanelStore.getState().currentAppId;
-    logger.info(`[ChatScreen] open agent app, currentAppId=${current}`);
-    if (current) {
-      navigation.navigate('AppSurface');
-    } else {
-      navigation.navigate('AppLauncher');
-    }
+    logger.info('[ChatScreen] open phone launcher');
+    navigation.navigate('AppLauncher');
   }, [navigation]);
 
   // ==================== Header 配置 ====================

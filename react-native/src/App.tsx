@@ -115,16 +115,16 @@ const AppNavigator = () => {
         component={SettingsScreen}
         options={{ ...stackScreenOptions, title: t('home.settings') }}
       />
-      {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠 */}
+      {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠；两屏都无 header，顶栏由 PhoneAppBar 自绘 */}
       <Stack.Screen
         name="AppLauncher"
         component={AppLauncher}
-        options={{ ...stackScreenOptions, title: t('appPanel.title') }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="AppSurface"
         component={AppSurface}
-        options={{ ...stackScreenOptions, title: '' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

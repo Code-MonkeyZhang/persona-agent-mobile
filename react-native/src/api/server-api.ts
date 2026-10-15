@@ -361,10 +361,12 @@ export interface McpServerDetail extends McpServerInfo {
   connectionType: McpConnectionType;
 }
 
-/** Agent App 信息（界面与图标走 /apps/:name 反代路径，displayName 为显示名） */
+/** Agent App 信息，界面走 /apps/:name 反代路径，图标走 logoUrl 哈希地址，displayName 为显示名 */
 export interface AppInfo {
   name: string;
   displayName: string;
+  /** 安装时拼好的图标地址，fetchMcpServers 已补成绝对地址并带内容哈希 */
+  logoUrl?: string;
 }
 
 /** Skill 信息（对应 GET /api/skills 返回的单个 skill，字段对齐 @persona/shared） */
@@ -630,7 +632,11 @@ export async function fetchAgentApps(
     .filter(
       (s) => s.agentApp === true && (s.supportedUI ?? []).includes('mobile')
     )
-    .map((s) => ({ name: s.name, displayName: s.displayName }));
+    .map((s) => ({
+      name: s.name,
+      displayName: s.displayName,
+      logoUrl: s.logoUrl,
+    }));
   logger.info(
     `${TAG} fetchAgentApps → ${apps.length} apps: ${apps
       .map((a) => a.name)
