@@ -37,5 +37,4 @@ jobs:
         with:
           files: |
             react-native/android/app/build/outputs/apk/release/*.apk
-          prerelease: true
           generate_release_notes: true

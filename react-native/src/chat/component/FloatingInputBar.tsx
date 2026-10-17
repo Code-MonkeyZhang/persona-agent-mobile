@@ -46,8 +46,10 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
       return;
     }
     onSend(trimmed);
+    // clear 命令更新原生输入控件的内部状态并触发重新量高，只改 value 属性不会触发。
+    textInputRef.current?.clear();
     setText('');
-  }, [text, selectedFiles.length, onSend]);
+  }, [text, selectedFiles.length, onSend, textInputRef]);
 
   return (
     <View style={styles.wrapper}>
