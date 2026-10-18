@@ -8,7 +8,6 @@ import { FlatList } from 'react-native';
 import { MarkdownProps } from 'react-native-marked';
 import useMarkdown from './useMarkdown.ts';
 import { ChatStatus } from '../../../types/Chat.ts';
-import { useTheme } from '../../../theme';
 
 type ChatMarkdownProps = MarkdownProps & {
   chatStatus: ChatStatus;
@@ -24,7 +23,6 @@ const Markdown = ({
   tokenizer,
   chatStatus,
 }: ChatMarkdownProps) => {
-  const { colors } = useTheme();
   const rnElements = useMarkdown(value, {
     theme,
     baseUrl,
@@ -48,9 +46,6 @@ const Markdown = ({
       removeClippedSubviews={false}
       keyExtractor={keyExtractor}
       initialNumToRender={rnElements.length}
-      style={{
-        backgroundColor: colors.background,
-      }}
       {...flatListProps}
       data={rnElements}
       renderItem={renderItem}
