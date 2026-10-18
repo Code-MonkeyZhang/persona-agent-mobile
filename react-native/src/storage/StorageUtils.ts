@@ -7,6 +7,7 @@ export const storage = new MMKV();
 
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
+const showThoughtProcessKey = keyPrefix + 'showThoughtProcess';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
@@ -22,6 +23,16 @@ export function saveHapticEnabled(enabled: boolean) {
 
 export function getHapticEnabled() {
   return storage.getBoolean(hapticEnabledKey) ?? true;
+}
+
+/** 保存思考过程入口显示开关 */
+export function saveShowThoughtProcess(enabled: boolean) {
+  storage.set(showThoughtProcessKey, enabled);
+}
+
+/** 获取思考过程入口显示开关，未设置时默认显示 */
+export function getShowThoughtProcess() {
+  return storage.getBoolean(showThoughtProcessKey) ?? true;
 }
 
 export function getTextModel(): Model {

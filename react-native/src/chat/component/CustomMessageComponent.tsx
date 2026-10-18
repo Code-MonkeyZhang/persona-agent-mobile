@@ -24,6 +24,7 @@ import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
 import AgentAvatar from './AgentAvatar.tsx';
+import { useSettingsStore } from '../../stores/settingsStore.ts';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
 interface CustomMessageProps extends MessageProps<ChatMessage> {
@@ -51,6 +52,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const thoughtProcessVisible = useSettingsStore(
+    (s) => s.thoughtProcessVisible
+  );
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
@@ -183,7 +187,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
       </View>
       <View style={styles.marked_box}>
-        {hasSteps && (
+        {hasSteps && thoughtProcessVisible && (
           <CollapsedThoughtProcess
             steps={currentMessage!.steps!}
             onToggle={onReasoningToggle}

@@ -11,7 +11,9 @@
   },
   "settings": {
     "vibration": "Vibration",
-    "vibrationDesc": "Haptic feedback on interactions"
+    "vibrationDesc": "Haptic feedback on interactions",
+    "thoughtProcess": "Thought Process",
+    "thoughtProcessDesc": "Show the thought process entry on messages"
   },
   "phone": {
     "resetLayout": "Reset Layout",

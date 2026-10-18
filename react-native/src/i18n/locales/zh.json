@@ -11,7 +11,9 @@
   },
   "settings": {
     "vibration": "震动",
-    "vibrationDesc": "交互时触觉反馈"
+    "vibrationDesc": "交互时触觉反馈",
+    "thoughtProcess": "思考过程",
+    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口"
   },
   "phone": {
     "resetLayout": "重置桌面布局",
