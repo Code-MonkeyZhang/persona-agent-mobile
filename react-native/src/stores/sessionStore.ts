@@ -25,6 +25,9 @@ interface SessionStore {
 
   homeRefreshVersion: number;
   requestHomeRefresh: () => void;
+
+  /** 主机切换后的整体复位，预览与标题补丁随旧主机作废 */
+  resetForHostSwitch: () => void;
 }
 
 const initialConversation = getLastConversation();
@@ -82,6 +85,11 @@ export const useSessionStore = create<SessionStore>((set) => ({
     set((state) => ({
       homeRefreshVersion: state.homeRefreshVersion + 1,
     })),
+
+  resetForHostSwitch: () => {
+    logger.info('[SessionStore] reset for host switch');
+    set({ sessionPreviews: {}, sessionTitles: {} });
+  },
 }));
 
 /**

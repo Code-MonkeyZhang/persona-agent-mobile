@@ -89,12 +89,6 @@
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "Connect",
     "connecting": "Connecting...",
-    "connected": "Connected",
-    "failed": "Failed",
-    "errNetwork": "Network unavailable",
-    "errTimeout": "Timed out",
-    "errHttp404": "Service not found",
-    "errHttp5xx": "Server error",
     "scanToConnect": "Scan to Connect",
     "scanning": "Align the QR code within the frame",
     "cameraPermissionDenied": "Camera permission is required to scan QR codes"
@@ -103,10 +97,42 @@
     "ttsFailed": "TTS playback failed"
   },
   "common": {
-    "back": "Back"
+    "back": "Back",
+    "cancel": "Cancel"
   },
   "connection": {
     "reconnecting": "Reconnecting..."
+  },
+  "device": {
+    "manage": "Device Management",
+    "manualInput": "Enter address manually",
+    "save": "Save",
+    "rename": "Rename",
+    "deleteShort": "Delete",
+    "deleteConfirmTitle": "Remove \"{{name}}\"?",
+    "deleteConfirmBody": "This removes the device record stored on this phone. The desktop is not affected and you can add it back anytime.",
+    "scanAdd": "Scan to Add",
+    "inputAddress": "Enter Address",
+    "statusConnected": "Connected",
+    "statusConnecting": "Connecting",
+    "statusFailed": "Failed",
+    "statusAvailable": "Available",
+    "nameRow": "Name",
+    "deviceIdRow": "Device ID",
+    "addressRow": "Address",
+    "versionRow": "Version",
+    "lastConnectedRow": "Last Connected",
+    "lastToday": "Today {{time}}",
+    "lastYesterday": "Yesterday {{time}}",
+    "lastDate": "{{m}}/{{d}}",
+    "lastNever": "Never",
+    "deleteDevice": "Remove Device",
+    "detailA11y": "Device details"
+  },
+  "first": {
+    "title": "Connect your device",
+    "desc": "Scan the QR code shared by the desktop to get started. Addresses may change, scanning always works.",
+    "tip": "The QR code lives in the desktop local management page, behind the gear on the bottom-left card."
   },
   "home": {
     "newChat": "New Chat",
@@ -116,7 +142,6 @@
     "connected": "Connected",
     "chat": "Chat",
     "sessions": "Sessions",
-    "server": "Server",
     "settings": "Settings",
     "delete": "Delete",
     "startChat": "Start chatting",

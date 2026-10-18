@@ -1,7 +1,8 @@
 /**
  * @file api/sync-api.ts
- * @description 镜像同步的三个 HTTP 包装。
- *   snapshot 拉冷启动全量镜像，changes 按游标增量追平，handshake 取主机身份供镜像归属识别，
+ * @description 镜像同步与连接链共用的 HTTP 包装。
+ *   snapshot 拉冷启动全量镜像，changes 按游标增量追平，
+ *   handshake 取主机全量身份供镜像归属识别与连接核身，
  *   响应形状与服务端路由对齐。snapshot 的超时单独调大，首次镜像的数据量随历史增长。
  */
 import { httpGet } from './server-api.ts';
@@ -47,16 +48,30 @@ export async function fetchSyncChanges(
   return JSON.parse(responseText) as { changes: SessionChange[]; head: number };
 }
 
+/** 主机握手身份，hostId 是客户端认主机的唯一依据，地址变化不影响 */
+export interface HandshakeInfo {
+  hostId: string;
+  hostName: string;
+  version: string;
+}
+
 /**
- * 拉当前连接主机的身份标识。
+ * 拉主机的握手身份，连接链核身与设备探测共用。
  * @param serverAddress 服务器地址
- * @returns 主机身份 hostId，同步引擎凭它识别镜像归属
+ * @param timeout 请求超时毫秒数，探测场景收紧到五秒
+ * @returns 三字段齐全的握手身份
  */
-export async function fetchHostId(serverAddress: string): Promise<string> {
-  const responseText = await httpGet(`${serverAddress}/api/handshake`);
-  const data = JSON.parse(responseText) as { hostId?: string };
-  if (!data.hostId) {
-    throw new Error('handshake response missing hostId');
+export async function fetchHandshakeInfo(
+  serverAddress: string,
+  timeout = 5000
+): Promise<HandshakeInfo> {
+  const responseText = await httpGet(
+    `${serverAddress}/api/handshake`,
+    timeout
+  );
+  const data = JSON.parse(responseText) as Partial<HandshakeInfo>;
+  if (!data.hostId || !data.hostName || !data.version) {
+    throw new Error('handshake response missing fields');
   }
-  return data.hostId;
+  return data as HandshakeInfo;
 }
