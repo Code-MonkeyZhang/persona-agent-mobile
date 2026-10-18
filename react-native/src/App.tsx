@@ -14,15 +14,16 @@ import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
 import SkillDetailScreen from './agent-nav/SkillDetailScreen.tsx';
 import BuiltinDetailScreen from './agent-nav/BuiltinDetailScreen.tsx';
-import ServerScreen from './server/ServerScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
+import DeviceManageScreen from './device/DeviceManageScreen.tsx';
+import DeviceDetailScreen from './device/DeviceDetailScreen.tsx';
 import AppLauncher from './chat/component/AppLauncher.tsx';
 import AppSurface from './chat/component/AppSurface.tsx';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
-import { setupSync } from './storage/sync-setup.ts';
+import { initDeviceLayer, setupSync } from './storage/sync-setup.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import { logger } from './lib/logger';
@@ -42,7 +43,7 @@ const styles = StyleSheet.create({
  * - Home: 会话主页(默认首屏)
  * - Chat: 聊天页(压栈进入，返回即卸载，头部由 ChatScreen 自配置)
  * - AgentDetail / AgentNav / McpDetail / SkillDetail / BuiltinDetail
- * - Server / ScanQR / Settings / AppLauncher / AppSurface
+ * - ScanQR / DeviceManage / Settings / AppLauncher / AppSurface
  */
 const AppNavigator = () => {
   const { colors } = useTheme();
@@ -102,14 +103,21 @@ const AppNavigator = () => {
         options={{ ...stackScreenOptions, title: t('detail.mcpTitle') }}
       />
       <Stack.Screen
-        name="Server"
-        component={ServerScreen}
-        options={{ ...stackScreenOptions, title: t('home.server') }}
+        name="DeviceManage"
+        component={DeviceManageScreen}
+        options={{ ...stackScreenOptions, title: t('device.manage') }}
       />
+      {/* 详情页标题跟随条目显示名，进页后由组件 setOptions 覆盖 */}
+      <Stack.Screen
+        name="DeviceDetail"
+        component={DeviceDetailScreen}
+        options={{ ...stackScreenOptions, title: '' }}
+      />
+      {/* 扫码页顶栏只留返回，标题按定稿去掉 */}
       <Stack.Screen
         name="ScanQR"
         component={ScanQRScreen}
-        options={{ ...stackScreenOptions, title: t('server.scanToConnect') }}
+        options={{ ...stackScreenOptions, title: '' }}
       />
       <Stack.Screen
         name="Settings"
@@ -175,10 +183,12 @@ const App = () => {
     configureErrorHandling();
     logger.debug('[App] error handling configured');
 
-    /** 刷新设备名缓存并启动冷连接，镜像同步链路一并装配 */
+    /** 刷新设备名缓存并装配镜像链路，设备层引导完成后才发起冷连接 */
     setupSync();
     refreshDeviceName();
-    useConnectionStore.getState().coldStart();
+    initDeviceLayer().then(() => {
+      useConnectionStore.getState().coldStart();
+    });
 
     /**
      * 监听 app 前后台切换：

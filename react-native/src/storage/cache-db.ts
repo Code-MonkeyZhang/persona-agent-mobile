@@ -1,12 +1,15 @@
 /**
  * @file storage/cache-db.ts
  * @description 移动端本地镜像库，服务端正本的只读镜像。
+ *   按主机分区，每台主机一个库文件 persona-cache-<hostId>，切换主机即换活动库文件，
+ *   未指派主机时读路径一律返回空，镜像来源身份与当前主机不符的自愈由同步引擎兜底。
  *   op-sqlite 开库，schema 与桌面端同构四张表，读接口产出与 HTTP 接口同形的数据。
  *   全部查询走 execute 异步版本在后台线程执行，不占 JS 线程。
  *   写入口只收快照与变更流两类服务端事实，外加 agent 列表的离线副本。
  *   全部写操作串行走模块内的写队列，调用方无需关心与同步引擎的交错。
  */
 import { open, type DB, type QueryResult } from '@op-engineering/op-sqlite';
+import RNFS from 'react-native-fs';
 import type { AgentInfo } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 import {
@@ -20,6 +23,12 @@ import {
 } from './sync-shapes.ts';
 
 const TAG = '[CacheDb]';
+
+/** 分区库文件名前缀，后接 hostId */
+const DB_NAME_PREFIX = 'persona-cache-';
+
+/** 分区前的旧单库文件名，仅存量迁移时使用 */
+const LEGACY_DB_NAME = 'persona-cache';
 
 /** 缓存 kv 里的变更流游标键 */
 const CURSOR_KEY = 'sync_cursor';
@@ -78,27 +87,132 @@ const DDL: string[] = [
 
 export class CacheDb {
   private db: DB | null = null;
+  /** 活动库对应的主机身份，null 表示尚未指派，读路径返回空 */
+  private hostId: string | null = null;
   /** 写操作串行队列，putAgents 与引擎的快照装载不会在事务上交错 */
   private writeQueue: Promise<unknown> = Promise.resolve();
   /** 写操作完成后的通知回调，界面层订阅后重读镜像 */
   private readonly listeners = new Set<() => void>();
 
+  /** 按主机身份算分区库文件名 */
+  private dbNameFor(hostId: string): string {
+    return DB_NAME_PREFIX + hostId;
+  }
+
   /**
-   * 惰性开库建表，WAL 模式让读写互不阻塞。
+   * 开库并建表，WAL 模式让读写互不阻塞。
    * PRAGMA 与建表走 executeSync，仅首个调用承担，保证排队的异步查询执行前表已就绪。
    */
-  private ensureDb(): DB {
-    if (this.db) {
-      return this.db;
-    }
-    const db = open({ name: 'persona-cache' });
+  private openDb(name: string): DB {
+    const db = open({ name });
     db.executeSync('PRAGMA journal_mode = WAL');
     for (const sql of DDL) {
       db.executeSync(sql);
     }
-    logger.info(`${TAG} opened persona-cache, ${DDL.length} ddl statements`);
-    this.db = db;
     return db;
+  }
+
+  /** 惰性取活动库，未指派主机视为编程错误，读路径不应走到这里 */
+  private ensureDb(): DB {
+    if (!this.db) {
+      if (!this.hostId) {
+        throw new Error('mirror db has no host assigned');
+      }
+      this.db = this.openDb(this.dbNameFor(this.hostId));
+      logger.info(`${TAG} opened mirror for ${this.hostId}`);
+    }
+    return this.db;
+  }
+
+  /**
+   * 切换活动镜像库到目标主机。
+   * 走写队列冲净在途写，先开新库再关旧库，开新失败时旧库原样保留。
+   */
+  switchHost(hostId: string): Promise<void> {
+    return this.enqueueWrite(async () => {
+      if (this.hostId === hostId && this.db) {
+        return;
+      }
+      const next = this.openDb(this.dbNameFor(hostId));
+      if (this.db) {
+        this.db.close();
+      }
+      this.db = next;
+      this.hostId = hostId;
+      logger.info(`${TAG} mirror switched to ${hostId}`);
+    });
+  }
+
+  /** 回到未指派主机的空态，关库不删文件，镜像数据的去留由调用方决定 */
+  private switchIdle(): Promise<void> {
+    return this.enqueueWrite(async () => {
+      if (this.db) {
+        this.db.close();
+      }
+      this.db = null;
+      this.hostId = null;
+    });
+  }
+
+  /** 删除目标主机的镜像库文件，删的是活动库时先回到未指派态 */
+  async deleteHostDb(hostId: string): Promise<void> {
+    if (this.hostId === hostId) {
+      await this.switchIdle();
+    }
+    const db = this.openDb(this.dbNameFor(hostId));
+    const path = db.getDbPath();
+    db.close();
+    try {
+      db.delete();
+    } catch (e) {
+      // 原生删除接口不可用时退回文件系统按路径清理
+      for (const suffix of ['', '-wal', '-shm']) {
+        await RNFS.unlink(path + suffix).catch(() => undefined);
+      }
+      logger.warn(`${TAG} db.delete failed, removed by path: ${e}`);
+    }
+    logger.info(`${TAG} mirror deleted for ${hostId}`);
+  }
+
+  /**
+   * 存量单库一次性迁移到按主机分区。
+   * 读旧库的身份章，有章把库文件连同 wal 与 shm 改名到该主机的分区名并返回 hostId，
+   * 无章说明镜像无从归属，删除旧文件返回 null。
+   */
+  async migrateLegacy(): Promise<string | null> {
+    const legacy = this.openDb(LEGACY_DB_NAME);
+    let hostId: string | null = null;
+    try {
+      const result = await legacy.execute(
+        'SELECT value FROM kv WHERE key = ?',
+        [SOURCE_HOST_KEY]
+      );
+      const row = result.rows[0] as { value: string } | undefined;
+      hostId = row?.value ?? null;
+    } finally {
+      legacy.close();
+    }
+    const from = legacy.getDbPath();
+    if (!hostId) {
+      try {
+        legacy.delete();
+      } catch {
+        await RNFS.unlink(from).catch(() => undefined);
+      }
+      logger.info(`${TAG} legacy mirror unstamped, dropped`);
+      return null;
+    }
+    const to = from.replace(
+      new RegExp(`${LEGACY_DB_NAME}(\\.db)?$`),
+      `${this.dbNameFor(hostId)}$1`
+    );
+    for (const suffix of ['', '-wal', '-shm']) {
+      if (await RNFS.exists(from + suffix)) {
+        await RNFS.moveFile(from + suffix, to + suffix);
+      }
+    }
+    logger.info(`${TAG} legacy mirror migrated to ${hostId}`);
+    return hostId;
   }
 
   /** 订阅写后通知，返回退订函数 */
@@ -125,6 +239,9 @@ export class CacheDb {
 
   /** 当前变更流游标，零表示尚未镜像 */
   async getCursor(): Promise<number> {
+    if (!this.hostId) {
+      return 0;
+    }
     const result = await this.ensureDb().execute(
       'SELECT value FROM kv WHERE key = ?',
       [CURSOR_KEY]
@@ -142,6 +259,9 @@ export class CacheDb {
 
   /** 镜像来源主机的身份，未记录返回 null，同步引擎凭它识别换主机 */
   async getSourceHostId(): Promise<string | null> {
+    if (!this.hostId) {
+      return null;
+    }
     const result = await this.ensureDb().execute(
       'SELECT value FROM kv WHERE key = ?',
       [SOURCE_HOST_KEY]
@@ -332,6 +452,9 @@ export class CacheDb {
 
   /** 某角色的会话元信息列表，updatedAt 排序与服务端一致，chat 会话预览现算 */
   async listSessions(agentId: string): Promise<SessionMeta[]> {
+    if (!this.hostId) {
+      return [];
+    }
     const result = await this.ensureDb().execute(
       'SELECT id, agent_id, updated_at, meta FROM sessions WHERE agent_id = ? ORDER BY updated_at DESC',
       [agentId]
@@ -367,6 +490,9 @@ export class CacheDb {
 
   /** 会话更新时间单行查询，全量重读前的廉价预检查用 */
   async getSessionUpdatedAt(id: string): Promise<number | null> {
+    if (!this.hostId) {
+      return null;
+    }
     const result = await this.ensureDb().execute(
       'SELECT updated_at FROM sessions WHERE id = ?',
       [id]
@@ -377,6 +503,9 @@ export class CacheDb {
 
   /** 完整会话，messages 混入轮次边界条目，与 HTTP 详情接口同形 */
   async getSession(id: string): Promise<MirrorSession | null> {
+    if (!this.hostId) {
+      return null;
+    }
     const startedAt = Date.now();
     const metaResult = await this.ensureDb().execute(
       'SELECT id, agent_id, updated_at, meta FROM sessions WHERE id = ?',
@@ -441,6 +570,9 @@ export class CacheDb {
 
   /** 缓存的 agent 列表，冷启动与界面重读的数据源 */
   async listAgents(): Promise<AgentInfo[]> {
+    if (!this.hostId) {
+      return [];
+    }
     const result = await this.ensureDb().execute('SELECT data FROM agents');
     return result.rows.map(
       (r) => JSON.parse((r as { data: string }).data) as AgentInfo

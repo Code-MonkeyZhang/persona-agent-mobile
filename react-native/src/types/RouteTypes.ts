@@ -12,8 +12,9 @@ export type RouteParamList = {
   McpDetail: { name: string };
   SkillDetail: { name: string };
   BuiltinDetail: { id: string };
-  Server: undefined;
   ScanQR: undefined;
+  DeviceManage: undefined;
+  DeviceDetail: { hostId: string };
   AppLauncher: undefined;
   AppSurface: undefined;
 };

@@ -123,6 +123,8 @@ interface ChatStore {
   setAgentProfile: (name: string) => void;
   /** 标记会话立绘加载失败 */
   setPoseError: (sessionId: string, value: boolean) => void;
+  /** 主机切换后清空全部会话分片与展示态，旧主机的内存现场不再串台 */
+  resetForHostSwitch: () => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -314,6 +316,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setPoseError: (sessionId, value) => {
     updateSlice(sessionId, (slice) => ({ ...slice, poseError: value }));
+  },
+
+  resetForHostSwitch: () => {
+    logger.info(`${TAG} reset for host switch`);
+    set({
+      sessions: {},
+      displayedSessionId: NEW_CHAT_SESSION,
+      isLoading: false,
+    });
   },
 }));
 

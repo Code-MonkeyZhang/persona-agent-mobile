@@ -11,7 +11,9 @@
   },
   "settings": {
     "vibration": "震动",
-    "vibrationDesc": "交互时触觉反馈"
+    "vibrationDesc": "交互时触觉反馈",
+    "thoughtProcess": "思考过程",
+    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口"
   },
   "phone": {
     "resetLayout": "重置桌面布局",
@@ -87,12 +89,6 @@
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "连接",
     "connecting": "连接中...",
-    "connected": "已连接",
-    "failed": "连接失败",
-    "errNetwork": "网络不可用",
-    "errTimeout": "连接超时",
-    "errHttp404": "服务未找到",
-    "errHttp5xx": "服务器错误",
     "scanToConnect": "扫码连接",
     "scanning": "将二维码放入框内即可自动扫描",
     "cameraPermissionDenied": "需要相机权限才能扫码"
@@ -101,10 +97,42 @@
     "ttsFailed": "语音播报失败"
   },
   "common": {
-    "back": "返回"
+    "back": "返回",
+    "cancel": "取消"
   },
   "connection": {
     "reconnecting": "正在重连..."
+  },
+  "device": {
+    "manage": "设备管理",
+    "manualInput": "手动输入地址",
+    "save": "保存",
+    "rename": "重命名",
+    "deleteShort": "删除",
+    "deleteConfirmTitle": "删除“{{name}}”？",
+    "deleteConfirmBody": "将移除这台设备在本机的连接记录，桌面端不受影响，随时可以重新添加。",
+    "scanAdd": "扫码添加",
+    "inputAddress": "输入地址",
+    "statusConnected": "已连接",
+    "statusConnecting": "连接中",
+    "statusFailed": "连接失败",
+    "statusAvailable": "可连接",
+    "nameRow": "名称",
+    "deviceIdRow": "设备号",
+    "addressRow": "地址",
+    "versionRow": "版本",
+    "lastConnectedRow": "上次连接",
+    "lastToday": "今天 {{time}}",
+    "lastYesterday": "昨天 {{time}}",
+    "lastDate": "{{m}}月{{d}}日",
+    "lastNever": "从未连接",
+    "deleteDevice": "删除设备",
+    "detailA11y": "设备详情"
+  },
+  "first": {
+    "title": "连接你的设备",
+    "desc": "扫描桌面端分享的二维码即可开始，地址经常变也没关系，扫码永远有效",
+    "tip": "二维码在桌面端的本机管理页，点左下角卡片上的齿轮进入"
   },
   "home": {
     "newChat": "新对话",
@@ -114,7 +142,6 @@
     "connected": "已连接",
     "chat": "聊天",
     "sessions": "会话",
-    "server": "服务器",
     "settings": "设置",
     "delete": "删除",
     "startChat": "开始聊天",

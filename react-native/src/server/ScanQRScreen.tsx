@@ -25,9 +25,8 @@ type ScanQRScreenNavigationProp = NativeStackNavigationProp<
 
 /**
  * @file ScanQRScreen.tsx
- * @description 纯扫码页面。扫到 URL 后立即返回 ServerScreen 并携带 scannedUrl 参数，
- *              后续配对流程由 ServerScreen 的 useEffect 处理。
- *              用 scannedRef 防止 onReadCode 连续触发。
+ * @description 纯扫码页面。扫到 URL 后立即按地址发起连接并 goBack 返回，
+ *              连接进度由连接横幅统一反馈。用 scannedRef 防止 onReadCode 连续触发。
  */
 const ScanQRScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -57,9 +56,9 @@ const ScanQRScreen: React.FC = () => {
   }, []);
 
   /**
-   * 扫码回调：提取 URL → 写入连接页的中转地址 → goBack 返回连接页。
+   * 扫码回调：提取 URL → 按地址发起连接 → goBack 返回来源页。
    * 用 goBack（pop 语义）而非 navigate，避免反复扫码时页面堆叠；
-   * 连接/配对逻辑统一由 ServerScreen 处理，本页面只负责扫码。
+   * 连接链统一走 connectByAddress，本页面只负责扫码。
    */
   const handleReadCode = (event: {
     nativeEvent: { codeStringValue: string };
@@ -72,7 +71,10 @@ const ScanQRScreen: React.FC = () => {
     const url = event.nativeEvent.codeStringValue;
     logger.info(`[ScanQR] Scanned URL: ${url}`);
 
-    useConnectionStore.getState().setPendingScannedUrl(url);
+    useConnectionStore
+      .getState()
+      .connectByAddress(url)
+      .catch(() => undefined);
     navigation.goBack();
   };
 

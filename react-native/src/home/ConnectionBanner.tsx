@@ -1,13 +1,13 @@
 /**
  * @file home/ConnectionBanner.tsx
- * @description Home 与 Chat 两页共用的连接态条，五态直映链路。
- *   - 红条连接失败，点本体以当前地址立即重连，右端箭头独立进 Server 改地址
- *   - 蓝条未填地址引导进 Server，点本体与点箭头等价
+ * @description Home 与 Chat 及设备管理页共用的连接态条，五态直映链路。
+ *   - 红条连接失败，点本体以当前登记主机立即重连，右端箭头独立进设备管理页
+ *   - 蓝条未填地址引导进设备管理页，点本体与点箭头等价
  *   - 蓝条连接中与重连中转圈过渡，重连由 ws-client 自动进行，不可点
  *   - 蓝条正在同步转圈持续在位，首次全量同步完成前不让位绿条
  *   - 绿条已连接或已同步亮两秒后压高收起，动画回调摘除并配兜底定时器双保险，重挂载不重播
  *   - 进场与收起动画由 reanimated 在 UI 线程驱动，新架构下 JS 驱动布局动画会掉帧留残影
- *   组件自取导航与连接态，两页宿主直接挂载即可，无需传回调。
+ *   组件自取连接态并自行压栈跳转，宿主直接挂载即可，无需传回调。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -30,15 +30,10 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
+import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
-import { RouteParamList } from '../types/RouteTypes.ts';
 import { logger } from '../lib/logger';
-
-/** Home 与 Chat 都在根栈内，取两页公共的导航形状即可跳 Server */
-type BannerNavigation = NativeStackNavigationProp<
-  RouteParamList,
-  'Home' | 'Chat'
->;
+import type { RouteParamList } from '../types/RouteTypes.ts';
 
 /** 已连接绿条的停留时长，亮满转收起 */
 const CONNECTED_FLASH_MS = 2000;
@@ -62,10 +57,11 @@ type FlashPhase = 'shown' | 'collapsing' | 'gone';
 /** 横幅的视觉分档，同档内的文字切换不重播进场动画 */
 type BannerKind = 'flash' | 'syncing' | 'transient' | 'noAddress' | 'failed';
 
+/** 横幅本体，蓝条引导与红条箭头直接压栈进设备管理页 */
 const ConnectionBanner: React.FC = () => {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const navigation = useNavigation<BannerNavigation>();
+  const navigation = useNavigation<NativeStackNavigationProp<RouteParamList>>();
   const status = useConnectionStore((s) => s.status);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
   const syncState = useMirrorStore((s) => s.syncState);
@@ -183,17 +179,34 @@ const ConnectionBanner: React.FC = () => {
     };
   });
 
-  /** 红条本体点击，以当前地址立即重连并重置退避节奏 */
+  /** 红条本体点击，以当前登记主机立即重连并重置退避节奏，同号重连走 coldStart 绕开切换守卫 */
   const retryNow = useCallback(() => {
-    const address = useConnectionStore.getState().serverAddress;
-    logger.info(`[ConnectionBanner] banner tap, reconnect: ${address}`);
-    useConnectionStore.getState().connect(address);
+    const { serverAddress: address } = useConnectionStore.getState();
+    const { currentHostId, devices } = useDeviceStore.getState();
+    const entry = devices.find((d) => d.hostId === currentHostId);
+    if (entry) {
+      logger.info(
+        `[ConnectionBanner] banner tap, reconnect host ${entry.hostId}`
+      );
+      useConnectionStore
+        .getState()
+        .coldStart()
+        .catch(() => undefined);
+      return;
+    }
+    if (address) {
+      logger.info(`[ConnectionBanner] banner tap, reconnect: ${address}`);
+      useConnectionStore
+        .getState()
+        .connectByAddress(address)
+        .catch(() => undefined);
+    }
   }, []);
 
-  /** 箭头与未填地址蓝条本体的共同入口，进 Server 页改地址 */
-  const goServer = useCallback(() => {
-    logger.info('[ConnectionBanner] go Server');
-    navigation.navigate('Server');
+  /** 箭头与未填地址蓝条本体的共同入口，压栈进设备管理页走扫码或手输 */
+  const openDevices = useCallback(() => {
+    logger.info('[ConnectionBanner] open device manage');
+    navigation.navigate('DeviceManage');
   }, [navigation]);
 
   // 绿条内容，亮起与收起两段渲染共用，完成跃迁后文案换已同步
@@ -283,13 +296,13 @@ const ConnectionBanner: React.FC = () => {
         <TouchableOpacity
           style={[styles.container, styles.banner, styles.bannerTransient]}
           activeOpacity={0.8}
-          onPress={goServer}
+          onPress={openDevices}
         >
           <Link2Off size={18} color={colors.primary} />
           <Text style={[styles.text, { color: colors.primary }]}>
             {t('home.connNoAddress')}
           </Text>
-          <ServerChevron color={colors.primary} onPress={goServer} />
+          <ServerChevron color={colors.primary} onPress={openDevices} />
         </TouchableOpacity>
       </Animated.View>
     );
@@ -306,14 +319,14 @@ const ConnectionBanner: React.FC = () => {
         <Text style={[styles.text, styles.textStalled]}>
           {t('home.connFailed')}
         </Text>
-        <ServerChevron color={colors.primaryForeground} onPress={goServer} />
+        <ServerChevron color={colors.primaryForeground} onPress={openDevices} />
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
 /**
- * 右端进服务器页的箭头入口，颜色随所在横幅的文字色。
+ * 右端进设备管理页的箭头入口，颜色随所在横幅的文字色。
  * 嵌在本体的 TouchableOpacity 内，RN 内层触摸先于外层命中，点它只开页面不触发本体动作。
  */
 function ServerChevron({
@@ -326,7 +339,7 @@ function ServerChevron({
   const { t } = useTranslation();
   return (
     <TouchableOpacity
-      accessibilityLabel={t('home.server')}
+      accessibilityLabel={t('device.manage')}
       accessibilityRole="button"
       hitSlop={{ top: 6, bottom: 6, left: 8, right: 0 }}
       onPress={onPress}

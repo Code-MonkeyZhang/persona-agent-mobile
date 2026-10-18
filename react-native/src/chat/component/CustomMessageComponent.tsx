@@ -3,7 +3,13 @@
  * @description 聊天消息渲染组件 - 负责渲染每条消息的 UI（头部、思考过程、正文、性能指标行、附件）
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import {
+  Dimensions,
+  StyleSheet,
+  Text,
+  View,
+  type TextStyle,
+} from 'react-native';
 import Share from 'react-native-share';
 import { MessageProps } from 'react-native-gifted-chat';
 import { CustomMarkdownRenderer } from './markdown/CustomMarkdownRenderer.tsx';
@@ -24,6 +30,7 @@ import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import i18n from '../../i18n/index.ts';
 import CollapsedThoughtProcess from './CollapsedThoughtProcess.tsx';
 import AgentAvatar from './AgentAvatar.tsx';
+import { useSettingsStore } from '../../stores/settingsStore.ts';
 
 /** 组件 Props 类型定义，继承自 GiftedChat 的 MessageProps，扩展了聊天状态等属性 */
 interface CustomMessageProps extends MessageProps<ChatMessage> {
@@ -51,6 +58,9 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const thoughtProcessVisible = useSettingsStore(
+    (s) => s.thoughtProcessVisible
+  );
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
@@ -104,14 +114,20 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     }
 
     if (!isUser.current) {
+      // 流式起始正文为空时不渲染气泡，避免出现空灰块
+      if (currentMessage.text.trim().length === 0) {
+        return null;
+      }
       return (
-        <Markdown
-          value={currentMessage.text}
-          styles={customMarkedStyles}
-          renderer={customMarkdownRenderer}
-          tokenizer={customTokenizer}
-          chatStatus={chatStatusRef.current}
-        />
+        <View style={styles.answerContainer}>
+          <Markdown
+            value={currentMessage.text}
+            styles={customMarkedStyles}
+            renderer={customMarkdownRenderer}
+            tokenizer={customTokenizer}
+            chatStatus={chatStatusRef.current}
+          />
+        </View>
       );
     }
 
@@ -139,6 +155,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     customMarkdownRenderer,
     customTokenizer,
     styles.questionContainer,
+    styles.answerContainer,
     styles.questionContainerQueued,
     styles.questionText,
     styles.questionTextQueued,
@@ -183,7 +200,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
         )}
       </View>
       <View style={styles.marked_box}>
-        {hasSteps && (
+        {hasSteps && thoughtProcessVisible && (
           <CollapsedThoughtProcess
             steps={currentMessage!.steps!}
             onToggle={onReasoningToggle}
@@ -240,9 +257,19 @@ const createStyles = (colors: ColorScheme) =>
       fontWeight: '500',
       color: colors.text,
     },
+    /** Agent 回复气泡框，灰底圆角贴左，对齐 demo 与桌面端样式 */
+    answerContainer: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderBottomLeftRadius: 4,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      overflow: 'hidden',
+    },
     questionContainer: {
       alignSelf: 'flex-end',
-      backgroundColor: colors.messageBackground,
+      backgroundColor: colors.primary,
       borderRadius: 22,
       overflow: 'hidden',
       marginVertical: 8,
@@ -251,11 +278,11 @@ const createStyles = (colors: ColorScheme) =>
     },
     /** 待注入插话的灰色草稿态气泡 */
     questionContainerQueued: {
-      backgroundColor: colors.surfaceSecondary,
+      backgroundColor: colors.messageBackground,
     },
     questionText: {
       ...typography.body,
-      color: colors.text,
+      color: colors.primaryForeground,
     },
     /** 待注入插话的弱化文字 */
     questionTextQueued: {
@@ -276,8 +303,16 @@ const createStyles = (colors: ColorScheme) =>
     },
   });
 
+/** 正文与内联样式的统一字体档，覆盖库默认的大一档字号，与用户消息对齐 */
+const messageFont: TextStyle = { ...typography.body };
+
 /** Markdown 富文本渲染的自定义样式配置（标题、列表、表格等间距） */
 const customMarkedStyles: MarkedStyles = {
+  text: messageFont,
+  em: messageFont,
+  strong: messageFont,
+  strikethrough: messageFont,
+  link: messageFont,
   table: { marginVertical: 4 },
   li: { paddingVertical: 4 },
   h1: { ...typography.display },
@@ -291,6 +326,7 @@ const customMarkedStyles: MarkedStyles = {
 /**
  * 导出组件并自定义 memo 比较函数，仅在消息内容、性能指标、Agent 标识等关键属性变化时重渲染。
  * chatStatus 只影响末条 AI 消息的性能指标行显隐，非末行不参与比较，追加消息不再触发全行重渲染。
+ * queued 参与比较，插话注入时灰气泡转蓝能当场触发重渲染。
  */
 export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
   return (
@@ -298,6 +334,7 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     prevProps.currentMessage?.image === nextProps.currentMessage?.image &&
     prevProps.currentMessage?.steps === nextProps.currentMessage?.steps &&
     prevProps.currentMessage?.metrics === nextProps.currentMessage?.metrics &&
+    prevProps.currentMessage?.queued === nextProps.currentMessage?.queued &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
     (!prevProps.isLastAIMessage ||
       prevProps.chatStatus === nextProps.chatStatus) &&

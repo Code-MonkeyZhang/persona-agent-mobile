@@ -134,6 +134,11 @@ export function subscribe(sessionId: string): void {
   }
 }
 
+/** 清当前会话订阅，切换主机后旧主机的会话身份不再随重连补发 */
+export function clearSubscription(): void {
+  subscribedSessionId = null;
+}
+
 /**
  * 请求服务端中止指定会话的当前生成。
  * WS 未连上时直接放弃，生成不可能在跑，abort 无意义。
