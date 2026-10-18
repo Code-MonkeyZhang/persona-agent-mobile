@@ -2,6 +2,7 @@ import { MMKV } from 'react-native-mmkv';
 import { Model } from '../types/Chat.ts';
 import { v4 as uuidv4 } from 'uuid';
 import type { PoseAssets } from '../api/server-api.ts';
+import { logger } from '../lib/logger';
 
 export const storage = new MMKV();
 
@@ -15,6 +16,7 @@ const companionOpenKey = keyPrefix + 'companionOpen';
 const lastConversationKey = keyPrefix + 'lastConversation';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
+const devicesKey = keyPrefix + 'devices';
 const posesAssetsPrefix = keyPrefix + 'posesAssets/';
 
 export function saveHapticEnabled(enabled: boolean) {
@@ -106,6 +108,80 @@ export function getLastConversation(): LastConversation | null {
     }
   }
   return null;
+}
+
+/** 清掉上次会话恢复对，切换主机后旧主机的会话身份不再恢复 */
+export function clearLastConversation(): void {
+  storage.delete(lastConversationKey);
+}
+
+/** 手机端记住的主机条目，hostId 是身份，地址是属性 */
+export interface DeviceEntry {
+  hostId: string;
+  /** 本地标签，建档时取握手自称名作初始值，此后归用户所有 */
+  name: string;
+  /** 最近一次成功连接的地址 */
+  address: string;
+  /** 服务端版本号，握手成功时刷新，空串表示还没握过手 */
+  version: string;
+  /** 最近一次成功连接的毫秒时间戳 */
+  lastConnectedAt: number;
+}
+
+/** 设备登记表，currentHostId 为空串表示一台主机都没有 */
+export interface DeviceRegistry {
+  currentHostId: string;
+  devices: DeviceEntry[];
+}
+
+/**
+ * 读取设备登记表，缺失或损坏时自愈回空表，重新扫码即恢复。
+ * 旧模型的 hostName 字段读入时归一，空名条目抄作本地标签初始值后删除该字段。
+ */
+export function loadDeviceRegistry(): DeviceRegistry {
+  const raw = storage.getString(devicesKey);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as DeviceRegistry;
+      if (
+        Array.isArray(parsed.devices) &&
+        typeof parsed.currentHostId === 'string'
+      ) {
+        normalizeLegacyEntries(parsed.devices);
+        return parsed;
+      }
+    } catch {
+      logger.warn('[Storage] device registry corrupted, resetting');
+    }
+  }
+  return { currentHostId: '', devices: [] };
+}
+
+/** 旧模型的 hostName 字段一次性归一，空名抄作标签初始值，缺版本补空串，幂等可重跑 */
+function normalizeLegacyEntries(devices: DeviceEntry[]): void {
+  let migrated = 0;
+  for (const device of devices as Array<
+    DeviceEntry & { hostName?: string; version?: string }
+  >) {
+    if ('hostName' in device) {
+      if (!device.name && device.hostName) {
+        device.name = device.hostName;
+      }
+      delete device.hostName;
+      migrated += 1;
+    }
+    device.version ??= '';
+  }
+  if (migrated > 0) {
+    logger.info(
+      `[Storage] migrated ${migrated} device entries to the local-label model`
+    );
+  }
+}
+
+/** 整体写回设备登记表 */
+export function saveDeviceRegistry(registry: DeviceRegistry): void {
+  storage.set(devicesKey, JSON.stringify(registry));
 }
 
 /**
