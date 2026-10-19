@@ -65,10 +65,7 @@ export async function fetchHandshakeInfo(
   serverAddress: string,
   timeout = 5000
 ): Promise<HandshakeInfo> {
-  const responseText = await httpGet(
-    `${serverAddress}/api/handshake`,
-    timeout
-  );
+  const responseText = await httpGet(`${serverAddress}/api/handshake`, timeout);
   const data = JSON.parse(responseText) as Partial<HandshakeInfo>;
   if (!data.hostId || !data.hostName || !data.version) {
     throw new Error('handshake response missing fields');
