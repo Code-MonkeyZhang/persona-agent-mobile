@@ -12,8 +12,10 @@ import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { Chat } from '../types/Chat.ts';
+import { Chat, ChatStatus } from '../types/Chat.ts';
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
+import { useChatStore } from '../stores/chatStore';
+import { SignalSlot } from '../component/SignalSlot.tsx';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 
@@ -40,6 +42,14 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
   const swipeableRef = React.useRef<Swipeable>(null);
   /** 本行收起函数的留存引用，供卸载清理时比对登记身份 */
   const selfCloseRef = React.useRef<(() => void) | null>(null);
+
+  // 运行腿与前台抑制经 store 自订阅,集合加本机取或,props 维持纯数据行,memo 隔离不受损
+  const running = useChatStore(
+    (s) =>
+      s.runningSessions.includes(item.id) ||
+      s.sessions[item.id]?.status === ChatStatus.Running
+  );
+  const onStage = useChatStore((s) => s.displayedSessionId === item.id);
 
   const performDelete = useCallback(() => {
     trigger(HapticFeedbackTypes.notificationWarning);
@@ -108,6 +118,12 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
         onPress={() => onPress(item)}
         style={styles.touch}
       >
+        {/* 运行与未读收敛到行首占位区同一个信号位,标题位置恒定不移 */}
+        <SignalSlot
+          running={running}
+          unread={Boolean(item.hasUnread) && !onStage}
+          style={styles.signal}
+        />
         <Text numberOfLines={1} style={styles.title}>
           {item.title}
         </Text>
@@ -125,12 +141,19 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 2,
       borderRadius: 8,
     },
-    /** 左边距 42 复刻主页行图标加间距的占位宽度，会话标题与四行入口文字同列 */
+    /** 信号位与标题横排,起点合计 42 与四行入口文字同列 */
     touch: {
-      paddingLeft: 42,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: 10,
       paddingRight: 16,
       paddingVertical: 12,
       borderRadius: 8,
+    },
+    /** 行首信号位,两侧各留 8px 间隙 */
+    signal: {
+      marginLeft: 8,
+      marginRight: 8,
     },
     title: {
       ...typography.titleDisplay,

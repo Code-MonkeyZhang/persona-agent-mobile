@@ -118,6 +118,21 @@ export type ServerMessage =
       /** 变更流推送，服务端向全部在线客户端广播，镜像库据此增量回放 */
       type: 'change';
       change: SessionChange;
+    }
+  | {
+      /** 回合开始的全局广播，未订阅端据此点亮会话信号位的运行腿 */
+      type: 'run_started';
+      sessionId: string;
+    }
+  | {
+      /** 回合结束的全局广播，完成、出错与中止共用此出口 */
+      type: 'run_ended';
+      sessionId: string;
+    }
+  | {
+      /** 连接建立时的运行中会话全量列表，晚接入与重连端据此补态 */
+      type: 'runs_snapshot';
+      sessionIds: string[];
     };
 
 /**

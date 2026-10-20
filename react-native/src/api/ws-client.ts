@@ -60,6 +60,12 @@ export interface WsEventHandler {
   onAborted(sessionId: string): void;
   /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画 */
   onSubscribed(sessionId: string, isGenerating: boolean): void;
+  /** 回合开始的全局广播，运行集合据此添加，未订阅会话的信号位也能点亮 */
+  onRunStarted(sessionId: string): void;
+  /** 回合结束的全局广播，完成、出错与中止共用，运行集合据此移除 */
+  onRunEnded(sessionId: string): void;
+  /** 连接建立时的运行中会话全量列表，运行集合整体替换补态 */
+  onRunsSnapshot(sessionIds: string[]): void;
   /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
   onAppNotification(sessionId: string, source: string, content: string): void;
   /** 普通用户消息落盘广播，空闲时据此追加用户气泡并切入生成态 */
@@ -284,6 +290,23 @@ function handleMessage(msg: ServerMessage): void {
         }`
       );
       currentHandler?.onSubscribed(msg.sessionId, msg.isGenerating ?? false);
+      break;
+
+    case 'run_started':
+      logger.info(`${TAG} run_started, sessionId=${msg.sessionId}`);
+      currentHandler?.onRunStarted(msg.sessionId);
+      break;
+
+    case 'run_ended':
+      logger.info(`${TAG} run_ended, sessionId=${msg.sessionId}`);
+      currentHandler?.onRunEnded(msg.sessionId);
+      break;
+
+    case 'runs_snapshot':
+      logger.info(
+        `${TAG} runs_snapshot, count=${msg.sessionIds.length} ids=[${msg.sessionIds.join(',')}]`
+      );
+      currentHandler?.onRunsSnapshot(msg.sessionIds);
       break;
 
     case 'pong':

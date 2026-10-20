@@ -64,7 +64,8 @@ import { useDeviceStore } from '../stores/deviceStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMirrorStore } from '../stores/mirrorStore';
-import { Chat } from '../types/Chat.ts';
+import { Chat, ChatStatus } from '../types/Chat.ts';
+import { SignalSlot } from '../component/SignalSlot.tsx';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
 import ConnectionBanner from './ConnectionBanner.tsx';
@@ -75,9 +76,13 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<
   'Home'
 >;
 
-/** 列表头部属性：聊天入口预览文本与打开回调 */
+/** 列表头部属性：聊天入口预览文本、信号位两信号与打开回调 */
 interface HomeListHeaderProps {
   preview: string;
+  /** 聊天会话运行中标志 */
+  running: boolean;
+  /** 聊天会话未读标志,前台会话的抑制由父级传入前完成 */
+  unread: boolean;
   onOpenChat: () => void;
 }
 
@@ -87,6 +92,8 @@ interface HomeListHeaderProps {
  */
 const HomeListHeader = React.memo(function ({
   preview,
+  running,
+  unread,
   onOpenChat,
 }: HomeListHeaderProps) {
   const { colors } = useTheme();
@@ -113,6 +120,8 @@ const HomeListHeader = React.memo(function ({
             {preview}
           </Text>
         </View>
+        {/* 信号位贴卡片右上角,与图标同做 3px 光学补偿 */}
+        <SignalSlot running={running} unread={unread} style={styles.chatCardSignal} />
       </TouchableOpacity>
       <View style={styles.divider} />
       {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
@@ -169,6 +178,8 @@ const HomeScreen: React.FC = () => {
   const [chatLastMessage, setChatLastMessage] = useState<string | undefined>(
     undefined
   );
+  /** 聊天会话的未读标记，镜像重读时随元信息携带 */
+  const [chatUnread, setChatUnread] = useState(false);
   /** 启动恢复只执行一次的守卫 */
   const hasRestoredRef = useRef(false);
 
@@ -191,6 +202,15 @@ const HomeScreen: React.FC = () => {
     sessionPreviews[currentChatSessionId] ||
     chatLastMessage ||
     t('home.startChat');
+  /** 聊天入口的运行腿取全局广播集合,本机状态兜底,信号位收敛运行与未读两信号 */
+  const chatRunning = useChatStore(
+    (s) =>
+      s.runningSessions.includes(currentChatSessionId) ||
+      s.sessions[currentChatSessionId]?.status === ChatStatus.Running
+  );
+  const chatOnStage = useChatStore(
+    (s) => s.displayedSessionId === currentChatSessionId
+  );
 
   // ==================== 列表与卡片拉取 ====================
   /** 从镜像库读会话列表，常驻聊天会话只取其预览不进列表，数据源不依赖网络 */
@@ -208,11 +228,12 @@ const HomeScreen: React.FC = () => {
           title: s.title,
           updatedAt: s.updatedAt,
           createdAt: s.createdAt,
+          hasUnread: s.hasUnread,
         }));
       setChatHistory(chatList);
-      setChatLastMessage(
-        sessions.find((s) => isChatSession(s.id))?.lastMessage
-      );
+      const chatSession = sessions.find((s) => isChatSession(s.id));
+      setChatLastMessage(chatSession?.lastMessage);
+      setChatUnread(Boolean(chatSession?.hasUnread));
     } catch (e) {
       logger.warn(`[Home] session list reload failed: ${e}`);
     }
@@ -545,6 +566,8 @@ const HomeScreen: React.FC = () => {
                 <View style={styles.divider} />
                 <HomeListHeader
                   preview={chatEntryPreview}
+                  running={chatRunning}
+                  unread={chatUnread && !chatOnStage}
                   onOpenChat={openChatSession}
                 />
               </>
@@ -658,6 +681,10 @@ const createStyles = (colors: ColorScheme) =>
     },
     /** 聊天入口图标，顶部补偿 3px 与两行文字的首行光学居中 */
     chatCardIcon: {
+      marginTop: 3,
+    },
+    /** 聊天入口信号位，贴卡片右上角，与图标同做光学补偿 */
+    chatCardSignal: {
       marginTop: 3,
     },
     chatCardText: {
