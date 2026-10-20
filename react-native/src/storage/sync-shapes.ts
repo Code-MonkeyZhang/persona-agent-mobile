@@ -100,6 +100,8 @@ export interface SessionMeta {
   summarizedUpTo?: number;
   /** 当前立绘表情名称，undefined 时前端 fallback 到 default */
   currentPose?: string;
+  /** 会话未读标记，server 权威字段经变更流镜像，任何一端看过即全局看过 */
+  hasUnread?: boolean;
   /** 最后一条真实消息的预览，镜像读路径现算 */
   lastMessage?: string;
 }

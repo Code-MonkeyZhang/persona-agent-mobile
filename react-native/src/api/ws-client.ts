@@ -152,6 +152,19 @@ export function abort(sessionId: string): void {
   }
 }
 
+/**
+ * 上报进入会话的已读，服务端据此清除 hasUnread 并经变更流广播全端。
+ * WS 未连上时直接放弃，重连追平后镜像携带的未读会再次触发上报。
+ */
+export function viewed(sessionId: string): void {
+  logger.info(`${TAG} → viewed sessionId=${sessionId}`);
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'viewed', payload: { sessionId } }));
+  } else {
+    logger.warn(`${TAG} viewed skipped, ws not open`);
+  }
+}
+
 export function isConnected(): boolean {
   return ws?.readyState === WebSocket.OPEN;
 }
