@@ -6,7 +6,7 @@ interface TypographyTier {
   lineHeight: number;
 }
 
-/** 语义层十三档，档位与配对行高取自设计规范的移动端字体规范数值层，使用处整体散布进 TextStyle */
+/** 语义层十三档，档位与配对行高取自设计规范预览页字体段移动端章节数值层，使用处整体散布进 TextStyle */
 export const typography = {
   micro: { fontSize: 10, lineHeight: 14 },
   tertiary: { fontSize: 11, lineHeight: 15 },
