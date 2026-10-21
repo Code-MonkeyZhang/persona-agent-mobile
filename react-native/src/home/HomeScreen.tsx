@@ -121,7 +121,11 @@ const HomeListHeader = React.memo(function ({
           </Text>
         </View>
         {/* 信号位贴卡片右上角,与图标同做 3px 光学补偿 */}
-        <SignalSlot running={running} unread={unread} style={styles.chatCardSignal} />
+        <SignalSlot
+          running={running}
+          unread={unread}
+          style={styles.chatCardSignal}
+        />
       </TouchableOpacity>
       <View style={styles.divider} />
       {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
@@ -180,6 +184,7 @@ const HomeScreen: React.FC = () => {
   );
   /** 聊天会话的未读标记，镜像重读时随元信息携带 */
   const [chatUnread, setChatUnread] = useState(false);
+  const [unreadAgentIds, setUnreadAgentIds] = useState<string[]>([]);
   /** 启动恢复只执行一次的守卫 */
   const hasRestoredRef = useRef(false);
 
@@ -234,6 +239,10 @@ const HomeScreen: React.FC = () => {
       const chatSession = sessions.find((s) => isChatSession(s.id));
       setChatLastMessage(chatSession?.lastMessage);
       setChatUnread(Boolean(chatSession?.hasUnread));
+
+      const unreadAgents = await cacheDb.listUnreadAgentIds();
+      setUnreadAgentIds(unreadAgents);
+      logger.info(`[Home] unread agents: ${unreadAgents.length}`);
     } catch (e) {
       logger.warn(`[Home] session list reload failed: ${e}`);
     }
@@ -527,6 +536,9 @@ const HomeScreen: React.FC = () => {
                         size={64}
                         fallbackIconSize={32}
                       />
+                      {unreadAgentIds.includes(agent.id) && (
+                        <View style={styles.avatarUnreadDot} />
+                      )}
                     </View>
                     <Text
                       style={[
@@ -642,6 +654,21 @@ const createStyles = (colors: ColorScheme) =>
     },
     avatarRingCurrent: {
       borderColor: colors.primary,
+    },
+    /**
+     * 头像角上未读点，名下任一会话未读即亮，绿色与 SignalSlot 的未读点同色。
+     * 偏移随目视调参变动，骑线参考值为 10.84 减尺寸一半，数值越大点越向内。
+     */
+    avatarUnreadDot: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: colors.success,
+      borderWidth: 2,
+      borderColor: colors.card,
     },
     agentItemName: {
       ...typography.content,
