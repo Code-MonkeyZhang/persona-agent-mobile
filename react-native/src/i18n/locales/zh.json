@@ -117,6 +117,8 @@
     "statusConnecting": "连接中",
     "statusFailed": "连接失败",
     "statusAvailable": "可连接",
+    "statusChecking": "检测中",
+    "statusUnreachable": "连不上",
     "nameRow": "名称",
     "deviceIdRow": "设备号",
     "addressRow": "地址",

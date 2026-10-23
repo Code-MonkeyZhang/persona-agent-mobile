@@ -477,6 +477,35 @@ export class CacheDb {
     return sessions;
   }
 
+  /** 名下存在未读会话的 agent 清单，头像角标的聚合数据源 */
+  async listUnreadAgentIds(): Promise<string[]> {
+    if (!this.hostId) {
+      return [];
+    }
+    const result = await this.ensureDb().execute(
+      "SELECT DISTINCT agent_id FROM sessions WHERE json_extract(meta, '$.hasUnread') = 1"
+    );
+    const rows = result.rows as unknown as Array<{ agent_id: string }>;
+    return rows.map((row) => row.agent_id);
+  }
+
+  /** 单会话元信息，前台会话的未读上报检查用，行不存在返回 null */
+  async getSessionMeta(sessionId: string): Promise<SessionMeta | null> {
+    if (!this.hostId) {
+      return null;
+    }
+    const result = await this.ensureDb().execute(
+      'SELECT updated_at, meta FROM sessions WHERE id = ?',
+      [sessionId]
+    );
+    const row = (
+      result.rows as unknown as Array<{ updated_at: number; meta: string }>
+    )[0];
+    if (!row) return null;
+    const blob = JSON.parse(row.meta) as SessionBlob;
+    return { ...blob, updatedAt: row.updated_at };
+  }
+
   /** 从消息尾部提取聊天会话预览 */
   private async chatPreview(sessionId: string): Promise<string | undefined> {
     const result = await this.ensureDb().execute(

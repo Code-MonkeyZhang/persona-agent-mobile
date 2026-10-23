@@ -117,6 +117,8 @@
     "statusConnecting": "Connecting",
     "statusFailed": "Failed",
     "statusAvailable": "Available",
+    "statusChecking": "Checking",
+    "statusUnreachable": "Unreachable",
     "nameRow": "Name",
     "deviceIdRow": "Device ID",
     "addressRow": "Address",

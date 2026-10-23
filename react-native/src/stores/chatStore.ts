@@ -110,6 +110,11 @@ interface ChatStore {
   isLoading: boolean;
   /** 当前 agent 显示名，占位气泡与历史消息转换使用 */
   agentName: string;
+  /**
+   * 运行中会话的全局集合，run_started 与 run_ended 广播维护，
+   * runs_snapshot 整体替换，信号位运行腿与本机 status 取或。
+   */
+  runningSessions: string[];
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
@@ -131,6 +136,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sessions: {},
   displayedSessionId: NEW_CHAT_SESSION,
   isLoading: false,
+  runningSessions: [],
   agentName: 'AI',
 
   activateSession: async (sessionId) => {
@@ -324,6 +330,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       sessions: {},
       displayedSessionId: NEW_CHAT_SESSION,
       isLoading: false,
+      // 旧主机的运行集合随现场一并清空，新主机连接后由快照重建
+      runningSessions: [],
     });
   },
 }));
@@ -706,6 +714,27 @@ function registerWsHandler(): void {
       }
       enterGeneratingState(sessionId);
       logger.info(`${TAG} session is generating, loading state entered`);
+    },
+    onRunStarted: (sessionId) => {
+      // 幂等添加，广播重放或快照竞态不产生重复成员
+      const { runningSessions } = useChatStore.getState();
+      if (runningSessions.includes(sessionId)) {
+        return;
+      }
+      useChatStore.setState({ runningSessions: [...runningSessions, sessionId] });
+      logger.info(`${TAG} run set added: ${sessionId}`);
+    },
+    onRunEnded: (sessionId) => {
+      const { runningSessions } = useChatStore.getState();
+      useChatStore.setState({
+        runningSessions: runningSessions.filter((id) => id !== sessionId),
+      });
+      logger.info(`${TAG} run set removed: ${sessionId}`);
+    },
+    onRunsSnapshot: (sessionIds) => {
+      // 快照整体替换，晚接入与重连端据此对齐 server 运行全量
+      useChatStore.setState({ runningSessions: sessionIds });
+      logger.info(`${TAG} run set replaced, count=${sessionIds.length}`);
     },
     onAppNotification: (sessionId, source, content) => {
       const slice = useChatStore.getState().sessions[sessionId];

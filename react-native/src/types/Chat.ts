@@ -14,6 +14,8 @@ export type Chat = {
   title: string;
   updatedAt: number;
   createdAt: number;
+  /** 会话未读标记，server 权威字段经镜像携带，点进会话上报清除 */
+  hasUnread?: boolean;
 };
 
 export enum ChatStatus {

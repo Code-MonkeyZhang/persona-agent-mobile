@@ -1,8 +1,9 @@
 /**
  * @file device/DeviceManageScreen.tsx
  * @description 设备管理页，iOS 设置形态。
- *   分组卡平铺设备行，指示灯在状态文字左侧，绿点含义是可连接；
- *   当前项排首位加粗，状态直映链路三态，点行切换留在本页，进度由内嵌横幅播完；
+ *   分组卡平铺设备行，指示灯在状态文字左侧，状态点回答这台设备现在能不能连上；
+ *   当前项排首位加粗，点行切换留在本页，进度由内嵌横幅播完；
+ *   页面可见期间对全部设备按间隔探测轮询，结论决定非当前行的红绿；
  *   每行 ⓘ 压栈进详情页，改名与删除收进详情；底部扫码添加与输入地址，
  *   手输弹居中对话框，连接发起后交回内嵌横幅播进度。
  */
@@ -22,13 +23,13 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ColorScheme, typography, useTheme } from '../theme/index.ts';
-import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import type { DeviceEntry } from '../storage/StorageUtils.ts';
 import type { RouteParamList } from '../types/RouteTypes.ts';
 import {
   deviceDotColors,
+  deviceDotStatus,
   deviceRowStatus,
   deviceDisplayName,
   type DeviceRowStatus,
@@ -51,20 +52,35 @@ const DeviceManageScreen: React.FC = () => {
   const currentHostId = useDeviceStore((s) => s.currentHostId);
   const status = useConnectionStore((s) => s.status);
   const serverAddress = useConnectionStore((s) => s.serverAddress);
+  const probes = useConnectionStore((s) => s.probes);
+  const pendingHostId = useConnectionStore((s) => s.pendingHostId);
 
-  /** 手输地址对话框的开合与草稿，草稿在打开时回填当前地址 */
+  /** 手输地址对话框的开合、草稿与失败提示，草稿在打开时回填当前地址 */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogUrl, setDialogUrl] = useState('');
+  const [dialogError, setDialogError] = useState('');
 
   const current = devices.find((d) => d.hostId === currentHostId) ?? null;
   const others = devices.filter((d) => d.hostId !== currentHostId);
 
-  /** 点行切换但不离页，连接进度由内嵌横幅原地播完 */
+  /** 连接链在途，对话框确认键的禁用与文案随之切换 */
+  const connecting = status === 'connecting' || status === 'reconnecting';
+
+  // 页面可见期间驱动探测轮询，挂载即查一轮，卸载即停
+  useEffect(() => useConnectionStore.getState().startProbing(), []);
+
+  /** 行状态两段裁决，清单与探测结论定四态，再映射颜色与文案 */
+  const rowStatus = (
+    device: DeviceEntry,
+    isCurrent: boolean
+  ): DeviceRowStatus =>
+    deviceRowStatus(
+      deviceDotStatus(device, { currentHostId, pendingHostId, status, probes }),
+      isCurrent
+    );
+
+  /** 点其他行切换、点当前行刷新链路，都不离页，在途守卫在 store，进度由行状态点原地播完 */
   const handleSwitch = (hostId: string) => {
-    if (hostId === currentHostId) {
-      return;
-    }
-    logger.info(`[DeviceManage] switch to ${hostId}`);
     useConnectionStore
       .getState()
       .switchDevice(hostId)
@@ -74,38 +90,44 @@ const DeviceManageScreen: React.FC = () => {
   /** 打开对话框并回填当前地址，扫过码换的地址也能带进来 */
   const openInput = () => {
     setDialogUrl(serverAddress);
+    setDialogError('');
     setDialogOpen(true);
   };
 
-  /** 对话框内发起手输连接走 connectByAddress 四阶段链，收起对话框由横幅播进度 */
-  const runConnect = () => {
+  /** 对话框内发起手输连接走 connectByAddress 四阶段链，成功收层，失败留在原地点出红字 */
+  const runConnect = async () => {
     const target = dialogUrl.trim();
     if (!target) {
       return;
     }
+    setDialogError('');
     logger.info(`[DeviceManage] manual connect: ${target}`);
-    useConnectionStore
+    const ok = await useConnectionStore
       .getState()
       .connectByAddress(target)
-      .catch(() => undefined);
-    setDialogOpen(false);
+      .catch(() => false);
+    if (ok) {
+      setDialogOpen(false);
+      return;
+    }
+    setDialogError(t('home.connFailed'));
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <ConnectionBanner />
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 分组卡：当前项排首位加粗，行点换设备，ⓘ 压栈进详情 */}
+        {/* 分组卡：当前项排首位加粗，行点换设备或刷新当前链路，ⓘ 压栈进详情 */}
         <View style={styles.group}>
           {current && (
             <DeviceRow
               device={current}
               bold
-              status={deviceRowStatus(true, status)}
+              status={rowStatus(current, true)}
+              onRowPress={() => handleSwitch(current.hostId)}
               onInfo={() =>
                 navigation.navigate('DeviceDetail', { hostId: current.hostId })
               }
@@ -116,7 +138,7 @@ const DeviceManageScreen: React.FC = () => {
               key={device.hostId}
               device={device}
               divided
-              status={deviceRowStatus(false, status)}
+              status={rowStatus(device, false)}
               onRowPress={() => handleSwitch(device.hostId)}
               onInfo={() =>
                 navigation.navigate('DeviceDetail', { hostId: device.hostId })
@@ -152,12 +174,9 @@ const DeviceManageScreen: React.FC = () => {
         onChange={setDialogUrl}
         onCancel={() => setDialogOpen(false)}
         onConfirm={runConnect}
-        confirmLabel={t('server.connect')}
-        confirmDisabled={
-          status === 'connecting' ||
-          status === 'reconnecting' ||
-          !dialogUrl.trim()
-        }
+        confirmLabel={connecting ? t('server.connecting') : t('server.connect')}
+        confirmDisabled={connecting || !dialogUrl.trim()}
+        error={dialogError}
         placeholder={t('server.placeholder')}
         keyboardType="url"
       />

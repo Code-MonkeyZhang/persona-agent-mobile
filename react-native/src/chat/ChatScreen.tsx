@@ -46,6 +46,9 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
+import { cacheDb } from '../storage/cache-db.ts';
+import { useMirrorStore } from '../stores/mirrorStore';
+import { viewed as wsViewed } from '../api/ws-client.ts';
 import { logger } from '../lib/logger';
 import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
@@ -256,6 +259,34 @@ function ChatScreen(): React.JSX.Element {
       cancelled = true;
     };
   }, [activeSessionId, scroll]);
+
+  // ==================== 会话切换 & 消息加载 ====================
+  /**
+   * 前台会话的未读上报。
+   * 前台且带未读即发送 viewed,单一入口覆盖进入会话与广播置位两种来源,
+   * 镜像版本驱动补发,重连追平后未读仍在即再报,服务端幂等空写无副作用。
+   */
+  const mirrorVersion = useMirrorStore((s) => s.version);
+  useEffect(() => {
+    if (!activeSessionId || activeSessionId === NEW_CHAT_SESSION) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const meta = await cacheDb.getSessionMeta(activeSessionId);
+        if (!cancelled && meta?.hasUnread) {
+          wsViewed(activeSessionId);
+          logger.info(`[ChatScreen] session viewed: ${activeSessionId}`);
+        }
+      } catch (e) {
+        logger.warn(`[ChatScreen] viewed check failed: ${e}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, mirrorVersion]);
 
   // ==================== 屏幕 ====================
   useEffect(() => {

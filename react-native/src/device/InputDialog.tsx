@@ -2,7 +2,7 @@
  * @file device/InputDialog.tsx
  * @description 设备页共用的居中输入对话框。
  *   标题、图标、占位与确认文案由调用方给定，手输地址与改名共用同一副骨架，
- *   确认发起后收层，后续进度交回连接横幅播完。
+ *   可选的红字提示行用于连接失败原地展示，收层时机由调用方裁决。
  */
 import * as React from 'react';
 import {
@@ -18,7 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ColorScheme, typography, useTheme } from '../theme/index.ts';
 
-/** 居中输入对话框，取消恒在左侧，确认文案与禁用态由调用方裁决 */
+/** 居中输入对话框，取消恒在左侧，确认文案与禁用态由调用方裁决，红字提示行可选 */
 function InputDialog({
   visible,
   title,
@@ -31,6 +31,7 @@ function InputDialog({
   confirmDisabled,
   placeholder,
   keyboardType,
+  error,
 }: {
   visible: boolean;
   title: string;
@@ -43,6 +44,7 @@ function InputDialog({
   confirmDisabled: boolean;
   placeholder?: string;
   keyboardType?: 'default' | 'url';
+  error?: string;
 }) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -85,6 +87,7 @@ function InputDialog({
                 returnKeyType="go"
               />
             </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <View style={styles.dialogBtnRow}>
               <TouchableOpacity
                 style={styles.dialogCancelBtn}
@@ -155,6 +158,12 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       ...typography.content,
       color: colors.text,
+    },
+    errorText: {
+      ...typography.caption,
+      color: colors.error,
+      textAlign: 'center',
+      marginTop: 10,
     },
     dialogBtnRow: {
       flexDirection: 'row',
