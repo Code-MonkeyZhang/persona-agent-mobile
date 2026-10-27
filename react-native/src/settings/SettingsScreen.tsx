@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BrainCircuit, Vibrate, VibrateOff } from 'lucide-react-native';
+import { Lightbulb, Vibrate, VibrateOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
@@ -75,7 +75,7 @@ function SettingsScreen(): React.JSX.Element {
   const styles = createStyles(colors);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <ScrollView style={styles.container}>
         <View style={styles.card}>
           {/* 震动开关，设备级偏好走本地 MMKV */}
@@ -94,7 +94,7 @@ function SettingsScreen(): React.JSX.Element {
           />
           {/* 思考过程开关，写显示偏好 store 并持久化到 MMKV */}
           <ToggleRow
-            icon={<BrainCircuit size={19} color={colors.text} />}
+            icon={<Lightbulb size={19} color={colors.text} />}
             label={t('settings.thoughtProcess')}
             description={t('settings.thoughtProcessDesc')}
             value={thoughtProcessVisible}
