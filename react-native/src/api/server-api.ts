@@ -936,9 +936,7 @@ export async function deleteSession(
  */
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
-  sessionCreatedAt: number,
-  agentName: string,
-  avatar: string
+  sessionCreatedAt: number
 ): ChatMessage[] {
   const result: ChatMessage[] = [];
   let pendingThoughts: Thought[] = [];
@@ -956,7 +954,7 @@ export function convertToChatMessages(
       text: pendingContent,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       createdAt: new Date(sessionCreatedAt + result.length * 1000),
-      user: { _id: BOT_ID, name: agentName, avatar },
+      user: { _id: BOT_ID },
     });
     pendingThoughts = [];
     pendingContent = '';
@@ -1026,7 +1024,7 @@ export function convertToChatMessages(
         _id: uuidv4(),
         text,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
-        user: { _id: BOT_ID, name: agentName, avatar },
+        user: { _id: BOT_ID },
       });
     } else {
       // 用户消息原地显示从不结组，插话因此排在整轮回复之前

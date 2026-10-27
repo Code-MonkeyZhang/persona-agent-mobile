@@ -15,7 +15,6 @@ import * as wsClient from '../api/ws-client.ts';
 import {
   createSession,
   sendChatMessage,
-  getAgentAvatarUrl,
   fetchSessionMessages,
   convertToChatMessages,
   chatSessionIdFor,
@@ -57,11 +56,11 @@ export const textPlaceholder = '...';
 export const EMPTY_MESSAGES: ChatMessage[] = [];
 
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
-const createBotMessage = (agentName: string, avatar: string): ChatMessage => ({
+const createBotMessage = (): ChatMessage => ({
   _id: uuidv4(),
   text: textPlaceholder,
   createdAt: new Date(),
-  user: { _id: BOT_ID, name: agentName, avatar },
+  user: { _id: BOT_ID },
   steps: [],
 });
 
@@ -174,12 +173,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         lastRefreshedAt[sessionId] = view.updatedAt;
         updateSlice(sessionId, (slice) => ({
           ...slice,
-          messages: convertToChatMessages(
-            view.messages,
-            view.createdAt,
-            get().agentName,
-            getAgentAvatarUrl(agentId, address)
-          ),
+          messages: convertToChatMessages(view.messages, view.createdAt),
           pose: view.currentPose ?? 'default',
           poseError: false,
         }));
@@ -317,7 +311,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   setAgentProfile: (name) => {
-    set({ agentName: name || 'AI' });
+    const next = name || 'AI';
+    set({ agentName: next });
+    logger.debug(`${TAG} agent profile updated, name=${next}`);
   },
 
   setPoseError: (sessionId, value) => {
@@ -378,10 +374,7 @@ function assemblePendingBubble(
   const finalThoughts = stripLastTextThought(buffer.thoughts);
   return [
     {
-      ...createBotMessage(
-        useChatStore.getState().agentName,
-        getAgentAvatarUrl(getServerAgentId(), getServerAddress())
-      ),
+      ...createBotMessage(),
       text: buffer.content,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       aborted: aborted || undefined,
@@ -512,12 +505,7 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     lastRefreshedAt[sessionId] = view.updatedAt;
     updateSlice(sessionId, (prev) => ({
       ...prev,
-      messages: convertToChatMessages(
-        view.messages,
-        view.createdAt,
-        useChatStore.getState().agentName,
-        getAgentAvatarUrl(agentId, address)
-      ),
+      messages: convertToChatMessages(view.messages, view.createdAt),
     }));
     logger.info(`${TAG} messages refreshed from disk, session=${sessionId}`);
   } catch (e) {
@@ -657,10 +645,7 @@ function registerWsHandler(): void {
       // 缓冲冲刷成半截气泡再追加错误气泡，与刷新链路的 error 结组口径一致
       const flushed = assemblePendingBubble(getTurnBuffer(sessionId));
       const errorBubble: ChatMessage = {
-        ...createBotMessage(
-          useChatStore.getState().agentName,
-          getAgentAvatarUrl(getServerAgentId(), getServerAddress())
-        ),
+        ...createBotMessage(),
         text: i18n.t('chat.error', { message }),
       };
       updateSlice(sessionId, (prev) => ({

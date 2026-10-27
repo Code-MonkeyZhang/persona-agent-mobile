@@ -129,6 +129,8 @@ function ChatScreen(): React.JSX.Element {
   const displayedSessionId = useChatStore((s) => s.displayedSessionId);
   const sessionSlice = useChatStore((s) => s.sessions[s.displayedSessionId]);
   const isLoadingMessages = useChatStore((s) => s.isLoading);
+  /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
+  const agentName = useChatStore((s) => s.agentName);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -426,6 +428,7 @@ function ChatScreen(): React.JSX.Element {
           isLastAIMessage={isLastAIMessage}
           onReasoningToggle={scroll.handleReasoningToggle}
           agentId={currentAgentId}
+          agentName={agentName}
           serverAddress={serverAddressRef.current}
         />
       );
@@ -435,6 +438,7 @@ function ChatScreen(): React.JSX.Element {
       chatStatus,
       scroll.handleReasoningToggle,
       currentAgentId,
+      agentName,
       serverAddressRef,
     ]
   );
