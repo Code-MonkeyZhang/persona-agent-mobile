@@ -30,6 +30,7 @@ export type ConnectionStatus =
   | 'connecting'
   | 'connected'
   | 'reconnecting'
+  | 'offline'
   | 'address_invalid';
 
 /** 单台设备的探测超时，几秒内无回应即判连不上 */

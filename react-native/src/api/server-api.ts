@@ -59,7 +59,7 @@ export interface PendingInput {
 
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
-  | { type: 'connected'; clientId: string }
+  | { type: 'connected'; clientId: string; keepaliveIntervalMs?: number }
   | { type: 'subscribed'; sessionId: string; isGenerating?: boolean }
   | {
       type: 'step_complete';
@@ -93,7 +93,7 @@ export type ServerMessage =
       reason: SpeakErrorReason;
       message: string;
     }
-  | { type: 'pong' }
+  | { type: 'keepalive' }
   | { type: 'aborted'; sessionId: string; reason: string }
   | {
       /** App 通知触发的回合开始信号，客户端据此创建 AI 占位气泡并切入生成状态 */
