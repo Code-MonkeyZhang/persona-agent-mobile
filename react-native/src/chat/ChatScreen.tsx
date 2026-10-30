@@ -461,8 +461,10 @@ function ChatScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.contentArea}>
-        {/* 头部下方状态槽，红蓝绿条在上，时间线浮层常驻其下 */}
-        <ConnectionBanner />
+        {/* 头部下方状态槽，横幅浮层盖顶不占布局，层级压过时间线，时间线让位到其下方 */}
+        <View style={styles.bannerOverlay}>
+          <ConnectionBanner />
+        </View>
         <LiveStrip />
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
           {/* Pane 1: 聊天列表 */}
@@ -621,6 +623,13 @@ const createStyles = (colors: ColorScheme) =>
     contentArea: {
       flex: 1,
       overflow: 'hidden',
+    },
+    bannerOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 30,
     },
     fibWrapper: {
       position: 'absolute',

@@ -1,12 +1,13 @@
 /**
  * @file home/ConnectionBanner.tsx
- * @description Home 与 Chat 及设备管理页共用的连接态条，五态直映链路。
+ * @description Home 与 Chat 共用的连接态条，五态直映链路。
  *   - 红条连接失败，点本体以当前登记主机立即重连，右端箭头独立进设备管理页
  *   - 蓝条未填地址引导进设备管理页，点本体与点箭头等价
  *   - 蓝条连接中与重连中转圈过渡，重连由 ws-client 自动进行，不可点
  *   - 蓝条正在同步转圈持续在位，首次全量同步完成前不让位绿条
  *   - 绿条已连接或已同步亮两秒后压高收起，动画回调摘除并配兜底定时器双保险，重挂载不重播
  *   - 进场与收起动画由 reanimated 在 UI 线程驱动，新架构下 JS 驱动布局动画会掉帧留残影
+ *   - Home 页流内挂载维持占布局现状，Chat 页浮层挂载不占布局，在位状态经 useBannerPresence 广播
  *   组件自取连接态并自行压栈跳转，宿主直接挂载即可，无需传回调。
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,6 +17,7 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { create } from 'zustand';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -47,8 +49,26 @@ const COLLAPSE_FALLBACK_MS = 600;
 /** 横幅进场动画时长 */
 const ENTER_MS = 250;
 
-/** 横幅固定行高与纵向内边距，收起动画把这两项压到零 */
-const BANNER_HEIGHT = 52;
+/**
+ * 横幅在位状态的最小广播，Chat 页的时间线据此做让位偏移。
+ * 在位判定只在横幅组件内推导，消费方不复制五态与绿条节拍逻辑。
+ */
+export const useBannerPresence = create<{ visible: boolean }>(() => ({
+  visible: false,
+}));
+
+/** 在位状态去重写入，翻转时留一条日志供排查让位链路 */
+function setBannerVisible(visible: boolean): void {
+  const prev = useBannerPresence.getState().visible;
+  if (prev === visible) {
+    return;
+  }
+  useBannerPresence.setState({ visible });
+  logger.debug(`[ConnectionBanner] presence -> ${visible}`);
+}
+
+/** 横幅固定行高与纵向内边距，收起动画把这两项压到零，Chat 页时间线引用行高做让位量 */
+export const BANNER_HEIGHT = 52;
 const BANNER_PAD_V = 8;
 
 /** 绿条的三段状态，亮起两秒后转收起，动画播完摘除 */
@@ -153,6 +173,11 @@ const ConnectionBanner: React.FC = () => {
       cancelAnimation(collapseProgress);
     };
   }, [flashPhase, collapseProgress, onCollapseFinished]);
+
+  // 对外广播在位状态，红蓝同步各态恒在位，绿条从亮起播到收起结束都算在位
+  useEffect(() => {
+    setBannerVisible(kind !== 'flash' || flashPhase !== 'gone');
+  }, [kind, flashPhase]);
 
   // 每次视觉分档变化重播进场动画，淡入加自上而下八像素落位
   useEffect(() => {
@@ -363,13 +388,15 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: BANNER_PAD_V,
     },
     bannerTransient: {
-      backgroundColor: colors.primarySelectedBackground,
+      // rgba(0,122,255,0.1) 叠白底的实色换算，Chat 页浮层挂载下不透底，白底上观感与透明浅色一致
+      backgroundColor: '#E6F3FF',
     },
     bannerStalled: {
       backgroundColor: colors.error,
     },
     bannerFlash: {
-      backgroundColor: colors.successBackground,
+      // rgba(0,200,81,0.1) 叠白底的实色换算，同上不透底
+      backgroundColor: '#E6FAEE',
     },
     /** 收起中的绿条，高度与内边距由动画值接管并裁掉溢出内容 */
     collapsing: {

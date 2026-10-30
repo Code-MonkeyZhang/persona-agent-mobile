@@ -8,6 +8,7 @@
  *   - 时间线三档浮在消息区上方不占布局，消息区高度恒定，行数据从消息流加运行态推导不新增存储
  *   - 行纯展示不可点，详情弹层只在桌面端
  *   - 档位偏好经本地存储跨启动记忆，只记 line 与 hair 两态，中止的轮次不落盘，时间线上它没有发生过
+ *   - 连接横幅在位时整层让位到横幅下方，横幅收走滑回顶部
  */
 import { useEffect, useMemo, useState } from 'react';
 import Animated, {
@@ -46,6 +47,7 @@ import {
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../../stores/chatStore';
+import { BANNER_HEIGHT, useBannerPresence } from '../../home/ConnectionBanner';
 import {
   getStripCollapsed,
   saveStripCollapsed,
@@ -461,6 +463,8 @@ export function LiveStrip() {
   const shellH = useSharedValue(BAR_H);
   const barOpacity = useSharedValue(1);
   const capsuleOpacity = useSharedValue(0);
+  const bannerOffset = useSharedValue(0);
+  const bannerVisible = useBannerPresence((s) => s.visible);
 
   const running = !!liveRun && liveRun.sessionId === displayedSessionId;
   const rows = useMemo(
@@ -502,6 +506,14 @@ export function LiveStrip() {
     });
   }, [mode, cappedPanelH, panelH, shellH, barOpacity, capsuleOpacity]);
 
+  // 连接横幅在位时整层让位一个横幅高度，三档一并平移，收走滑回
+  useEffect(() => {
+    bannerOffset.value = withTiming(bannerVisible ? BANNER_HEIGHT : 0, {
+      duration: 250,
+      easing: Easing.inOut(Easing.quad),
+    });
+  }, [bannerVisible, bannerOffset]);
+
   // 倒置列表展示新在前数据，倒序回时间正序让最新行贴视觉底
   const panelData = useMemo(() => [...rows].reverse(), [rows]);
   const panelStyle = useAnimatedStyle(() => ({ height: panelH.value }));
@@ -509,6 +521,9 @@ export function LiveStrip() {
   const barStyle = useAnimatedStyle(() => ({ opacity: barOpacity.value }));
   const capsuleStyle = useAnimatedStyle(() => ({
     opacity: capsuleOpacity.value,
+  }));
+  const layerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: bannerOffset.value }],
   }));
 
   if (!running && rows.length === 0) {
@@ -529,7 +544,7 @@ export function LiveStrip() {
   const barInteractive = mode !== 'hair';
 
   return (
-    <View style={styles.layer}>
+    <Animated.View style={[styles.layer, layerStyle]}>
       <Animated.View style={[styles.shellWrap, shellStyle]}>
         {/* 条子背景层，磨砂加白底加下描边，随条子档淡入淡出，不参与点击 */}
         <Animated.View
@@ -650,7 +665,7 @@ export function LiveStrip() {
           </Animated.View>
         </Animated.View>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 
