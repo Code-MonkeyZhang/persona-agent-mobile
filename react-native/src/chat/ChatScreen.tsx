@@ -36,7 +36,7 @@ import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
-import { SweepIndicator } from './component/SweepIndicator.tsx';
+import { LiveStrip } from './component/LiveStrip.tsx';
 import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
@@ -90,6 +90,13 @@ const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
 /** 消息窗口的初始与扩展尺寸，列表更新成本随总条数线性放大，窗口化后稳定在常数级 */
 const MESSAGE_WINDOW_BASE = 300;
 const MESSAGE_WINDOW_STEP = 300;
+
+/**
+ * 顶栏时间线的统一顶部留位，行档 36 加下描边 1 共 37。
+ * 档位无关统一预留，hair 档不因视觉小而少留，open 展开面板盖住内容属明确豁免。
+ * 倒置列表里 paddingBottom 映射视觉顶，与桌面 MessageList 的 STRIP_TOP_RESERVE 同规格，两边调整需同步。
+ */
+const STRIP_TOP_RESERVE = 37;
 
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
@@ -454,9 +461,9 @@ function ChatScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.contentArea}>
-        {/* 头部下方状态槽，红蓝绿条在上，生成扫动条在下，绿条亮两秒收起后不占布局 */}
+        {/* 头部下方状态槽，红蓝绿条在上，时间线浮层常驻其下 */}
         <ConnectionBanner />
-        {chatStatus === ChatStatus.Running && <SweepIndicator />}
+        <LiveStrip />
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
           {/* Pane 1: 聊天列表 */}
           <View style={slideStyle.pane}>
@@ -624,7 +631,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     contentContainer: {
       paddingTop: 15,
-      paddingBottom: 15,
+      paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
     },

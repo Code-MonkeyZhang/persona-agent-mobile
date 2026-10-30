@@ -1,7 +1,7 @@
 /**
  * @file component/ChatHeaderTitle.tsx
  * @description Chat 头部中间件，常驻居中的会话标题。
- *   连接态显示已移交 ChatScreen 的 ConnectionBanner，生成指示已移交 SweepIndicator。
+ *   连接态显示已移交 ChatScreen 的 ConnectionBanner，生成指示已移交顶栏时间线 LiveStrip。
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';

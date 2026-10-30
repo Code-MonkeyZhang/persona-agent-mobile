@@ -13,6 +13,7 @@ const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 const companionOpenKey = keyPrefix + 'companionOpen';
+const stripCollapsedKey = keyPrefix + 'stripCollapsed';
 const lastConversationKey = keyPrefix + 'lastConversation';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
@@ -79,6 +80,16 @@ export function saveCompanionOpen(open: boolean) {
 /** 获取陪伴面板是否展开，默认 false */
 export function getCompanionOpen(): boolean {
   return storage.getBoolean(companionOpenKey) ?? false;
+}
+
+/** 保存时间线收起档偏好，true 为发丝线档，line 与 hair 切换时写入，open 不记录 */
+export function saveStripCollapsed(collapsed: boolean) {
+  storage.set(stripCollapsedKey, collapsed);
+}
+
+/** 获取时间线收起档偏好，默认 false 即留一行档 */
+export function getStripCollapsed(): boolean {
+  return storage.getBoolean(stripCollapsedKey) ?? false;
 }
 
 /** 上次打开的对话，Agent 与会话成对存储，用于冷启动恢复 */

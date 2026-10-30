@@ -15,6 +15,7 @@ import type {
   WsToolResult,
   SpeakErrorReason,
   PendingInput,
+  CurrentActivity,
 } from './server-api.ts';
 import type { SessionChange } from '../storage/sync-shapes.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
@@ -46,6 +47,13 @@ export interface WsEventHandler {
     toolCalls?: ToolCall[],
     toolResults?: WsToolResult[]
   ): void;
+  /** 工具调用开始事件，时间线据此立即开活动步显示执行中的工具身份 */
+  onToolStarted(
+    sessionId: string,
+    stepIndex: number,
+    toolName: string,
+    paramSummary: string
+  ): void;
   /** 轮次边界信号，客户端据此把轮次缓冲组装成整轮气泡，生成状态保持 */
   onTurnComplete(sessionId: string): void;
   onComplete(sessionId: string): void;
@@ -67,8 +75,12 @@ export interface WsEventHandler {
   ): void;
   /** 用户中止生成后服务端推送的确认事件 */
   onAborted(sessionId: string): void;
-  /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画 */
-  onSubscribed(sessionId: string, isGenerating: boolean): void;
+  /** 订阅成功时服务端返回的会话状态，isGenerating 为 true 时前端恢复加载动画，currentActivity 携带当前动作 */
+  onSubscribed(
+    sessionId: string,
+    isGenerating: boolean,
+    activity?: CurrentActivity
+  ): void;
   /** 回合开始的全局广播，运行集合据此添加，未订阅会话的信号位也能点亮 */
   onRunStarted(sessionId: string): void;
   /** 回合结束的全局广播，完成、出错与中止共用，运行集合据此移除 */
@@ -332,7 +344,11 @@ function handleMessage(msg: ServerMessage): void {
           msg.isGenerating ?? false
         }`
       );
-      currentHandler?.onSubscribed(msg.sessionId, msg.isGenerating ?? false);
+      currentHandler?.onSubscribed(
+        msg.sessionId,
+        msg.isGenerating ?? false,
+        msg.currentActivity
+      );
       break;
 
     case 'run_started':
@@ -360,6 +376,18 @@ function handleMessage(msg: ServerMessage): void {
 
     case 'title_updated':
       useSessionStore.getState().updateSessionTitle(msg.sessionId, msg.title);
+      break;
+
+    case 'tool_started':
+      logger.info(
+        `${TAG} tool_started, sessionId=${msg.sessionId} step=${msg.stepIndex} tool=${msg.toolName}`
+      );
+      currentHandler?.onToolStarted(
+        msg.sessionId,
+        msg.stepIndex,
+        msg.toolName,
+        msg.paramSummary
+      );
       break;
 
     case 'step_complete':

@@ -56,8 +56,8 @@ function GridCube({
       phase < 0.35
         ? 0.5 * (1 - phase / 0.35)
         : phase < 0.7
-          ? ((phase - 0.35) / 0.35) * 0.5
-          : 0.5;
+        ? ((phase - 0.35) / 0.35) * 0.5
+        : 0.5;
     return { transform: [{ scale }] };
   });
   return (

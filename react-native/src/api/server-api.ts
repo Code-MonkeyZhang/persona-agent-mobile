@@ -6,7 +6,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
-import { stripLastTextThought } from '../chat/util/thought-utils';
 import { logger } from '../lib/logger';
 import type {
   SessionChange,
@@ -57,10 +56,26 @@ export interface PendingInput {
   content: string;
 }
 
+/** 运行中会话的当前动作，subscribed 携带，thinking 与 tool 两态 */
+export type CurrentActivity =
+  | { kind: 'thinking' }
+  | {
+      kind: 'tool';
+      stepIndex: number;
+      toolName: string;
+      paramSummary: string;
+    };
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
   | { type: 'connected'; clientId: string; keepaliveIntervalMs?: number }
-  | { type: 'subscribed'; sessionId: string; isGenerating?: boolean }
+  | {
+      type: 'subscribed';
+      sessionId: string;
+      isGenerating?: boolean;
+      /** 生成中会话的当前动作，中途接入端据此立即显示工具执行或思考中 */
+      currentActivity?: CurrentActivity;
+    }
   | {
       type: 'step_complete';
       sessionId: string;
@@ -71,6 +86,19 @@ export type ServerMessage =
       toolCalls?: ToolCall[];
       /** 工具执行结果列表，可用于展示工具是否成功 */
       toolResults?: WsToolResult[];
+      /** 子代理工具链路的挂载点，当前无写入方，演进预留 */
+      parent_tool_use_id?: string;
+    }
+  | {
+      /** 工具调用开始事件，agent 开始执行单个工具时即时广播，UI 据此显示执行中的工具身份 */
+      type: 'tool_started';
+      sessionId: string;
+      stepIndex: number;
+      toolName: string;
+      /** 入参经掩码与摘要压成的一句参数摘要 */
+      paramSummary: string;
+      /** 子代理工具链路的挂载点，当前无写入方，演进预留 */
+      parent_tool_use_id?: string;
     }
   | { type: 'round_complete'; sessionId: string }
   | { type: 'turn_complete'; sessionId: string }
@@ -934,6 +962,21 @@ export async function deleteSession(
  * - 扫描结束强制结一次，兜底崩溃留下的半截内容
  * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条间隔 1 秒近似处理。
  */
+
+/**
+ * 移除 steps 中最后一条 text thought。
+ * 最终回复已在消息气泡展示，时间线中不再重复。
+ * @param thoughts 待去重的思考步骤列表
+ */
+export function stripLastTextThought(thoughts: Thought[]): Thought[] {
+  for (let i = thoughts.length - 1; i >= 0; i--) {
+    if (thoughts[i].type === 'text') {
+      return thoughts.filter((_, idx) => idx !== i);
+    }
+  }
+  return thoughts;
+}
+
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
   sessionCreatedAt: number
