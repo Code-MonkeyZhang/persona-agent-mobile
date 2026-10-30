@@ -13,7 +13,11 @@
     "vibration": "震动",
     "vibrationDesc": "交互时触觉反馈",
     "thoughtProcess": "思考过程",
-    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口"
+    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口",
+    "exportLogs": "导出日志",
+    "exportLogsDesc": "分享最近七天的运行日志文件",
+    "noLogs": "暂无日志文件",
+    "exportFailed": "日志分享未完成"
   },
   "phone": {
     "resetLayout": "重置桌面布局",

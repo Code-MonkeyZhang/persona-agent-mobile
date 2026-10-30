@@ -13,7 +13,11 @@
     "vibration": "Vibration",
     "vibrationDesc": "Haptic feedback on interactions",
     "thoughtProcess": "Thought Process",
-    "thoughtProcessDesc": "Show the thought process entry on messages"
+    "thoughtProcessDesc": "Show the thought process entry on messages",
+    "exportLogs": "Export Logs",
+    "exportLogsDesc": "Share log files from the last seven days",
+    "noLogs": "No log files yet",
+    "exportFailed": "Log sharing did not complete"
   },
   "phone": {
     "resetLayout": "Reset Layout",
