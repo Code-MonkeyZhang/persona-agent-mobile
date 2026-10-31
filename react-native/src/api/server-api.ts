@@ -56,6 +56,12 @@ export interface PendingInput {
   content: string;
 }
 
+/** 运行中会话的带归属条目，Agent 级运行集合的数据源 */
+export interface RunningSessionEntry {
+  sessionId: string;
+  agentId: string;
+}
+
 /** 运行中会话的当前动作，subscribed 携带，thinking 与 tool 两态 */
 export type CurrentActivity =
   | { kind: 'thinking' }
@@ -148,19 +154,26 @@ export type ServerMessage =
       change: SessionChange;
     }
   | {
-      /** 回合开始的全局广播，未订阅端据此点亮会话信号位的运行腿 */
+      /** 回合开始的全局广播，未订阅端据此点亮会话信号位的运行腿与头像运行圈 */
       type: 'run_started';
       sessionId: string;
+      /** 归属 Agent，旧服务端可能缺失，缺失时头像圈不转 */
+      agentId?: string;
     }
   | {
       /** 回合结束的全局广播，完成、出错与中止共用此出口 */
       type: 'run_ended';
       sessionId: string;
+      /** 结束会话的归属 Agent，与 run_started 对称携带 */
+      agentId?: string;
     }
   | {
       /** 连接建立时的运行中会话全量列表，晚接入与重连端据此补态 */
       type: 'runs_snapshot';
+      /** 保留给旧口径的会话 id 列表 */
       sessionIds: string[];
+      /** 带归属的同一份全量，旧服务端缺失时头像圈不转不误转 */
+      runs?: RunningSessionEntry[];
     };
 
 /**

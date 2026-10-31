@@ -16,6 +16,7 @@ import type {
   SpeakErrorReason,
   PendingInput,
   CurrentActivity,
+  RunningSessionEntry,
 } from './server-api.ts';
 import type { SessionChange } from '../storage/sync-shapes.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
@@ -81,12 +82,12 @@ export interface WsEventHandler {
     isGenerating: boolean,
     activity?: CurrentActivity
   ): void;
-  /** 回合开始的全局广播，运行集合据此添加，未订阅会话的信号位也能点亮 */
-  onRunStarted(sessionId: string): void;
+  /** 回合开始的全局广播，运行集合据此添加，归属完整时头像运行圈一并起转 */
+  onRunStarted(sessionId: string, agentId?: string): void;
   /** 回合结束的全局广播，完成、出错与中止共用，运行集合据此移除 */
   onRunEnded(sessionId: string): void;
-  /** 连接建立时的运行中会话全量列表，运行集合整体替换补态 */
-  onRunsSnapshot(sessionIds: string[]): void;
+  /** 连接建立时的运行中会话全量列表，运行集合整体替换补态，带归属时维护 Agent 集合 */
+  onRunsSnapshot(sessionIds: string[], runs?: RunningSessionEntry[]): void;
   /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
   onAppNotification(sessionId: string, source: string, content: string): void;
   /** 普通用户消息落盘广播，空闲时据此追加用户气泡并切入生成态 */
@@ -352,12 +353,20 @@ function handleMessage(msg: ServerMessage): void {
       break;
 
     case 'run_started':
-      logger.info(`${TAG} run_started, sessionId=${msg.sessionId}`);
-      currentHandler?.onRunStarted(msg.sessionId);
+      logger.info(
+        `${TAG} run_started, sessionId=${msg.sessionId} agentId=${
+          msg.agentId ?? 'unknown'
+        }`
+      );
+      currentHandler?.onRunStarted(msg.sessionId, msg.agentId);
       break;
 
     case 'run_ended':
-      logger.info(`${TAG} run_ended, sessionId=${msg.sessionId}`);
+      logger.info(
+        `${TAG} run_ended, sessionId=${msg.sessionId} agentId=${
+          msg.agentId ?? 'unknown'
+        }`
+      );
       currentHandler?.onRunEnded(msg.sessionId);
       break;
 
@@ -365,9 +374,9 @@ function handleMessage(msg: ServerMessage): void {
       logger.info(
         `${TAG} runs_snapshot, count=${
           msg.sessionIds.length
-        } ids=[${msg.sessionIds.join(',')}]`
+        } ids=[${msg.sessionIds.join(',')}] runs=${msg.runs?.length ?? 0}`
       );
-      currentHandler?.onRunsSnapshot(msg.sessionIds);
+      currentHandler?.onRunsSnapshot(msg.sessionIds, msg.runs);
       break;
 
     case 'keepalive':

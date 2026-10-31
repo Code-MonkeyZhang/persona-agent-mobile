@@ -155,6 +155,13 @@ interface ChatStore {
    */
   runningSessions: string[];
   /**
+   * 运行归属的内存登记，sessionId 指向 agentId，
+   * 只收带归属的运行族事件，旧服务端缺字段时不登记。
+   */
+  runningOwners: Map<string, string>;
+  /** 运行中 Agent 的全局集合，头像运行圈据此起转停转 */
+  runningAgents: string[];
+  /**
    * 运行期时间线的全局单例，内含 sessionId 归属防串台，
    * ws 单订阅决定同时只有一条活动时间线，顶栏时间线据此渲染活动尾巴。
    */
@@ -181,6 +188,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   displayedSessionId: NEW_CHAT_SESSION,
   isLoading: false,
   runningSessions: [],
+  runningOwners: new Map(),
+  runningAgents: [],
   agentName: 'AI',
   liveRun: null,
 
@@ -374,6 +383,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       isLoading: false,
       // 旧主机的运行集合与时间线随现场一并清空，新主机连接后由快照重建
       runningSessions: [],
+      runningOwners: new Map(),
+      runningAgents: [],
       liveRun: null,
     });
   },
@@ -887,28 +898,50 @@ function registerWsHandler(): void {
         }`
       );
     },
-    onRunStarted: (sessionId) => {
-      // 幂等添加，广播重放或快照竞态不产生重复成员
-      const { runningSessions } = useChatStore.getState();
-      if (runningSessions.includes(sessionId)) {
-        return;
+    onRunStarted: (sessionId, agentId) => {
+      // 幂等添加，广播重放或快照竞态不产生重复成员；旧服务端缺归属时只维护会话集合
+      const { runningSessions, runningOwners } = useChatStore.getState();
+      const patch: Partial<ChatStore> = {
+        runningSessions: runningSessions.includes(sessionId)
+          ? runningSessions
+          : [...runningSessions, sessionId],
+      };
+      if (agentId) {
+        const owners = new Map(runningOwners).set(sessionId, agentId);
+        patch.runningOwners = owners;
+        patch.runningAgents = [...new Set(owners.values())];
       }
-      useChatStore.setState({
-        runningSessions: [...runningSessions, sessionId],
-      });
-      logger.info(`${TAG} run set added: ${sessionId}`);
+      useChatStore.setState(patch);
+      logger.info(
+        `${TAG} run set added: ${sessionId} agent=${agentId ?? 'unknown'}`
+      );
     },
     onRunEnded: (sessionId) => {
-      const { runningSessions } = useChatStore.getState();
+      const { runningSessions, runningOwners } = useChatStore.getState();
+      // 归属登记一并摘除，同 Agent 还有会话在跑时派生集合自然保留
+      const owners = new Map(runningOwners);
+      owners.delete(sessionId);
       useChatStore.setState({
         runningSessions: runningSessions.filter((id) => id !== sessionId),
+        runningOwners: owners,
+        runningAgents: [...new Set(owners.values())],
       });
       logger.info(`${TAG} run set removed: ${sessionId}`);
     },
-    onRunsSnapshot: (sessionIds) => {
-      // 快照整体替换，晚接入与重连端据此对齐 server 运行全量
-      useChatStore.setState({ runningSessions: sessionIds });
-      logger.info(`${TAG} run set replaced, count=${sessionIds.length}`);
+    onRunsSnapshot: (sessionIds, runs) => {
+      // 快照整体替换，晚接入与重连端据此对齐 server 运行全量；旧服务端无归属条目时 Agent 集合置空不误转
+      const owners = new Map(
+        (runs ?? []).map((run) => [run.sessionId, run.agentId])
+      );
+      const runningAgents = [...new Set(owners.values())];
+      useChatStore.setState({
+        runningSessions: sessionIds,
+        runningOwners: owners,
+        runningAgents,
+      });
+      logger.info(
+        `${TAG} run set replaced, count=${sessionIds.length} agents=${runningAgents.length}`
+      );
     },
     onAppNotification: (sessionId, source, content) => {
       const slice = useChatStore.getState().sessions[sessionId];

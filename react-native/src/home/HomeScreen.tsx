@@ -4,6 +4,7 @@
  *   顶部固定区从上到下是圆钮行、agent 横向条、分隔线、连接横幅与淡阴影，不随列表滚动。
  *   圆钮行避让状态栏，滚动区从聊天入口开始，列表底部避让 home indicator。
  *   agent 拉取与当前 agent 确定与启动会话恢复在连接建立后完成。
+ *   agent 横向条的头像在名下会话运行期间外挂全圈呼吸运行圈，数据来自运行族广播的 runningAgents。
  *   Chat 是压栈页，点聊天入口或会话行进入，返回即回到本页。
  *   长相基准是 demo 第三轮的 HomePage，横滑交互走原生 ScrollView。
  *   字号与次级文字颜色及会话行缩进经用户确认有意偏离 demo 基准，不作为对齐缺陷回改。
@@ -37,6 +38,16 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 import { ColorScheme, typography, useTheme } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
@@ -216,6 +227,8 @@ const HomeScreen: React.FC = () => {
   const chatOnStage = useChatStore(
     (s) => s.displayedSessionId === currentChatSessionId
   );
+  /** 运行中 Agent 集合，agent 横向条的头像运行圈据此起转停转 */
+  const runningAgentIds = useChatStore((s) => s.runningAgents);
 
   // ==================== 列表与卡片拉取 ====================
   /** 从镜像库读会话列表，常驻聊天会话只取其预览不进列表，数据源不依赖网络 */
@@ -513,6 +526,7 @@ const HomeScreen: React.FC = () => {
             >
               {agents.map((agent) => {
                 const isCurrent = currentAgentId === agent.id;
+                const isRunning = runningAgentIds.includes(agent.id);
                 return (
                   <TouchableOpacity
                     key={agent.id}
@@ -524,10 +538,11 @@ const HomeScreen: React.FC = () => {
                         : handleSelectAgent(agent.id)
                     }
                   >
+                    {/* 运行中圈位让给变长弧，选中实圈只在空闲时出现，选中信号由名字颜色继续承担 */}
                     <View
                       style={[
                         styles.avatarRing,
-                        isCurrent && styles.avatarRingCurrent,
+                        isCurrent && !isRunning && styles.avatarRingCurrent,
                       ]}
                     >
                       <AgentAvatar
@@ -536,6 +551,7 @@ const HomeScreen: React.FC = () => {
                         size={64}
                         fallbackIconSize={32}
                       />
+                      {isRunning && <AgentRunningRing />}
                       {unreadAgentIds.includes(agent.id) && (
                         <View style={styles.avatarUnreadDot} />
                       )}
@@ -591,6 +607,52 @@ const HomeScreen: React.FC = () => {
         </>
       )}
     </View>
+  );
+};
+
+/** 运行圈外径，avatarRing 的 padding 3 加边框 2 包住 64 头像 */
+const RING_BOX = 74;
+/** 圆环中线半径，正落在现有 avatarRing 边框的位置 */
+const RING_RADIUS = 36;
+
+/**
+ * Agent 头像运行圈，全圈呼吸。
+ * 整圈实线透明度一起一伏，1.4s 一个来回，
+ * 只在 Agent 名下会话运行期间挂载，靠动与不动区分选中态。
+ */
+const AgentRunningRing = () => {
+  const { colors } = useTheme();
+  const opacity = useSharedValue(0.15);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 700, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.15, { duration: 700, easing: Easing.inOut(Easing.quad) })
+      ),
+      -1
+    );
+    return () => cancelAnimation(opacity);
+  }, [opacity]);
+
+  const ringStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View
+      style={[StyleSheet.absoluteFill, ringStyle]}
+      pointerEvents="none"
+    >
+      <Svg style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={RING_BOX / 2}
+          cy={RING_BOX / 2}
+          r={RING_RADIUS}
+          stroke={colors.primary}
+          strokeWidth={2}
+          fill="none"
+        />
+      </Svg>
+    </Animated.View>
   );
 };
 
