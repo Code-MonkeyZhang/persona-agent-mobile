@@ -42,6 +42,8 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
     animated: boolean
   ) => void;
   agentId: string;
+  /** 实时角色名，来自 chatStore.agentName，改名或切换 agent 后即时跟随 */
+  agentName: string;
   serverAddress: string;
 }
 
@@ -54,6 +56,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   isLastAIMessage,
   onReasoningToggle,
   agentId,
+  agentName,
   serverAddress,
 }) => {
   const { colors } = useTheme();
@@ -68,8 +71,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const toggleButtons = useCallback(() => {
     setForceShowButtons((prev) => !prev);
   }, []);
-
-  const userName = currentMessage?.user?.name ?? 'AI';
 
   const handleImagePress = useCallback((pressMode: PressMode, url: string) => {
     if (pressMode === PressMode.Click) {
@@ -192,10 +193,10 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             <AgentAvatar
               agentId={agentId}
               serverAddress={serverAddress}
-              size={26}
+              size={30}
               marginRight={6}
             />
-            <Text style={styles.name}>{userName}</Text>
+            <Text style={styles.name}>{agentName}</Text>
           </>
         )}
       </View>
@@ -239,7 +240,7 @@ const createStyles = (colors: ColorScheme) =>
       marginVertical: 4,
     },
     marked_box: {
-      marginLeft: 28,
+      marginLeft: 32,
       marginRight: 16,
     },
     header: {
@@ -251,6 +252,7 @@ const createStyles = (colors: ColorScheme) =>
       flexDirection: 'row',
       alignItems: 'center',
     },
+    /** 角色名与头像同权重的外置 header，全强度 15px 对齐 mattermost 口径 */
     name: {
       flex: 1,
       ...typography.body,
@@ -339,6 +341,7 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     (!prevProps.isLastAIMessage ||
       prevProps.chatStatus === nextProps.chatStatus) &&
     prevProps.agentId === nextProps.agentId &&
+    prevProps.agentName === nextProps.agentName &&
     prevProps.serverAddress === nextProps.serverAddress
   );
 });

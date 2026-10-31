@@ -24,6 +24,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
 import { initDeviceLayer, setupSync } from './storage/sync-setup.ts';
+import { imageCache } from './storage/image-cache-rn.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import { logger } from './lib/logger';
@@ -185,6 +186,8 @@ const App = () => {
 
     /** 刷新设备名缓存并装配镜像链路，设备层引导完成后才发起冷连接 */
     setupSync();
+    // 图片缓存预热扫目录，首帧头像与壁纸的本地判定不等首访
+    imageCache.warmup();
     refreshDeviceName();
     initDeviceLayer().then(() => {
       useConnectionStore.getState().coldStart();

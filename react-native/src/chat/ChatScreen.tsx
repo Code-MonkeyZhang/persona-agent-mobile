@@ -36,7 +36,7 @@ import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
-import { SweepIndicator } from './component/SweepIndicator.tsx';
+import { LiveStrip } from './component/LiveStrip.tsx';
 import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
@@ -91,6 +91,13 @@ const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
 const MESSAGE_WINDOW_BASE = 300;
 const MESSAGE_WINDOW_STEP = 300;
 
+/**
+ * 顶栏时间线的统一顶部留位，行档 36 加下描边 1 共 37。
+ * 档位无关统一预留，hair 档不因视觉小而少留，open 展开面板盖住内容属明确豁免。
+ * 倒置列表里 paddingBottom 映射视觉顶，与桌面 MessageList 的 STRIP_TOP_RESERVE 同规格，两边调整需同步。
+ */
+const STRIP_TOP_RESERVE = 37;
+
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -129,6 +136,8 @@ function ChatScreen(): React.JSX.Element {
   const displayedSessionId = useChatStore((s) => s.displayedSessionId);
   const sessionSlice = useChatStore((s) => s.sessions[s.displayedSessionId]);
   const isLoadingMessages = useChatStore((s) => s.isLoading);
+  /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
+  const agentName = useChatStore((s) => s.agentName);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -426,6 +435,7 @@ function ChatScreen(): React.JSX.Element {
           isLastAIMessage={isLastAIMessage}
           onReasoningToggle={scroll.handleReasoningToggle}
           agentId={currentAgentId}
+          agentName={agentName}
           serverAddress={serverAddressRef.current}
         />
       );
@@ -435,6 +445,7 @@ function ChatScreen(): React.JSX.Element {
       chatStatus,
       scroll.handleReasoningToggle,
       currentAgentId,
+      agentName,
       serverAddressRef,
     ]
   );
@@ -450,9 +461,11 @@ function ChatScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.contentArea}>
-        {/* 头部下方状态槽，红蓝绿条在上，生成扫动条在下，绿条亮两秒收起后不占布局 */}
-        <ConnectionBanner />
-        {chatStatus === ChatStatus.Running && <SweepIndicator />}
+        {/* 头部下方状态槽，横幅浮层盖顶不占布局，层级压过时间线，时间线让位到其下方 */}
+        <View style={styles.bannerOverlay}>
+          <ConnectionBanner />
+        </View>
+        <LiveStrip />
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
           {/* Pane 1: 聊天列表 */}
           <View style={slideStyle.pane}>
@@ -611,6 +624,13 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       overflow: 'hidden',
     },
+    bannerOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 30,
+    },
     fibWrapper: {
       position: 'absolute',
       bottom: 0,
@@ -620,7 +640,7 @@ const createStyles = (colors: ColorScheme) =>
     },
     contentContainer: {
       paddingTop: 15,
-      paddingBottom: 15,
+      paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
     },

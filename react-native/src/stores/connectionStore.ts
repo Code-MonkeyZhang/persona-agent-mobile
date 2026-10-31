@@ -1,11 +1,11 @@
 /**
  * @file stores/connectionStore.ts
  * @description 全局连接态管理。
- *   统一服务器地址（凭证）和连接状态（运行时），所有组件通过此 store 响应式读取连接态。
- *   WebSocket 生命周期由 ws-client 单例管理，store 负责编排握手核身、条目落位、
- *   镜像库切换与 WS 建链。connectByAddress 按握手、通报、落位切库、建链四阶段推进，
- *   任一阶段失败保留旧主机现场。已登记设备的切换与刷新共用 switchDevice 入口，
- *   切换链对全局状态全程静默，点当前设备则走冷启动链刷新重建。
+ *   身份是唯一事实源，登记表的 currentHostId 推进后由 settleHost 派生落位，
+ *   断旧链、切镜像库、复位旧主机的界面态、递增主机计数并驱动镜像重读，
+ *   服务地址不独立存储，恒随登记表条目解析。
+ *   已登记设备的切换先落位再核身，核身失败置红条不回滚视图，
+ *   点当前设备则走核身重连的刷新链。connectByAddress 按握手、通报、落位、建链推进。
  *   设备探测只在清单可见期间运行，探测结论与连接事实共同决定状态点颜色。
  */
 import { create } from 'zustand';
@@ -30,6 +30,7 @@ export type ConnectionStatus =
   | 'connecting'
   | 'connected'
   | 'reconnecting'
+  | 'offline'
   | 'address_invalid';
 
 /** 单台设备的探测超时，几秒内无回应即判连不上 */
@@ -50,7 +51,11 @@ interface ConnectionStore {
   probes: Record<string, boolean>;
   /** 切换进行中的目标主机，空串表示没有切换在途 */
   pendingHostId: string;
+  /** 已落位主机，进程内跟踪，settle 据此跳过重复落位 */
+  settledHostId: string;
 
+  /** 把镜像与界面落位到目标主机，地址随条目解析，幂等且在途合并 */
+  settleHost: (hostId: string) => Promise<void>;
   connectByAddress: (url: string) => Promise<boolean>;
   /** 点其他设备切换连接，点当前设备刷新重建链路，在途时静默忽略 */
   switchDevice: (hostId: string) => Promise<void>;
@@ -66,16 +71,66 @@ interface ConnectionStore {
 }
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => {
-  /** 连接失败落地址无效态并留日志 */
+  /** 连接失败落地址无效红条并留日志 */
   const fail = (message: string): void => {
     set({ status: 'address_invalid', error: message });
     logger.error(`[ConnectionStore] connect failed: ${message}`);
   };
 
+  /** 在途落位任务，同目标的并发调用合并进同一条 Promise */
+  let settleTask: { hostId: string; promise: Promise<void> } | null = null;
+
   /**
-   * 落位并接管连接。
-   * 条目按身份落进登记表，镜像库切到该主机，旧主机的界面态整体复位，
-   * 主机计数递增驱动界面重走启动恢复。
+   * 落位的执行段，串行推进。
+   * 身份持久化在前，断旧链清订阅后切镜像库，旧主机的界面态整体复位，
+   * 主机计数与镜像版本最后递增，驱动界面重读目标主机的镜像。
+   */
+  const performSettle = async (hostId: string): Promise<void> => {
+    logger.info(`[ConnectionStore] settling host ${hostId}`);
+    useDeviceStore.getState().setCurrentHost(hostId);
+    wsClient.disconnect();
+    wsClient.clearSubscription();
+    await cacheDb.switchHost(hostId);
+    clearLastConversation();
+    useSessionStore.getState().resetForHostSwitch();
+    useChatStore.getState().resetForHostSwitch();
+    set((state) => ({
+      settledHostId: hostId,
+      hostVersion: state.hostVersion + 1,
+    }));
+    useMirrorStore.getState().bump();
+    logger.info(`[ConnectionStore] host ${hostId} settled`);
+  };
+
+  /**
+   * 把镜像与界面落位到目标主机，身份唯一事实源的派生入口。
+   * 服务地址恒随登记表条目解析，已落位主机不重放切库与复位，
+   * 在途的同目标调用合并，异目标调用排在当前落位之后串行执行。
+   */
+  const settleHost = (hostId: string): Promise<void> => {
+    const entry = useDeviceStore
+      .getState()
+      .devices.find((d) => d.hostId === hostId);
+    if (!entry) {
+      logger.warn(`[ConnectionStore] settle ${hostId} skipped, no entry`);
+      return Promise.resolve();
+    }
+    saveServerAddress(entry.address);
+    set({ serverAddress: entry.address });
+    if (get().settledHostId === hostId) {
+      return Promise.resolve();
+    }
+    const start = () => performSettle(hostId);
+    const promise = settleTask
+      ? settleTask.promise.then(start, start)
+      : start();
+    settleTask = { hostId, promise };
+    return promise;
+  };
+
+  /**
+   * 配对成功后的落位入口。条目元信息经 upsert 写进登记表并推进身份，
+   * settle 随身份把镜像与界面切到新主机，调用方等它完成后才建链。
    */
   const activateHost = async (
     info: HandshakeInfo,
@@ -87,33 +142,15 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
       version: info.version,
       address,
     });
-    saveServerAddress(address);
-    set((state) => ({
-      serverAddress: address,
-      hostVersion: state.hostVersion + 1,
-    }));
-    await cacheDb.switchHost(info.hostId);
-    clearLastConversation();
-    wsClient.clearSubscription();
-    useSessionStore.getState().resetForHostSwitch();
-    useChatStore.getState().resetForHostSwitch();
-    useMirrorStore.getState().bump();
+    await settleHost(info.hostId);
   };
 
   /**
-   * 对已登记主机握手核身后接管连接。
-   * 地址失效或身份不符都保留旧主机现场，身份不符不落任何写。
-   * preservePrevOnFailure 供切换链使用，进入与失败全程不碰全局状态，失败只记日志。
+   * 对已登记主机核身后建链，冷启动、刷新与切换链共用。
+   * 核身失败或身份不符置地址无效红条，已落位的镜像与身份不受影响。
    */
-  const connectToHost = async (
-    entry: DeviceEntry,
-    preservePrevOnFailure = false
-  ): Promise<boolean> => {
-    const prev = get().status;
-    // preserve 模式下旧链路还在跑，进入时不惊动全局状态
-    if (!preservePrevOnFailure) {
-      set({ status: 'connecting', error: '' });
-    }
+  const connectToHost = async (entry: DeviceEntry): Promise<boolean> => {
+    set({ status: 'connecting', error: '' });
     logger.info(
       `[ConnectionStore] connecting host ${entry.hostId} at ${entry.address}`
     );
@@ -121,24 +158,11 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
     try {
       info = await fetchHandshakeInfo(entry.address);
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (preservePrevOnFailure) {
-        // 切换失败旧链路未动，全局状态从未变化，只记日志不打扰横幅
-        logger.warn(
-          `[ConnectionStore] switch to ${entry.hostId} failed: ${message}`
-        );
-      } else {
-        fail(message);
-      }
+      fail(e instanceof Error ? e.message : String(e));
       return false;
     }
     if (info.hostId !== entry.hostId) {
-      if (!preservePrevOnFailure) {
-        set({ status: prev, error: 'identity mismatch' });
-      }
-      logger.error(
-        `[ConnectionStore] identity mismatch, expect ${entry.hostId} got ${info.hostId}`
-      );
+      fail(`identity mismatch, expect ${entry.hostId} got ${info.hostId}`);
       return false;
     }
     await activateHost(info, entry.address);
@@ -154,6 +178,9 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
     hostVersion: 0,
     probes: {},
     pendingHostId: '',
+    settledHostId: '',
+
+    settleHost: (hostId) => settleHost(hostId),
 
     connectByAddress: async (url) => {
       const address = url.trim().replace(/\/+$/, '');
@@ -194,16 +221,21 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
       if (!entry) {
         return;
       }
-      // 点当前设备是刷新链路走冷启动链重建，其余目标是切换链不碰全局
+      // 点当前设备是刷新链走核身重连，其余目标先落位再核身，失败不回滚视图
       const refresh = hostId === currentHostId;
       logger.info(
         `[ConnectionStore] ${refresh ? 'refresh' : 'switch to'} ${hostId}`
       );
       set({ pendingHostId: hostId });
       try {
-        const ok = await connectToHost(entry, !refresh);
+        if (refresh) {
+          await connectToHost(entry);
+          return;
+        }
+        await settleHost(hostId);
+        const ok = await connectToHost(entry);
         // 切换失败后马上补查这一台，状态点红绿立见分晓
-        if (!ok && !refresh) {
+        if (!ok) {
           get()
             .probeDevice(hostId)
             .catch(() => undefined);
@@ -223,11 +255,18 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
       }
       const rest = useDeviceStore.getState().devices;
       if (rest.length > 0) {
-        useDeviceStore.getState().setCurrentHost(rest[0].hostId);
+        // 接替主机与手动切换同一条链，先落位再核身建链
+        await settleHost(rest[0].hostId);
         await connectToHost(rest[0]);
       } else {
         wsClient.disconnect();
-        set({ status: 'idle', serverAddress: '', error: '' });
+        // 清空落位标记，同台主机日后重新配对时走完整落位
+        set({
+          status: 'idle',
+          serverAddress: '',
+          error: '',
+          settledHostId: '',
+        });
       }
     },
 

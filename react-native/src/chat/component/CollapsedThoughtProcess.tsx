@@ -1,122 +1,77 @@
 /**
  * @file CollapsedThoughtProcess.tsx
- * @description 结构化思考过程时间线组件。折叠时显示按钮，展开后显示带图标的步骤列表。
- *              基础版：图标 + 标签 + 2 行截断展开 + 整体折叠。
+ * @description 消息内思考过程，与顶栏时间线同一套行语言。
+ *   - 入口透明无底色，文案恒为思考过程不带步数，失败不改色
+ *   - 展开后是带框面板，身份图标加自然语言动向句，竖向连线把步骤串起来
+ *   - 行纯展示两行截断不可点，详情弹层只在桌面端
+ *   - props 保持 steps 与 onToggle 契约不变，展开时量高回调供宿主做滚动补偿
  */
-import React, { memo, useState, useRef } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { ChevronRight, Lightbulb, XCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import type { Thought } from '../../types/Thought';
-import {
-  getThoughtIcon,
-  getThoughtColor,
-  getThoughtLabel,
-  getToolFriendlyFormat,
-} from '../util/thought-utils';
-import { useTheme, typography, type ColorScheme } from '../../theme';
+import { phraseForThought, toolIcon, ROW_ICON, FAIL_RED } from './LiveStrip';
+import { useTheme, typography } from '../../theme';
 
 interface CollapsedThoughtProcessProps {
   steps: Thought[];
   onToggle?: (expanded: boolean, height: number, animated: boolean) => void;
 }
 
-/** 单个思考步骤的时间线节点 */
+/** 面板内竖向连线色，取自设计文档与桌面实现 */
+const CONNECTOR = '#c3cfdf';
+
+/**
+ * 单条步骤行，与时间线的行语言同构
+ * 前置位身份图标，工具行走自然语言动向句，思考行走正文灰不斜体
+ * 失败行整句红字紧跟 circle-x，末行不垂线
+ */
 const ThoughtItem = memo(function ({
   thought,
   isLast,
-  colors,
 }: {
   thought: Thought;
   isLast: boolean;
-  colors: ColorScheme;
 }) {
   const { t } = useTranslation();
-  const [isContentExpanded, setIsContentExpanded] = useState(false);
-  const [lineCount, setLineCount] = useState(0);
-  const needsExpand = lineCount > 2;
+  const { colors } = useTheme();
 
-  const isError = !!thought.toolResult?.isError;
-  const hasToolResult = thought.type === 'tool_use' && !!thought.toolResult;
-  const color = getThoughtColor(thought.type, isError, colors);
-  const Icon = getThoughtIcon(thought.type);
-  const label = getThoughtLabel(thought.type);
-  const headerColor = isError ? colors.warning : color;
-  const circleBg = isError ? colors.warningBackground : colors.surface;
-  const circleStyle = [styles.circle, { backgroundColor: circleBg }];
-  const headerStyle = [styles.header, { color: headerColor }];
-  const contentStyle = [styles.content, { color: colors.textSecondary }];
-  const thinkingContentStyle = [
-    styles.content,
-    { fontStyle: 'italic' as const, color: colors.textTertiary },
-  ];
-
-  const content =
-    thought.type === 'tool_use'
-      ? getToolFriendlyFormat(thought.toolName || '', thought.toolInput)
-      : thought.content || '';
+  const isTool = thought.type === 'tool_use';
+  const isErrorType = thought.type === 'error';
+  const isFailed = isTool && !!(thought.isError || thought.toolResult?.isError);
+  const Icon = isTool
+    ? toolIcon(thought.toolName || '')
+    : isErrorType
+    ? XCircle
+    : Lightbulb;
+  const iconColor = isErrorType || isFailed ? FAIL_RED : ROW_ICON;
+  const summary = phraseForThought(t, thought);
+  const textColor = isErrorType || isFailed ? FAIL_RED : colors.textSecondary;
 
   return (
     <View style={styles.itemRow}>
-      {/* 时间线：圆形图标 + 竖线连接 */}
-      <View style={styles.timelineColumn}>
-        <View style={circleStyle}>
-          {hasToolResult ? (
-            isError ? (
-              <AlertTriangle size={17} color={colors.warning} />
-            ) : (
-              <CheckCircle size={17} color={colors.success} />
-            )
-          ) : (
-            <Icon size={17} color={color} />
-          )}
+      {!isLast && <View style={styles.connector} />}
+      <Icon size={11} color={iconColor} />
+      {isFailed ? (
+        // 失败行主文字不撑满整行，标记贴着文字尾部
+        <View style={styles.failRow}>
+          <Text style={[styles.rowText, { color: FAIL_RED }]} numberOfLines={2}>
+            {summary}
+          </Text>
+          <XCircle size={11} color={FAIL_RED} />
         </View>
-        {!isLast && (
-          <View
-            style={[styles.connector, { backgroundColor: colors.border }]}
-          />
-        )}
-      </View>
-
-      {/* 内容：标签 + 正文 */}
-      <View style={[styles.contentColumn, isLast && styles.contentColumnLast]}>
-        <Text style={headerStyle}>
-          {thought.toolName ? `${label} - ${thought.toolName}` : label}
+      ) : (
+        <Text style={[styles.rowText, { color: textColor }]} numberOfLines={2}>
+          {summary}
         </Text>
-        {content.length > 0 && (
-          <View style={styles.bodyRow}>
-            <Text
-              style={
-                thought.type === 'thinking'
-                  ? thinkingContentStyle
-                  : contentStyle
-              }
-              numberOfLines={isContentExpanded ? undefined : 2}
-              onTextLayout={(e) => setLineCount(e.nativeEvent.lines.length)}
-            >
-              {content}
-            </Text>
-            {needsExpand && (
-              <TouchableOpacity
-                style={styles.expandBtn}
-                onPress={() => setIsContentExpanded(!isContentExpanded)}
-              >
-                <Text style={[styles.expandBtnText, { color: colors.info }]}>
-                  {isContentExpanded
-                    ? t('thought.collapse')
-                    : t('thought.expand')}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+      )}
     </View>
   );
 });
@@ -132,7 +87,9 @@ function CollapsedThoughtProcess({
   const panelRef = useRef<View>(null);
   const panelHeightRef = useRef(0);
 
-  if (steps.length === 0) {
+  // text 行由气泡正文承担不进面板，与时间线同一过滤口径
+  const visible = steps.filter((th) => th.type !== 'text');
+  if (visible.length === 0) {
     return null;
   }
 
@@ -154,37 +111,39 @@ function CollapsedThoughtProcess({
   return (
     <View style={styles.wrapper}>
       <TouchableOpacity
-        style={styles.collapsedBtn}
+        style={styles.entryBtn}
         activeOpacity={0.6}
         onPress={handleToggle}
       >
         <ChevronRight
-          size={15}
+          size={11}
           color={colors.textTertiary}
           style={{
             transform: [{ rotate: isExpanded ? '90deg' : '0deg' }],
           }}
         />
-        <Text style={[styles.collapsedLabel, { color: colors.textSecondary }]}>
-          {t('thought.showThinking')}
+        <Text style={[styles.entryText, { color: colors.textSecondary }]}>
+          {t('thought.entry')}
         </Text>
       </TouchableOpacity>
 
       {isExpanded && (
         <View
           ref={panelRef}
-          style={[styles.panel, { backgroundColor: colors.surface }]}
+          style={[
+            styles.panel,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
           onLayout={(e) => {
             panelHeightRef.current = e.nativeEvent.layout.height;
           }}
         >
           <ScrollView style={styles.scroll}>
-            {steps.map((thought, index) => (
+            {visible.map((thought, index) => (
               <ThoughtItem
                 key={`${thought.id}-${index}`}
                 thought={thought}
-                isLast={index === steps.length - 1}
-                colors={colors}
+                isLast={index === visible.length - 1}
               />
             ))}
           </ScrollView>
@@ -200,7 +159,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginLeft: 2,
   },
-  collapsedBtn: {
+  entryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -209,67 +168,47 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
-  collapsedLabel: {
-    ...typography.content,
+  entryText: {
+    ...typography.caption,
   },
   panel: {
     marginTop: 4,
+    borderWidth: 1,
+    borderRadius: 16,
     paddingVertical: 8,
-    borderRadius: 8,
     maxHeight: 250,
+    overflow: 'hidden',
   },
   scroll: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   itemRow: {
     flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 4,
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingTop: 4,
+    paddingBottom: 12,
+    paddingLeft: 4,
+    paddingRight: 4,
   },
-  timelineColumn: {
-    flexDirection: 'column',
-    alignItems: 'center',
+  rowText: {
+    flex: 1,
+    ...typography.caption,
   },
-  circle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
+  failRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   connector: {
-    width: 2,
-    flex: 1,
-    marginTop: 4,
-    minHeight: 8,
-  },
-  contentColumn: {
-    flex: 1,
-    paddingBottom: 12,
-  },
-  contentColumnLast: {
-    paddingBottom: 0,
-  },
-  header: {
-    ...typography.content,
-    fontWeight: '500',
-  },
-  bodyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    ...typography.content,
-  },
-  expandBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  expandBtnText: {
-    ...typography.content,
+    position: 'absolute',
+    left: 9,
+    top: 17,
+    bottom: -4,
+    width: 1.5,
+    borderRadius: 1,
+    backgroundColor: CONNECTOR,
   },
 });
 

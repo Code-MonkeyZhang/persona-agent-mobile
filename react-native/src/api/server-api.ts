@@ -6,7 +6,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
-import { stripLastTextThought } from '../chat/util/thought-utils';
 import { logger } from '../lib/logger';
 import type {
   SessionChange,
@@ -57,10 +56,32 @@ export interface PendingInput {
   content: string;
 }
 
+/** 运行中会话的带归属条目，Agent 级运行集合的数据源 */
+export interface RunningSessionEntry {
+  sessionId: string;
+  agentId: string;
+}
+
+/** 运行中会话的当前动作，subscribed 携带，thinking 与 tool 两态 */
+export type CurrentActivity =
+  | { kind: 'thinking' }
+  | {
+      kind: 'tool';
+      stepIndex: number;
+      toolName: string;
+      paramSummary: string;
+    };
+
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
-  | { type: 'connected'; clientId: string }
-  | { type: 'subscribed'; sessionId: string; isGenerating?: boolean }
+  | { type: 'connected'; clientId: string; keepaliveIntervalMs?: number }
+  | {
+      type: 'subscribed';
+      sessionId: string;
+      isGenerating?: boolean;
+      /** 生成中会话的当前动作，中途接入端据此立即显示工具执行或思考中 */
+      currentActivity?: CurrentActivity;
+    }
   | {
       type: 'step_complete';
       sessionId: string;
@@ -71,6 +92,19 @@ export type ServerMessage =
       toolCalls?: ToolCall[];
       /** 工具执行结果列表，可用于展示工具是否成功 */
       toolResults?: WsToolResult[];
+      /** 子代理工具链路的挂载点，当前无写入方，演进预留 */
+      parent_tool_use_id?: string;
+    }
+  | {
+      /** 工具调用开始事件，agent 开始执行单个工具时即时广播，UI 据此显示执行中的工具身份 */
+      type: 'tool_started';
+      sessionId: string;
+      stepIndex: number;
+      toolName: string;
+      /** 入参经掩码与摘要压成的一句参数摘要 */
+      paramSummary: string;
+      /** 子代理工具链路的挂载点，当前无写入方，演进预留 */
+      parent_tool_use_id?: string;
     }
   | { type: 'round_complete'; sessionId: string }
   | { type: 'turn_complete'; sessionId: string }
@@ -93,7 +127,7 @@ export type ServerMessage =
       reason: SpeakErrorReason;
       message: string;
     }
-  | { type: 'pong' }
+  | { type: 'keepalive' }
   | { type: 'aborted'; sessionId: string; reason: string }
   | {
       /** App 通知触发的回合开始信号，客户端据此创建 AI 占位气泡并切入生成状态 */
@@ -120,19 +154,26 @@ export type ServerMessage =
       change: SessionChange;
     }
   | {
-      /** 回合开始的全局广播，未订阅端据此点亮会话信号位的运行腿 */
+      /** 回合开始的全局广播，未订阅端据此点亮会话信号位的运行腿与头像运行圈 */
       type: 'run_started';
       sessionId: string;
+      /** 归属 Agent，旧服务端可能缺失，缺失时头像圈不转 */
+      agentId?: string;
     }
   | {
       /** 回合结束的全局广播，完成、出错与中止共用此出口 */
       type: 'run_ended';
       sessionId: string;
+      /** 结束会话的归属 Agent，与 run_started 对称携带 */
+      agentId?: string;
     }
   | {
       /** 连接建立时的运行中会话全量列表，晚接入与重连端据此补态 */
       type: 'runs_snapshot';
+      /** 保留给旧口径的会话 id 列表 */
       sessionIds: string[];
+      /** 带归属的同一份全量，旧服务端缺失时头像圈不转不误转 */
+      runs?: RunningSessionEntry[];
     };
 
 /**
@@ -934,11 +975,24 @@ export async function deleteSession(
  * - 扫描结束强制结一次，兜底崩溃留下的半截内容
  * 消息没有独立时间戳，用 session 的 createdAt 做基准，每条间隔 1 秒近似处理。
  */
+
+/**
+ * 移除 steps 中最后一条 text thought。
+ * 最终回复已在消息气泡展示，时间线中不再重复。
+ * @param thoughts 待去重的思考步骤列表
+ */
+export function stripLastTextThought(thoughts: Thought[]): Thought[] {
+  for (let i = thoughts.length - 1; i >= 0; i--) {
+    if (thoughts[i].type === 'text') {
+      return thoughts.filter((_, idx) => idx !== i);
+    }
+  }
+  return thoughts;
+}
+
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
-  sessionCreatedAt: number,
-  agentName: string,
-  avatar: string
+  sessionCreatedAt: number
 ): ChatMessage[] {
   const result: ChatMessage[] = [];
   let pendingThoughts: Thought[] = [];
@@ -956,7 +1010,7 @@ export function convertToChatMessages(
       text: pendingContent,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       createdAt: new Date(sessionCreatedAt + result.length * 1000),
-      user: { _id: BOT_ID, name: agentName, avatar },
+      user: { _id: BOT_ID },
     });
     pendingThoughts = [];
     pendingContent = '';
@@ -1026,7 +1080,7 @@ export function convertToChatMessages(
         _id: uuidv4(),
         text,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
-        user: { _id: BOT_ID, name: agentName, avatar },
+        user: { _id: BOT_ID },
       });
     } else {
       // 用户消息原地显示从不结组，插话因此排在整轮回复之前

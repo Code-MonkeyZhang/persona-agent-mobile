@@ -13,7 +13,11 @@
     "vibration": "震动",
     "vibrationDesc": "交互时触觉反馈",
     "thoughtProcess": "思考过程",
-    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口"
+    "thoughtProcessDesc": "在消息中显示「查看思考过程」入口",
+    "exportLogs": "导出日志",
+    "exportLogsDesc": "分享最近七天的运行日志文件",
+    "noLogs": "暂无日志文件",
+    "exportFailed": "日志分享未完成"
   },
   "phone": {
     "resetLayout": "重置桌面布局",
@@ -56,13 +60,28 @@
     "updateFailedMsg": "写回服务端失败，已还原该项"
   },
   "thought": {
-    "thinking": "思考",
-    "text": "回复",
-    "toolCall": "工具调用",
-    "error": "错误",
-    "ai": "AI",
-    "showThinking": "查看思考过程",
-    "expand": "展开",
+    "entry": "思考过程"
+  },
+  "live": {
+    "thinking": "思考中",
+    "read": "正在读取",
+    "readFallback": "正在读取文件",
+    "write": "正在写入",
+    "writeFallback": "正在写入文件",
+    "edit": "正在编辑",
+    "editFallback": "正在编辑文件",
+    "bash": "运行",
+    "bashFallback": "正在运行命令",
+    "bashOutput": "查看后台输出",
+    "bashKill": "终止后台命令",
+    "webfetch": "正在抓取网页",
+    "webfetchFallback": "正在抓取网页",
+    "showPose": "切换表情",
+    "getPose": "查看当前表情",
+    "executing": "正在执行",
+    "done": "执行了 {{count}} 个步骤",
+    "doneFail": "执行了 {{count}} 个步骤 · {{fails}} 步失败",
+    "restore": "显示运行状态",
     "collapse": "收起"
   },
   "companion": {

@@ -15,12 +15,14 @@ import * as wsClient from '../api/ws-client.ts';
 import {
   createSession,
   sendChatMessage,
-  getAgentAvatarUrl,
   fetchSessionMessages,
   convertToChatMessages,
   chatSessionIdFor,
+  stripLastTextThought,
   type PendingInput,
   type ServerChatMessage,
+  type ToolCall,
+  type WsToolResult,
 } from '../api/server-api.ts';
 import {
   getServerAddress,
@@ -32,9 +34,10 @@ import { toServerChatMessages } from '../storage/sync-shapes.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
 import { getFileTypeSummary, isAllFileReady } from '../chat/util/FileUtils.ts';
 import {
-  cycleToThoughts,
-  stripLastTextThought,
-} from '../chat/util/thought-utils';
+  summarizeToolInput,
+  type LiveRunState,
+  type LiveStep,
+} from '../chat/component/LiveStrip';
 import {
   useSessionStore,
   extractPreview,
@@ -57,11 +60,11 @@ export const textPlaceholder = '...';
 export const EMPTY_MESSAGES: ChatMessage[] = [];
 
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
-const createBotMessage = (agentName: string, avatar: string): ChatMessage => ({
+const createBotMessage = (): ChatMessage => ({
   _id: uuidv4(),
   text: textPlaceholder,
   createdAt: new Date(),
-  user: { _id: BOT_ID, name: agentName, avatar },
+  user: { _id: BOT_ID },
   steps: [],
 });
 
@@ -74,6 +77,42 @@ const createPendingMessage = (input: PendingInput): ChatMessage => ({
   queued: true,
   pendingId: input.id,
 });
+
+/**
+ * 将一个 step_complete 事件转换为 Thought 数组。
+ * 顺序为 thinking → text → tool_use，每个 step 的批次追加到已有 steps 末尾。
+ */
+function cycleToThoughts(
+  content: string | undefined,
+  thinking: string | undefined,
+  toolCalls?: ToolCall[],
+  toolResults?: WsToolResult[]
+): Thought[] {
+  const thoughts: Thought[] = [];
+
+  if (thinking) {
+    thoughts.push({ id: uuidv4(), type: 'thinking', content: thinking });
+  }
+
+  if (content) {
+    thoughts.push({ id: uuidv4(), type: 'text', content });
+  }
+
+  toolCalls?.forEach((tc) => {
+    const result = toolResults?.find((r) => r.toolCallId === tc.id);
+    thoughts.push({
+      id: tc.id,
+      type: 'tool_use',
+      toolName: tc.name,
+      toolInput: tc.arguments,
+      toolResult: result
+        ? { output: result.result, isError: !result.success }
+        : undefined,
+    });
+  });
+
+  return thoughts;
+}
 
 /** 单轮的步骤缓冲，生成期间与界面无关，放在响应式 store 外让步骤到达零渲染 */
 interface TurnBuffer {
@@ -115,6 +154,18 @@ interface ChatStore {
    * runs_snapshot 整体替换，信号位运行腿与本机 status 取或。
    */
   runningSessions: string[];
+  /**
+   * 运行归属的内存登记，sessionId 指向 agentId，
+   * 只收带归属的运行族事件，旧服务端缺字段时不登记。
+   */
+  runningOwners: Map<string, string>;
+  /** 运行中 Agent 的全局集合，头像运行圈据此起转停转 */
+  runningAgents: string[];
+  /**
+   * 运行期时间线的全局单例，内含 sessionId 归属防串台，
+   * ws 单订阅决定同时只有一条活动时间线，顶栏时间线据此渲染活动尾巴。
+   */
+  liveRun: LiveRunState | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
@@ -137,7 +188,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   displayedSessionId: NEW_CHAT_SESSION,
   isLoading: false,
   runningSessions: [],
+  runningOwners: new Map(),
+  runningAgents: [],
   agentName: 'AI',
+  liveRun: null,
 
   activateSession: async (sessionId) => {
     if (get().displayedSessionId === sessionId) {
@@ -174,12 +228,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         lastRefreshedAt[sessionId] = view.updatedAt;
         updateSlice(sessionId, (slice) => ({
           ...slice,
-          messages: convertToChatMessages(
-            view.messages,
-            view.createdAt,
-            get().agentName,
-            getAgentAvatarUrl(agentId, address)
-          ),
+          messages: convertToChatMessages(view.messages, view.createdAt),
           pose: view.currentPose ?? 'default',
           poseError: false,
         }));
@@ -317,7 +366,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   setAgentProfile: (name) => {
-    set({ agentName: name || 'AI' });
+    const next = name || 'AI';
+    set({ agentName: next });
+    logger.debug(`${TAG} agent profile updated, name=${next}`);
   },
 
   setPoseError: (sessionId, value) => {
@@ -330,8 +381,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       sessions: {},
       displayedSessionId: NEW_CHAT_SESSION,
       isLoading: false,
-      // 旧主机的运行集合随现场一并清空，新主机连接后由快照重建
+      // 旧主机的运行集合与时间线随现场一并清空，新主机连接后由快照重建
       runningSessions: [],
+      runningOwners: new Map(),
+      runningAgents: [],
+      liveRun: null,
     });
   },
 }));
@@ -378,10 +432,7 @@ function assemblePendingBubble(
   const finalThoughts = stripLastTextThought(buffer.thoughts);
   return [
     {
-      ...createBotMessage(
-        useChatStore.getState().agentName,
-        getAgentAvatarUrl(getServerAgentId(), getServerAddress())
-      ),
+      ...createBotMessage(),
       text: buffer.content,
       steps: finalThoughts.length > 0 ? finalThoughts : undefined,
       aborted: aborted || undefined,
@@ -390,17 +441,101 @@ function assemblePendingBubble(
 }
 
 /**
+ * 把 step_complete 的思考步骤合并进实时时间线。
+ * 本步的思考段与解说文本插到未闭合工具步之前还原先思考后执行的叙述顺序，
+ * 未闭合工具步与本次 tool_use 按出现顺序一一配对闭合补全失败态，
+ * agent 串行执行保证 tool_started 顺序与 toolCalls 顺序一致，配对不存 stepIndex，
+ * tool_started 漏收的 tool_use 补一条已完成步，配对不上的未闭合步按孤儿收尾避免呼吸行悬挂，
+ * text 步骤由气泡正文承担不进行。
+ * @param sessionId 事件所属会话，作为时间线归属写回
+ * @param liveRun 当前实时状态，null 时惰性创建
+ * @param thoughts cycleToThoughts 的产物
+ * @returns 合并后的实时状态
+ */
+function mergeStepIntoLiveRun(
+  sessionId: string,
+  liveRun: LiveRunState | null,
+  thoughts: Thought[]
+): LiveRunState {
+  const now = Date.now();
+  const steps = (liveRun?.steps ?? []).map((s) => ({ ...s }));
+  const isOpenTool = (s: LiveStep) => s.tool !== '' && s.endedAt === undefined;
+
+  const thinkSteps: LiveStep[] = [];
+  for (const th of thoughts) {
+    if ((th.type === 'thinking' || th.type === 'text') && th.content) {
+      thinkSteps.push({
+        tool: '',
+        detail: th.content,
+        startedAt: now,
+        endedAt: now,
+      });
+    }
+  }
+
+  const toolThoughts = thoughts.filter((th) => th.type === 'tool_use');
+  const openSteps = steps.filter(isOpenTool);
+  const closed: LiveStep[] = [];
+  const missed: LiveStep[] = [];
+  toolThoughts.forEach((th, i) => {
+    const step: LiveStep = {
+      tool: th.toolName ?? '',
+      detail: summarizeToolInput(th.toolName ?? '', th.toolInput),
+      startedAt: openSteps[i]?.startedAt ?? now,
+      endedAt: now,
+      failed: th.isError || th.toolResult?.isError || undefined,
+    };
+    if (i < openSteps.length) closed.push(step);
+    else missed.push(step);
+  });
+  const orphans = openSteps
+    .slice(toolThoughts.length)
+    .map((s) => ({ ...s, endedAt: s.endedAt ?? now }));
+
+  const result: LiveStep[] = [];
+  let spliced = false;
+  for (const s of steps) {
+    if (isOpenTool(s)) {
+      if (!spliced) {
+        result.push(...thinkSteps, ...closed, ...orphans);
+        spliced = true;
+      }
+      continue;
+    }
+    result.push(s);
+  }
+  if (!spliced) result.push(...thinkSteps);
+  result.push(...missed);
+  return { sessionId, steps: result };
+}
+
+/** 时间线归属校验后清空，别的会话已接管单例时不动它 */
+function clearLiveRunIfOwned(sessionId: string): void {
+  const { liveRun } = useChatStore.getState();
+  if (liveRun?.sessionId === sessionId) {
+    useChatStore.setState({ liveRun: null });
+  }
+}
+
+/**
  * 切入生成状态并清空轮次缓冲。
  * 发送、订阅恢复与 App 通知触发回合时的公共准备步骤，
- * 生成期间界面无占位气泡，运行指示由头部小点承担。
+ * 生成期间界面无占位气泡，liveRun 同步开空时间线供顶栏时间线驱动。
+ * @param sessionId 回合所属会话
+ * @param liveSteps 订阅恢复携带的当前动作步骤，常规回合传空
  */
-function enterGeneratingState(sessionId: string): void {
+function enterGeneratingState(
+  sessionId: string,
+  liveSteps: LiveStep[] = []
+): void {
   turnBuffers.set(sessionId, { thoughts: [], content: '' });
+  useChatStore.setState({ liveRun: { sessionId, steps: liveSteps } });
   updateSlice(sessionId, (slice) => ({
     ...slice,
     status: ChatStatus.Running,
     armedDiskRefresh: false,
   }));
+  logger.info(`[live-strip] timeline armed, session=${sessionId}`);
 }
 
 /**
@@ -512,12 +647,7 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     lastRefreshedAt[sessionId] = view.updatedAt;
     updateSlice(sessionId, (prev) => ({
       ...prev,
-      messages: convertToChatMessages(
-        view.messages,
-        view.createdAt,
-        useChatStore.getState().agentName,
-        getAgentAvatarUrl(agentId, address)
-      ),
+      messages: convertToChatMessages(view.messages, view.createdAt),
     }));
     logger.info(`${TAG} messages refreshed from disk, session=${sessionId}`);
   } catch (e) {
@@ -527,11 +657,12 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
 
 /**
  * 回合结束的公共收尾：
- * - 状态回到 Init 并清空轮次缓冲与武装标志
+ * - 状态回到 Init 并清空轮次缓冲与武装标志，归属本会话的时间线一并兜底清空
  * - 消息数大于一（用户消息加回复）时通知会话列表刷新预览
  */
 function finishTurn(sessionId: string): void {
   turnBuffers.delete(sessionId);
+  clearLiveRunIfOwned(sessionId);
   updateSlice(sessionId, (slice) => ({
     ...slice,
     status: ChatStatus.Init,
@@ -549,6 +680,32 @@ function finishTurn(sessionId: string): void {
  */
 function registerWsHandler(): void {
   wsClient.registerHandler({
+    onToolStarted: (sessionId, _stepIndex, toolName, paramSummary) => {
+      const state = useChatStore.getState();
+      const slice = state.sessions[sessionId];
+      // 迟到守卫：回合未在进行中即丢弃，不污染空闲时间线
+      if (slice?.status !== ChatStatus.Running) {
+        logger.info(
+          `[live-strip] late tool_started ignored, session=${sessionId}`
+        );
+        return;
+      }
+      // 单例归属校验：归属不符先对齐归属再开步，ws 单订阅下这是防御位
+      const steps =
+        state.liveRun?.sessionId === sessionId ? [...state.liveRun.steps] : [];
+      useChatStore.setState({
+        liveRun: {
+          sessionId,
+          steps: [
+            ...steps,
+            { tool: toolName, detail: paramSummary, startedAt: Date.now() },
+          ],
+        },
+      });
+      logger.info(
+        `[live-strip] tool started, session=${sessionId} tool=${toolName}`
+      );
+    },
     onStepComplete: (sessionId, content, thinking, toolCalls, toolResults) => {
       const slice = useChatStore.getState().sessions[sessionId];
       if (!slice) {
@@ -570,6 +727,17 @@ function registerWsHandler(): void {
       const buffer = getTurnBuffer(sessionId);
       buffer.thoughts.push(...newThoughts);
       buffer.content = content || buffer.content;
+      // 同步推进时间线显示层，只进 liveRun 不动轮次缓冲与气泡组装
+      const { liveRun } = useChatStore.getState();
+      const merged = mergeStepIntoLiveRun(
+        sessionId,
+        liveRun?.sessionId === sessionId ? liveRun : null,
+        newThoughts
+      );
+      useChatStore.setState({ liveRun: merged });
+      logger.info(
+        `[live-strip] step merged, session=${sessionId} timelineSteps=${merged.steps.length}`
+      );
       logger.debug(
         `${TAG} step buffered, session=${sessionId} thoughts=${
           buffer.thoughts.length
@@ -618,6 +786,7 @@ function registerWsHandler(): void {
           ...prev,
           armedDiskRefresh: true,
         }));
+        clearLiveRunIfOwned(sessionId);
         logger.info(`${TAG} turn end with empty buffer, disk refresh armed`);
         return;
       }
@@ -630,6 +799,8 @@ function registerWsHandler(): void {
       useSessionStore
         .getState()
         .updateSessionPreview(sessionId, extractPreview(bubble[0].text));
+      // 时间线步骤随组装迁入消息流，liveRun 立即清空避免同批步骤在消息流与活动尾巴各显一遍
+      clearLiveRunIfOwned(sessionId);
       logger.info(
         `${TAG} turn bubble assembled, session=${sessionId} contentLen=${bubble[0].text.length}`
       );
@@ -657,10 +828,7 @@ function registerWsHandler(): void {
       // 缓冲冲刷成半截气泡再追加错误气泡，与刷新链路的 error 结组口径一致
       const flushed = assemblePendingBubble(getTurnBuffer(sessionId));
       const errorBubble: ChatMessage = {
-        ...createBotMessage(
-          useChatStore.getState().agentName,
-          getAgentAvatarUrl(getServerAgentId(), getServerAddress())
-        ),
+        ...createBotMessage(),
         text: i18n.t('chat.error', { message }),
       };
       updateSlice(sessionId, (prev) => ({
@@ -700,7 +868,7 @@ function registerWsHandler(): void {
     onSpeakError: (_sessionId, _reason, message) => {
       logger.error(`${TAG} speak_error: ${message}`);
     },
-    onSubscribed: (sessionId, isGenerating) => {
+    onSubscribed: (sessionId, isGenerating, activity) => {
       if (!isGenerating) {
         return;
       }
@@ -712,29 +880,68 @@ function registerWsHandler(): void {
       if (slice.status === ChatStatus.Running) {
         return;
       }
-      enterGeneratingState(sessionId);
-      logger.info(`${TAG} session is generating, loading state entered`);
+      // tool 态当前动作直接开活动工具步，中途接入立即显示执行中身份
+      const liveSteps: LiveStep[] =
+        activity?.kind === 'tool'
+          ? [
+              {
+                tool: activity.toolName,
+                detail: activity.paramSummary,
+                startedAt: Date.now(),
+              },
+            ]
+          : [];
+      enterGeneratingState(sessionId, liveSteps);
+      logger.info(
+        `[live-strip] generating restored, session=${sessionId} activity=${
+          activity?.kind ?? 'thinking'
+        }`
+      );
     },
-    onRunStarted: (sessionId) => {
-      // 幂等添加，广播重放或快照竞态不产生重复成员
-      const { runningSessions } = useChatStore.getState();
-      if (runningSessions.includes(sessionId)) {
-        return;
+    onRunStarted: (sessionId, agentId) => {
+      // 幂等添加，广播重放或快照竞态不产生重复成员；旧服务端缺归属时只维护会话集合
+      const { runningSessions, runningOwners } = useChatStore.getState();
+      const patch: Partial<ChatStore> = {
+        runningSessions: runningSessions.includes(sessionId)
+          ? runningSessions
+          : [...runningSessions, sessionId],
+      };
+      if (agentId) {
+        const owners = new Map(runningOwners).set(sessionId, agentId);
+        patch.runningOwners = owners;
+        patch.runningAgents = [...new Set(owners.values())];
       }
-      useChatStore.setState({ runningSessions: [...runningSessions, sessionId] });
-      logger.info(`${TAG} run set added: ${sessionId}`);
+      useChatStore.setState(patch);
+      logger.info(
+        `${TAG} run set added: ${sessionId} agent=${agentId ?? 'unknown'}`
+      );
     },
     onRunEnded: (sessionId) => {
-      const { runningSessions } = useChatStore.getState();
+      const { runningSessions, runningOwners } = useChatStore.getState();
+      // 归属登记一并摘除，同 Agent 还有会话在跑时派生集合自然保留
+      const owners = new Map(runningOwners);
+      owners.delete(sessionId);
       useChatStore.setState({
         runningSessions: runningSessions.filter((id) => id !== sessionId),
+        runningOwners: owners,
+        runningAgents: [...new Set(owners.values())],
       });
       logger.info(`${TAG} run set removed: ${sessionId}`);
     },
-    onRunsSnapshot: (sessionIds) => {
-      // 快照整体替换，晚接入与重连端据此对齐 server 运行全量
-      useChatStore.setState({ runningSessions: sessionIds });
-      logger.info(`${TAG} run set replaced, count=${sessionIds.length}`);
+    onRunsSnapshot: (sessionIds, runs) => {
+      // 快照整体替换，晚接入与重连端据此对齐 server 运行全量；旧服务端无归属条目时 Agent 集合置空不误转
+      const owners = new Map(
+        (runs ?? []).map((run) => [run.sessionId, run.agentId])
+      );
+      const runningAgents = [...new Set(owners.values())];
+      useChatStore.setState({
+        runningSessions: sessionIds,
+        runningOwners: owners,
+        runningAgents,
+      });
+      logger.info(
+        `${TAG} run set replaced, count=${sessionIds.length} agents=${runningAgents.length}`
+      );
     },
     onAppNotification: (sessionId, source, content) => {
       const slice = useChatStore.getState().sessions[sessionId];

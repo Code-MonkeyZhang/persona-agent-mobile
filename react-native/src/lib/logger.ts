@@ -3,6 +3,7 @@
  * @description 统一日志出口。每条日志同时输出到 console 和内存缓冲；
  *   内存缓冲定时批量落盘到 DocumentDirectoryPath/logs/app-YYYY-MM-DD.log，
  *   按天切文件，启动时清理 RETENTION_DAYS 前的旧文件。
+ *   listFiles 对外给出已落盘文件清单，供设置页导出。
  *   - console 保留原始 args，让 Metro / Xcode 能展开对象
  *   - 文件单行序列化（对象走 JSON.stringify），便于 grep / 跨文件分析
  *   - error 级立即 flush，保证崩溃前的错误一定落盘
@@ -13,6 +14,9 @@ import RNFS from 'react-native-fs';
 const FLUSH_INTERVAL_MS = 3_000;
 const RETENTION_DAYS = 7;
 const LOG_DIR = `${RNFS.DocumentDirectoryPath}/logs`;
+
+/** 日志文件名样式，app 前缀加 ISO 日期，清单与清理共用 */
+const LOG_FILE_PATTERN = /^app-(\d{4}-\d{2}-\d{2})\.log$/;
 
 const LEVEL_INFO = 'INFO ';
 const LEVEL_WARN = 'WARN ';
@@ -139,7 +143,7 @@ async function cleanOldLogs(): Promise<void> {
   const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
   let removed = 0;
   for (const f of files) {
-    const m = f.name.match(/^app-(\d{4}-\d{2}-\d{2})\.log$/);
+    const m = f.name.match(LOG_FILE_PATTERN);
     if (!m) {
       continue;
     }
@@ -181,4 +185,20 @@ export const logger = {
 
   /** 主动把缓冲落盘。App 进后台、异常捕获时调用 */
   flush,
+
+  /**
+   * 列出已落盘的日志文件绝对路径，按文件名日期新到旧排序。
+   * 目录不存在或读取失败时回退空清单，调用方无需感知异常。
+   */
+  listFiles: async (): Promise<string[]> => {
+    try {
+      const files = await RNFS.readDir(LOG_DIR);
+      return files
+        .filter((f) => LOG_FILE_PATTERN.test(f.name))
+        .map((f) => f.path)
+        .sort((a, b) => b.localeCompare(a));
+    } catch {
+      return [];
+    }
+  },
 };

@@ -13,7 +13,11 @@
     "vibration": "Vibration",
     "vibrationDesc": "Haptic feedback on interactions",
     "thoughtProcess": "Thought Process",
-    "thoughtProcessDesc": "Show the thought process entry on messages"
+    "thoughtProcessDesc": "Show the thought process entry on messages",
+    "exportLogs": "Export Logs",
+    "exportLogsDesc": "Share log files from the last seven days",
+    "noLogs": "No log files yet",
+    "exportFailed": "Log sharing did not complete"
   },
   "phone": {
     "resetLayout": "Reset Layout",
@@ -56,14 +60,29 @@
     "updateFailedMsg": "Failed to write back to server, the field was restored"
   },
   "thought": {
+    "entry": "Thinking process"
+  },
+  "live": {
     "thinking": "Thinking",
-    "text": "Response",
-    "toolCall": "Tool Call",
-    "error": "Error",
-    "ai": "AI",
-    "showThinking": "Show thinking process",
-    "expand": "More",
-    "collapse": "Less"
+    "read": "Reading",
+    "readFallback": "Reading file",
+    "write": "Writing",
+    "writeFallback": "Writing file",
+    "edit": "Editing",
+    "editFallback": "Editing file",
+    "bash": "Running",
+    "bashFallback": "Running command",
+    "bashOutput": "Reading background output",
+    "bashKill": "Killing background command",
+    "webfetch": "Fetching",
+    "webfetchFallback": "Fetching webpage",
+    "showPose": "Changing expression",
+    "getPose": "Reading current expression",
+    "executing": "Running",
+    "done": "{{count}} steps executed",
+    "doneFail": "Ran {{count}} steps · {{fails}} failed",
+    "restore": "Show run status",
+    "collapse": "Collapse"
   },
   "companion": {
     "noAssetTitle": "This agent has no companion avatar",
