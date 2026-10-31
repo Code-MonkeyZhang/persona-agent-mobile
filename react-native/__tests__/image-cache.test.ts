@@ -1,8 +1,8 @@
 /**
  * @file __tests__/image-cache.test.ts
  * @description 图片缓存核心的单测，依赖注入替身，覆盖键提取、目录扫描命中、
- *   下载校验落盘、哈希不符拒绝、并发合并、并发首访共享扫描、覆盖写清旧
- *   与临时残留排除等主路径。
+ *   下载校验落盘、哈希不符拒绝、并发合并、并发首访共享扫描、覆盖写清旧、
+ *   warmup 预热与临时残留排除等主路径。
  */
 import {
   ImageCache,
@@ -173,6 +173,20 @@ test('落盘前清除同名旧文件，覆盖写幂等', async () => {
   expect(stats.moveFile).toEqual([
     [`${DIR}/${KEY}.download`, `${DIR}/${KEY}.png`],
   ]);
+});
+
+test('warmup 预热记忆映射，之后的 peek 同步命中不再下载', async () => {
+  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const cache = new ImageCache(
+    DIR,
+    makeDeps(stats, {
+      readDir: async () => [`${KEY}.png`],
+    })
+  );
+  await cache.warmup();
+  expect(cache.peek(URL_WITH_H)).toBe(`${DIR}/${KEY}.png`);
+  expect(await cache.resolve(URL_WITH_H)).toBe(`${DIR}/${KEY}.png`);
+  expect(stats.download.length).toBe(0);
 });
 
 test('目录扫描忽略 download 临时残留', async () => {

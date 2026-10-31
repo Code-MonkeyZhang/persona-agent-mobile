@@ -130,6 +130,14 @@ export class ImageCache {
     }
   }
 
+  /**
+   * 预热记忆映射，App 启动时调用一次。
+   * 与首访共享同一条扫描，让首帧 peek 在扫描完成后同步命中本地路径。
+   */
+  warmup(): Promise<void> {
+    return this.scanOnce();
+  }
+
   /** 未命中路径的完整流程：扫目录、下载、校验、落盘 */
   private async fetchToFile(
     source: string,
