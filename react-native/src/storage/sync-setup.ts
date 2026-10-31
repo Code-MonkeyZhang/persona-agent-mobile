@@ -9,6 +9,7 @@
  *   小手机偏好中枢单例同在此装配，kv 按当前主机作用域寻址，两台主机的偏好互不污染，
  *   快照与变更流写入走 LWW，连接恢复先追平镜像再照待重交标记补交本地编辑。
  *   追平前先认主机身份，镜像来源与当前主机不符或游标越过服务端头部时整库作废重镜像。
+ *   登记表身份推进经订阅派生落位，任何只写身份的路径都被兜住。
  *   initDeviceLayer 先于冷连接执行，存量单库迁移与登记表水化在此完成。
  *   App 启动时调用一次 setupSync 与 initDeviceLayer，界面层只消费 mirrorStore 与镜像读接口。
  */
@@ -108,7 +109,8 @@ export const launcherPrefs = new LauncherPrefs({
 
 /**
  * 设备层引导，App 启动时先于冷连接执行一次。
- * 存量单库按身份章迁移到分区库并落进登记表，随后水化设备仓库并把镜像库指到当前主机。
+ * 存量单库按身份章迁移到分区库并落进登记表，随后水化设备仓库，
+ * 镜像库经 settle 落位到当前主机并驱动界面首读，断网时同样完成。
  */
 export async function initDeviceLayer(): Promise<void> {
   const registry = loadDeviceRegistry();
@@ -128,7 +130,7 @@ export async function initDeviceLayer(): Promise<void> {
   }
   useDeviceStore.getState().hydrate(registry);
   if (registry.currentHostId) {
-    await cacheDb.switchHost(registry.currentHostId);
+    await useConnectionStore.getState().settleHost(registry.currentHostId);
   }
 }
 
@@ -206,6 +208,23 @@ export function setupSync(): void {
       launcherPrefs.retryPending();
     }
     lastStatus = state.status;
+  });
+
+  // 身份是唯一事实源，任何路径推进 currentHostId 都派生一次落位
+  let lastHostId = useDeviceStore.getState().currentHostId;
+  useDeviceStore.subscribe((state) => {
+    const { currentHostId } = state;
+    if (!currentHostId || currentHostId === lastHostId) {
+      return;
+    }
+    lastHostId = currentHostId;
+    logger.info(`${TAG} identity advanced to ${currentHostId}, settling`);
+    useConnectionStore
+      .getState()
+      .settleHost(currentHostId)
+      .catch((e) =>
+        logger.error(`${TAG} settle ${currentHostId} failed: ${e}`)
+      );
   });
 
   let notifyTimer: ReturnType<typeof setTimeout> | null = null;
