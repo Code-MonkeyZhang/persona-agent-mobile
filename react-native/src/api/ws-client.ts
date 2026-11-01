@@ -53,8 +53,12 @@ export interface WsEventHandler {
     sessionId: string,
     stepIndex: number,
     toolName: string,
-    paramSummary: string
+    paramSummary: string,
+    toolTitle?: string,
+    iconUrl?: string
   ): void;
+  /** 正文开始信号，只报开始不带文字，时间线据此切正在回复相位 */
+  onContentStarted(sessionId: string, stepIndex: number): void;
   /** 轮次边界信号，客户端据此把轮次缓冲组装成整轮气泡，生成状态保持 */
   onTurnComplete(sessionId: string): void;
   onComplete(sessionId: string): void;
@@ -395,8 +399,17 @@ function handleMessage(msg: ServerMessage): void {
         msg.sessionId,
         msg.stepIndex,
         msg.toolName,
-        msg.paramSummary
+        msg.paramSummary,
+        msg.toolTitle,
+        msg.iconUrl
       );
+      break;
+
+    case 'content_started':
+      logger.info(
+        `${TAG} content_started, sessionId=${msg.sessionId} step=${msg.stepIndex}`
+      );
+      currentHandler?.onContentStarted(msg.sessionId, msg.stepIndex);
       break;
 
     case 'step_complete':
