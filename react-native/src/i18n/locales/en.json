@@ -64,6 +64,7 @@
   },
   "live": {
     "thinking": "Thinking",
+    "replying": "Replying",
     "read": "Reading",
     "readFallback": "Reading file",
     "write": "Writing",

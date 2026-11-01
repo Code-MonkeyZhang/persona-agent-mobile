@@ -38,8 +38,6 @@ PODS:
     - ExpoModulesCore
   - ExpoAudio (55.0.18):
     - ExpoModulesCore
-  - ExpoBlur (55.0.18):
-    - ExpoModulesCore
   - ExpoDocumentPicker (55.0.17):
     - ExpoModulesCore
   - ExpoDomWebView (55.0.6):
@@ -2882,6 +2880,34 @@ PODS:
     - React-perflogger (= 0.83.9)
     - React-utils (= 0.83.9)
     - SocketRocket
+  - ReactNativeBlur (6.0.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - ReactNativeCameraKit (18.0.1):
     - boost
     - DoubleConversion
@@ -3394,7 +3420,6 @@ DEPENDENCIES:
   - Expo (from `../node_modules/expo`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoAudio (from `../node_modules/expo-audio/ios`)
-  - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoDocumentPicker (from `../node_modules/expo-document-picker/ios`)
   - "ExpoDomWebView (from `../node_modules/expo/node_modules/@expo/log-box/node_modules/@expo/dom-webview/ios`)"
   - ExpoFileSystem (from `../node_modules/expo/node_modules/expo-file-system/ios`)
@@ -3488,6 +3513,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios/ReactAppDependencyProvider`)
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
+  - "ReactNativeBlur (from `../node_modules/@sbaiahmed1/react-native-blur`)"
   - ReactNativeCameraKit (from `../node_modules/react-native-camera-kit`)
   - "RNCClipboard (from `../node_modules/@react-native-clipboard/clipboard`)"
   - RNDeviceInfo (from `../node_modules/react-native-device-info`)
@@ -3522,8 +3548,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-asset/ios"
   ExpoAudio:
     :path: "../node_modules/expo-audio/ios"
-  ExpoBlur:
-    :path: "../node_modules/expo-blur/ios"
   ExpoDocumentPicker:
     :path: "../node_modules/expo-document-picker/ios"
   ExpoDomWebView:
@@ -3709,6 +3733,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios/ReactCodegen
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
+  ReactNativeBlur:
+    :path: "../node_modules/@sbaiahmed1/react-native-blur"
   ReactNativeCameraKit:
     :path: "../node_modules/react-native-camera-kit"
   RNCClipboard:
@@ -3745,7 +3771,6 @@ SPEC CHECKSUMS:
   Expo: f988900e2b86c186b34c2a73087ec422afab1785
   ExpoAsset: 64ff088f684d008431f518c0d40fccefb9cda593
   ExpoAudio: bf8a9a7d9cb56fbb01aa459d940cf39ddb8e451b
-  ExpoBlur: bca7f31780d80dc090b616910ff5d52098888b53
   ExpoDocumentPicker: e471276f75d4767740ad1a3929db6996c4c5aef8
   ExpoDomWebView: 317a0d188cfdb850fc6fd2a43a2fc132dfd171ee
   ExpoFileSystem: 7874fb1de3cd3f866cb8dd7dbe05361c5c278ef6
@@ -3839,6 +3864,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 5bf52020fdc0d0a337068ea42d4a6676ce4a04bc
   ReactCodegen: 5c808345ff57b4f4f1eab230f541921ad9e37500
   ReactCommon: 3b79ecfd327035654f6c36cf1de8e222d8b835e6
+  ReactNativeBlur: 8572e93c9f904029cc2f2737e26261643366dd12
   ReactNativeCameraKit: 237754a596201bebce4413f4825e26fb666e38dd
   RNCClipboard: 962296f7af77f6c039b683e21c2e2255af9c05df
   RNDeviceInfo: d79872e11c8e9c4de0d65b0ee6e0cee719f37fea
