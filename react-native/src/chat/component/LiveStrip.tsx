@@ -30,7 +30,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import BackdropBlur from '../../component/BackdropBlur.tsx';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   CheckCircle,
@@ -602,12 +602,7 @@ export function LiveStrip() {
           style={[StyleSheet.absoluteFill, barStyle]}
           pointerEvents="none"
         >
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            tint="light"
-            intensity={40}
-            blurMethod="dimezisBlurView"
-          />
+          <BackdropBlur />
           <View style={styles.shellBg} />
         </Animated.View>
         {/* 发丝线层，胶囊热区只在 hair 档接管点击 */}
