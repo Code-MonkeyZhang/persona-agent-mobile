@@ -25,6 +25,9 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** 模型自写的工具叙述，随 toolCalls 项透传，供显示层取值优先读 */
+  toolTitle?: string;
+  toolIntent?: string;
 }
 
 /** step_complete 消息中的工具执行结果项 */
@@ -62,7 +65,7 @@ export interface RunningSessionEntry {
   agentId: string;
 }
 
-/** 运行中会话的当前动作，subscribed 携带，thinking 与 tool 两态 */
+/** 运行中会话的当前动作，subscribed 携带，thinking、tool 与 replying 三态 */
 export type CurrentActivity =
   | { kind: 'thinking' }
   | {
@@ -70,7 +73,8 @@ export type CurrentActivity =
       stepIndex: number;
       toolName: string;
       paramSummary: string;
-    };
+    }
+  | { kind: 'replying' };
 
 /** Agent Server 通过 WebSocket 下发的所有消息类型 */
 export type ServerMessage =
@@ -103,8 +107,19 @@ export type ServerMessage =
       toolName: string;
       /** 入参经掩码与摘要压成的一句参数摘要 */
       paramSummary: string;
+      /** 模型自写的工具叙述，显示层优先显示 */
+      toolTitle?: string;
+      toolIntent?: string;
+      /** MCP 工具所属服务的 logo 地址，内置工具缺省，客户端缺失回退 Wrench */
+      iconUrl?: string;
       /** 子代理工具链路的挂载点，当前无写入方，演进预留 */
       parent_tool_use_id?: string;
+    }
+  | {
+      /** 正文开始信号，模型开始产出正文时广播一次，只报开始不带文字，正文仍在步末随 step_complete 整段发出 */
+      type: 'content_started';
+      sessionId: string;
+      stepIndex: number;
     }
   | { type: 'round_complete'; sessionId: string }
   | { type: 'turn_complete'; sessionId: string }
@@ -899,6 +914,9 @@ interface ServerToolCall {
     name: string;
     arguments: Record<string, unknown>;
   };
+  /** 模型自写的工具叙述，随消息落盘，回看读它保真 */
+  toolTitle?: string;
+  toolIntent?: string;
   toolResult?: {
     content: string;
     isError: boolean;
@@ -1053,6 +1071,8 @@ export function convertToChatMessages(
           type: 'tool_use',
           toolName: tc.function.name,
           toolInput: tc.function.arguments,
+          toolTitle: tc.toolTitle,
+          toolIntent: tc.toolIntent,
           toolResult: tc.toolResult
             ? { output: tc.toolResult.content, isError: tc.toolResult.isError }
             : undefined,

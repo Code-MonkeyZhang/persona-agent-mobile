@@ -80,7 +80,7 @@ android {
         applicationId "com.persona.agent"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 14
+        versionCode 15
         versionName "1.4.1"
         ndk {
             //noinspection ChromeOsAbiSupport

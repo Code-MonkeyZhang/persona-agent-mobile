@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import {
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -29,7 +30,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import BackdropBlur from '../../component/BackdropBlur.tsx';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   CheckCircle,
@@ -38,10 +39,13 @@ import {
   FileText,
   Globe,
   Lightbulb,
+  MessageCircle,
   MessageSquare,
+  MessageSquareDashed,
   Pencil,
   Smile,
   TerminalSquare,
+  Wrench,
   XCircle,
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
@@ -60,20 +64,28 @@ import { useTheme, typography } from '../../theme';
 export const ROW_ICON = '#8E8E93';
 export const FAIL_RED = '#d5392e';
 
-/** 实时步骤条的一步，tool 为空串代表思考段，detail 是参数摘要或思考段正文
+/** 实时步骤条的一步，tool 为空串代表文字步，detail 是参数摘要或文字步正文
+ *  text 标记模型文字步，渲染时按后面跟不跟工具分中间解说行与回复内容行
+ *  toolTitle 是模型自写的调用短标题，显示取值链第一优先
+ *  iconUrl 是 MCP 工具所属服务的 logo 图址，缺失回退 Wrench
  *  failed 标记工具步失败，行渲染走红字紧跟 circle-x */
 export interface LiveStep {
   tool: string;
   detail: string;
   startedAt: number;
   endedAt?: number;
+  text?: boolean;
+  toolTitle?: string;
+  iconUrl?: string;
   failed?: boolean;
 }
 
-/** 运行期时间线的实时状态，sessionId 归属防串台，null 表示空闲 */
+/** 运行期时间线的实时状态，sessionId 归属防串台，null 表示空闲
+ *  replying 标记模型正在产出正文，content_started 到达置位，步落行后复位 */
 export interface LiveRunState {
   sessionId: string;
   steps: LiveStep[];
+  replying?: boolean;
 }
 
 /** i18n 文案函数的最小形状，供纯函数共用 */
@@ -85,7 +97,7 @@ type IconComponent = ComponentType<{
   color?: string;
 }>;
 
-/** 工具名到行前置位身份图标的映射，九个实名键覆盖文档七族，未登记工具回退文档图标 */
+/** 工具名到行前置位身份图标的映射，内置工具全量登记，未登记的第三方工具回退扳手 */
 const TOOL_ICONS: Record<string, IconComponent> = {
   read_file: FileText,
   write_file: FilePlus,
@@ -100,10 +112,11 @@ const TOOL_ICONS: Record<string, IconComponent> = {
 
 /**
  * 取工具步的身份图标，行前置位任何时候都是身份图标，成功失败不抢图标位
+ * MCP 工具的身份由 iconUrl 图址承担，这里只兜无图址的展示位
  * @param tool 工具实名
  */
 export function toolIcon(tool: string): IconComponent {
-  return TOOL_ICONS[tool] ?? FileText;
+  return TOOL_ICONS[tool] ?? Wrench;
 }
 
 /** 掩码替换用的固定星串，定长不泄露原始凭据长度 */
@@ -203,12 +216,13 @@ export function summarizeToolInput(
 }
 
 /**
- * 单个步骤的自然语言动向句，动词加真实对象为主，拼不到对象回退该工具的纯动词形态
- * 未登记的第三方工具统一回退正在执行加工具名，截断口径只剩 Bash 24
+ * 单个步骤的自然语言动向句，三级取值链，模型自写短标题优先，
+ * 查表翻译次之，未登记的第三方工具回退正在执行加工具名，截断口径只剩 Bash 24
  * @param t 文案函数
  * @param step 待叙述的步骤
  */
 export function stepPhrase(t: Translate, step: LiveStep): string {
+  if (step.toolTitle) return step.toolTitle;
   switch (step.tool) {
     case '':
       return t('live.thinking');
@@ -258,38 +272,47 @@ export function phraseForThought(t: Translate, thought: Thought): string {
     detail: summarizeToolInput(thought.toolName ?? '', thought.toolInput),
     startedAt: 0,
     endedAt: 1,
+    toolTitle: thought.toolTitle,
   });
 }
 
 /**
- * 状态条当前动作文案推导，两态纯函数，有未闭合工具步则工具执行叙述，否则思考中
+ * 状态条当前动作文案推导，三态纯函数，有未闭合工具步则工具执行叙述，
+ * 无活动步且正文写作中返回正在回复，其余思考中
  * @param t 文案函数
  * @param liveRun 当前回合的实时状态
  */
 export function liveRunLabel(t: Translate, liveRun: LiveRunState): string {
   const active = [...liveRun.steps].reverse().find((s) => !s.endedAt);
-  return active ? stepPhrase(t, active) : t('live.thinking');
+  if (active) return stepPhrase(t, active);
+  return liveRun.replying ? t('live.replying') : t('live.thinking');
 }
 
 /**
- * 顶条图标位随相位换身份图标，两态纯函数，活动工具步取工具身份，思考中灯泡
+ * 顶条图标位随相位换身份图标，三态纯函数，活动工具步取工具身份，
+ * 正文写作中取方形气泡，其余灯泡
  * @param liveRun 当前回合的实时状态
  */
 export function phaseIcon(liveRun: LiveRunState): IconComponent {
   const active = [...liveRun.steps].reverse().find((s) => !s.endedAt);
-  if (!active || active.tool === '') return Lightbulb;
-  return toolIcon(active.tool);
+  if (active && active.tool !== '') return toolIcon(active.tool);
+  return liveRun.replying ? MessageSquare : Lightbulb;
 }
 
-/** 时间线行数据，kind 区分三类条目，live 标记运行期未闭合的活动行
- *  synthetic 标记思考间隙补出的思考中活动行，文本渲染时取文案不存值 */
+/** 时间线行数据，kind 区分五类条目，live 标记运行期未闭合的活动行
+ *  synthetic 标记思考间隙与写作期补出的活动行，文本渲染时取文案不存值
+ *  note 是模型中间解说，reply 是回复内容 */
 export type TimelineRowData =
   | { kind: 'user'; text: string }
   | { kind: 'think'; text: string; live?: boolean; synthetic?: boolean }
+  | { kind: 'note'; text: string }
+  | { kind: 'reply'; text: string; live?: boolean; synthetic?: boolean }
   | {
       kind: 'tool';
       tool: string;
       detail: string;
+      toolTitle?: string;
+      iconUrl?: string;
       live?: boolean;
       failed?: boolean;
     };
@@ -298,10 +321,11 @@ export type TimelineRowData =
  * 把会话消息流摊平成时间线行，顺序即发生顺序。
  * GiftedChat 数组新在前，先倒序摊平还原时间正序。
  * 用户消息出用户行充当轮次锚点，助手消息的思考段出思考行，工具调用出工具行带参数摘要，
- * text 步骤由气泡正文承担不进行，与消息内思考过程同一过滤口径。
+ * 落盘消息的中间解说轮末收起不进行，助手正文非空出回复内容行给整轮收尾。
  * 落盘行与运行行的失败判定同源，读 thought 的 isError 与 toolResult 的 isError。
  * 运行期 liveRun 的步骤作为活动尾巴接在末尾，当前轮的消息还没落盘由它补齐，
- * 运行中没有未闭合的工具步即处于思考间隙，补一条思考中活动行。
+ * 文字步按后面跟不跟工具定性，跟了出中间解说行，没跟出回复内容行，
+ * 运行中没有未闭合工具步时按相位补活动行，写作期补正在回复标记，间隙补思考中。
  * @param messages 当前会话消息流，新在前
  * @param liveRun 运行期实时状态，空闲或归属不符传 null
  */
@@ -321,30 +345,52 @@ export function buildRows(
           kind: 'tool',
           tool: th.toolName ?? '',
           detail: summarizeToolInput(th.toolName ?? '', th.toolInput),
+          toolTitle: th.toolTitle,
           failed: th.isError || th.toolResult?.isError || undefined,
         });
       } else if (th.type === 'thinking' && th.content) {
         rows.push({ kind: 'think', text: th.content });
       }
     }
+    if (m.text) {
+      rows.push({ kind: 'reply', text: m.text });
+    }
   }
   if (liveRun) {
-    for (const st of liveRun.steps) {
+    liveRun.steps.forEach((st, i) => {
       const live = st.endedAt === undefined;
       if (st.tool === '') {
-        rows.push({ kind: 'think', text: st.detail, live });
+        if (st.text) {
+          // 文字定性纯推导，后面还有工具步即中间解说，否则是候选的回复内容
+          const hasToolAfter = liveRun.steps
+            .slice(i + 1)
+            .some((s) => s.tool !== '');
+          rows.push(
+            hasToolAfter
+              ? { kind: 'note', text: st.detail }
+              : { kind: 'reply', text: st.detail }
+          );
+        } else {
+          rows.push({ kind: 'think', text: st.detail, live });
+        }
       } else {
         rows.push({
           kind: 'tool',
           tool: st.tool,
           detail: st.detail,
+          toolTitle: st.toolTitle,
+          iconUrl: st.iconUrl,
           live,
           failed: st.failed,
         });
       }
-    }
+    });
     if (!liveRun.steps.some((s) => s.tool !== '' && s.endedAt === undefined)) {
-      rows.push({ kind: 'think', text: '', live: true, synthetic: true });
+      rows.push(
+        liveRun.replying
+          ? { kind: 'reply', text: '', live: true, synthetic: true }
+          : { kind: 'think', text: '', live: true, synthetic: true }
+      );
     }
   }
   return rows;
@@ -373,7 +419,8 @@ const SEAM_IDLE = '#D1D1D6';
 
 /**
  * 空闲态一行档摘要，从最新一条带工具步的助手消息现算步数与失败步数。
- * 失败轮输出 doneFail 红字整句，成功轮输出 done 步数，不落任何驻留字段。
+ * 成功轮优先显示模型写的本轮意图，取最后一个工具步的 toolIntent，未写走步数兜底。
+ * 失败轮输出 doneFail 红字整句，意图置空走兜底，不落任何驻留字段。
  * GiftedChat 数组新在前，从头部向尾部扫。
  * 回退不到工具步数时取最新一条用户消息截断，无消息显示思考中。
  * @param t 文案函数
@@ -391,11 +438,15 @@ export function idleLabel(
     const fails = tools.filter(
       (th) => th.isError || th.toolResult?.isError
     ).length;
-    return fails > 0
-      ? {
-          text: t('live.doneFail', { count: tools.length, fails }),
-          failed: true,
-        }
+    if (fails > 0) {
+      return {
+        text: t('live.doneFail', { count: tools.length, fails }),
+        failed: true,
+      };
+    }
+    const intent = tools[tools.length - 1]?.toolIntent;
+    return intent
+      ? { text: intent, failed: false }
       : { text: t('live.done', { count: tools.length }), failed: false };
   }
   const newest = messages[0];
@@ -551,12 +602,7 @@ export function LiveStrip() {
           style={[StyleSheet.absoluteFill, barStyle]}
           pointerEvents="none"
         >
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            tint="light"
-            intensity={40}
-            blurMethod="dimezisBlurView"
-          />
+          <BackdropBlur />
           <View style={styles.shellBg} />
         </Animated.View>
         {/* 发丝线层，胶囊热区只在 hair 档接管点击 */}
@@ -746,20 +792,42 @@ function HairSeam({
   );
 }
 
+/** 工具行的行数据形状，供前置位组件收窄消费 */
+type ToolRow = Extract<TimelineRowData, { kind: 'tool' }>;
+
+/** 工具行前置位，MCP 工具显所属服务 logo，图址缺失或加载失败回退身份图标 */
+function ToolLeadingIcon({ row }: { row: ToolRow }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  if (row.iconUrl && !logoFailed) {
+    return (
+      <Image
+        source={{ uri: row.iconUrl }}
+        style={styles.toolLogo}
+        resizeMode="contain"
+        onError={() => setLogoFailed(true)}
+      />
+    );
+  }
+  const Icon = toolIcon(row.tool);
+  return <Icon size={14} color={ROW_ICON} />;
+}
+
 /**
- * 时间线的单行，三类各自可辨，行纯展示不可点。
+ * 时间线的单行，五类各自可辨，行纯展示不可点。
  * 前置位任何时候都是身份图标，运行行的圆点紧跟文字右侧对齐首行，
  * 失败行整句红字紧跟 circle-x。
  * @param row 当前行数据
  */
 function TimelineRow({ row }: { row: TimelineRowData }) {
   const { t } = useTranslation();
-  const live = row.kind === 'user' ? false : row.live ?? false;
+  const { colors } = useTheme();
+  const live =
+    row.kind === 'user' || row.kind === 'note' ? false : row.live ?? false;
 
   if (row.kind === 'user') {
     return (
       <View style={styles.timelineRow}>
-        <MessageSquare size={14} color={ROW_ICON} />
+        <MessageCircle size={14} color={ROW_ICON} />
         <Text style={[styles.rowText, styles.userText]} numberOfLines={2}>
           {row.text}
         </Text>
@@ -783,16 +851,35 @@ function TimelineRow({ row }: { row: TimelineRowData }) {
     );
   }
 
-  const Icon = toolIcon(row.tool);
+  // 解说行与回复行共用一套文字行渲染，写作期标记行取固定文案与主色图标
+  if (row.kind === 'note' || row.kind === 'reply') {
+    const TextIcon = row.kind === 'note' ? MessageSquareDashed : MessageSquare;
+    const text =
+      row.kind === 'reply' && row.synthetic ? t('live.replying') : row.text;
+    return (
+      <View style={styles.timelineRow}>
+        <TextIcon size={14} color={live ? colors.primary : ROW_ICON} />
+        <Text
+          style={[styles.rowText, live && styles.liveText]}
+          numberOfLines={2}
+        >
+          {text}
+        </Text>
+        {live && <Dots style={styles.rowDots} />}
+      </View>
+    );
+  }
+
   const summary = stepPhrase(t, {
     tool: row.tool,
     detail: row.detail,
+    toolTitle: row.toolTitle,
     startedAt: 0,
     endedAt: 1,
   });
   return (
     <View style={styles.timelineRow}>
-      <Icon size={14} color={ROW_ICON} />
+      <ToolLeadingIcon row={row} />
       {row.failed ? (
         // 失败行主文字不撑满整行，标记贴着文字尾部
         <View style={styles.failRow}>
@@ -910,6 +997,11 @@ const styles = StyleSheet.create({
   userText: {
     flex: 1,
     color: ROW_ICON,
+  },
+  toolLogo: {
+    width: 14,
+    height: 14,
+    marginTop: 1,
   },
   liveText: {
     fontWeight: '500',

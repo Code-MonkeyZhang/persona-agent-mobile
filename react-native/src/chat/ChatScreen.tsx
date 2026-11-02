@@ -26,7 +26,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+import BackdropBlur from '../component/BackdropBlur.tsx';
 import {
   activateKeepAwake,
   deactivateKeepAwake,
@@ -581,14 +581,9 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         )}
-        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，Android 需显式指定模糊实现 */}
+        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，安卓为半透明降级底色 */}
         <Animated.View style={keyboardBottomStyle}>
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            tint="light"
-            intensity={40}
-            blurMethod="dimezisBlurView"
-          />
+          <BackdropBlur />
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;

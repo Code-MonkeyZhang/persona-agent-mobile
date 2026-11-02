@@ -105,6 +105,8 @@ function cycleToThoughts(
       type: 'tool_use',
       toolName: tc.name,
       toolInput: tc.arguments,
+      toolTitle: tc.toolTitle,
+      toolIntent: tc.toolIntent,
       toolResult: result
         ? { output: result.result, isError: !result.success }
         : undefined,
@@ -446,7 +448,8 @@ function assemblePendingBubble(
  * 未闭合工具步与本次 tool_use 按出现顺序一一配对闭合补全失败态，
  * agent 串行执行保证 tool_started 顺序与 toolCalls 顺序一致，配对不存 stepIndex，
  * tool_started 漏收的 tool_use 补一条已完成步，配对不上的未闭合步按孤儿收尾避免呼吸行悬挂，
- * text 步骤由气泡正文承担不进行。
+ * 文字步带 text 标记落行，渲染时按后面跟不跟工具分中间解说行与回复内容行，
+ * 合并即步落行，replying 复位。
  * @param sessionId 事件所属会话，作为时间线归属写回
  * @param liveRun 当前实时状态，null 时惰性创建
  * @param thoughts cycleToThoughts 的产物
@@ -469,6 +472,7 @@ function mergeStepIntoLiveRun(
         detail: th.content,
         startedAt: now,
         endedAt: now,
+        text: th.type === 'text' || undefined,
       });
     }
   }
@@ -484,6 +488,10 @@ function mergeStepIntoLiveRun(
       startedAt: openSteps[i]?.startedAt ?? now,
       endedAt: now,
       failed: th.isError || th.toolResult?.isError || undefined,
+      // 闭合时以落盘侧的存档文案为准，tool_started 漏收的步从这里补上取值链第一档
+      toolTitle: th.toolTitle ?? openSteps[i]?.toolTitle,
+      // logo 图址只在 tool_started 事件携带，闭合步沿用活动步的图址
+      iconUrl: openSteps[i]?.iconUrl,
     };
     if (i < openSteps.length) closed.push(step);
     else missed.push(step);
@@ -506,7 +514,8 @@ function mergeStepIntoLiveRun(
   }
   if (!spliced) result.push(...thinkSteps);
   result.push(...missed);
-  return { sessionId, steps: result };
+  // 步落行后写作相位结束，下一个信号重新点亮
+  return { sessionId, steps: result, replying: false };
 }
 
 /** 时间线归属校验后清空，别的会话已接管单例时不动它 */
@@ -523,13 +532,17 @@ function clearLiveRunIfOwned(sessionId: string): void {
  * 生成期间界面无占位气泡，liveRun 同步开空时间线供顶栏时间线驱动。
  * @param sessionId 回合所属会话
  * @param liveSteps 订阅恢复携带的当前动作步骤，常规回合传空
+ * @param replying 订阅恢复携带的写作态，常规回合传 false
  */
 function enterGeneratingState(
   sessionId: string,
-  liveSteps: LiveStep[] = []
+  liveSteps: LiveStep[] = [],
+  replying = false
 ): void {
   turnBuffers.set(sessionId, { thoughts: [], content: '' });
-  useChatStore.setState({ liveRun: { sessionId, steps: liveSteps } });
+  useChatStore.setState({
+    liveRun: { sessionId, steps: liveSteps, replying: replying || undefined },
+  });
   updateSlice(sessionId, (slice) => ({
     ...slice,
     status: ChatStatus.Running,
@@ -680,7 +693,14 @@ function finishTurn(sessionId: string): void {
  */
 function registerWsHandler(): void {
   wsClient.registerHandler({
-    onToolStarted: (sessionId, _stepIndex, toolName, paramSummary) => {
+    onToolStarted: (
+      sessionId,
+      _stepIndex,
+      toolName,
+      paramSummary,
+      toolTitle,
+      iconUrl
+    ) => {
       const state = useChatStore.getState();
       const slice = state.sessions[sessionId];
       // 迟到守卫：回合未在进行中即丢弃，不污染空闲时间线
@@ -691,19 +711,51 @@ function registerWsHandler(): void {
         return;
       }
       // 单例归属校验：归属不符先对齐归属再开步，ws 单订阅下这是防御位
-      const steps =
-        state.liveRun?.sessionId === sessionId ? [...state.liveRun.steps] : [];
+      const prev =
+        state.liveRun?.sessionId === sessionId ? state.liveRun : null;
       useChatStore.setState({
         liveRun: {
           sessionId,
           steps: [
-            ...steps,
-            { tool: toolName, detail: paramSummary, startedAt: Date.now() },
+            ...(prev?.steps ?? []),
+            {
+              tool: toolName,
+              detail: paramSummary,
+              toolTitle,
+              iconUrl,
+              startedAt: Date.now(),
+            },
           ],
+          // 同步内先写正文后接工具时保住写作标志，步落行时统一复位
+          replying: prev?.replying,
         },
       });
       logger.info(
         `[live-strip] tool started, session=${sessionId} tool=${toolName}`
+      );
+    },
+    onContentStarted: (sessionId, stepIndex) => {
+      const state = useChatStore.getState();
+      const slice = state.sessions[sessionId];
+      // 迟到守卫：回合未在进行中即丢弃，不污染空闲时间线
+      if (slice?.status !== ChatStatus.Running) {
+        logger.info(
+          `[live-strip] late content_started ignored, session=${sessionId}`
+        );
+        return;
+      }
+      // 只报开始的轻量信号，正文不直播，步末随 step_complete 整段落行
+      const prev =
+        state.liveRun?.sessionId === sessionId ? state.liveRun : null;
+      useChatStore.setState({
+        liveRun: {
+          sessionId,
+          steps: prev ? [...prev.steps] : [],
+          replying: true,
+        },
+      });
+      logger.info(
+        `[live-strip] content started, session=${sessionId} step=${stepIndex}`
       );
     },
     onStepComplete: (sessionId, content, thinking, toolCalls, toolResults) => {
@@ -880,7 +932,7 @@ function registerWsHandler(): void {
       if (slice.status === ChatStatus.Running) {
         return;
       }
-      // tool 态当前动作直接开活动工具步，中途接入立即显示执行中身份
+      // tool 态当前动作直接开活动工具步，replying 态置写作标志，中途接入立即显示对应相位
       const liveSteps: LiveStep[] =
         activity?.kind === 'tool'
           ? [
@@ -891,7 +943,7 @@ function registerWsHandler(): void {
               },
             ]
           : [];
-      enterGeneratingState(sessionId, liveSteps);
+      enterGeneratingState(sessionId, liveSteps, activity?.kind === 'replying');
       logger.info(
         `[live-strip] generating restored, session=${sessionId} activity=${
           activity?.kind ?? 'thinking'

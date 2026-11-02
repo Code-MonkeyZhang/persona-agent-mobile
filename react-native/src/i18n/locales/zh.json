@@ -64,6 +64,7 @@
   },
   "live": {
     "thinking": "思考中",
+    "replying": "正在回复",
     "read": "正在读取",
     "readFallback": "正在读取文件",
     "write": "正在写入",

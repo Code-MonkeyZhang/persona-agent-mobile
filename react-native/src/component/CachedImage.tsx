@@ -76,8 +76,7 @@ const CachedImage: React.FC<CachedImageProps> = ({
     <Image
       /** 安卓的 Image 静默拒绝绘制不带 file scheme 的本地路径，iOS 对两种写法都接受，本地命中统一补前缀。 */
       source={{
-        uri:
-          resolution.kind === 'local' ? `file://${resolution.path}` : source,
+        uri: resolution.kind === 'local' ? `file://${resolution.path}` : source,
       }}
       style={style}
       resizeMode={resizeMode}
