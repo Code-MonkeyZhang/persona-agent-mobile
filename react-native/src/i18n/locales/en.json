@@ -158,11 +158,6 @@
     "deleteDevice": "Remove Device",
     "detailA11y": "Device details"
   },
-  "first": {
-    "title": "Connect your device",
-    "desc": "Scan the QR code shared by the desktop to get started. Addresses may change, scanning always works.",
-    "tip": "The QR code lives in the desktop local management page, behind the gear on the bottom-left card."
-  },
   "home": {
     "newChat": "New Chat",
     "newSession": "New Session",

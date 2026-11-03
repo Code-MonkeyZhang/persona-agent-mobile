@@ -71,7 +71,6 @@ import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/index.ts';
 import { logger } from '../lib/logger';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useConnectionStore } from '../stores/connectionStore';
-import { useDeviceStore } from '../stores/deviceStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useChatStore } from '../stores/chatStore';
 import { useMirrorStore } from '../stores/mirrorStore';
@@ -81,7 +80,6 @@ import { PressableRow } from '../component/PressableRow.tsx';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
 import ConnectionBanner from './ConnectionBanner.tsx';
-import FirstLaunchView from '../device/FirstLaunchView.tsx';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RouteParamList,
@@ -204,7 +202,6 @@ const HomeScreen: React.FC = () => {
   const connectionStatus = useConnectionStore((s) => s.status);
   const reconnectVersion = useConnectionStore((s) => s.reconnectVersion);
   const hostVersion = useConnectionStore((s) => s.hostVersion);
-  const deviceCount = useDeviceStore((s) => s.devices.length);
 
   /** 当前 Agent 的常驻聊天会话 ID，复用于高亮与预览查找 */
   const currentChatSessionId = chatSessionIdFor(currentAgentId);
@@ -473,133 +470,124 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      {/* 登记表为空时整页让位给首启扫码布局，连上台主机后自动回到会话主页 */}
-      {deviceCount === 0 ? (
-        <FirstLaunchView />
-      ) : (
-        <>
-          {/* === 固定区，圆钮行避让状态栏，整体不随列表滚动 === */}
-          <View style={[styles.fixed, { paddingTop: insets.top }]}>
-            {/* 圆钮行，左上设置，右上连接与新建并排 */}
-            <View style={styles.circleRow}>
-              <TouchableOpacity
-                style={styles.circleBtn}
-                activeOpacity={0.7}
-                accessibilityLabel={t('home.settings')}
-                onPress={() => navigation.navigate('Settings')}
-              >
-                <Settings size={20} color={colors.textDarkGray} />
-              </TouchableOpacity>
-              <View style={styles.circleRowRight}>
-                <TouchableOpacity
-                  style={styles.circleBtn}
-                  activeOpacity={0.7}
-                  accessibilityLabel={t('device.manage')}
-                  onPress={() => navigation.navigate('DeviceManage')}
-                >
-                  <MonitorSmartphone size={20} color={serverIconColor} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.circleBtn}
-                  activeOpacity={0.7}
-                  accessibilityLabel={t('home.newSession')}
-                  onPress={handleNewChat}
-                >
-                  <Plus size={20} color={colors.textDarkGray} />
-                </TouchableOpacity>
-              </View>
-            </View>
-            {/* agent 横向条，原生横滑，点当前头像进配置页，点其他头像切换 */}
-            <ScrollView
-              style={styles.agentStrip}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.agentTrack}
+      {/* === 固定区，圆钮行避让状态栏，整体不随列表滚动 === */}
+      <View style={[styles.fixed, { paddingTop: insets.top }]}>
+        {/* 圆钮行，左上设置，右上连接与新建并排 */}
+        <View style={styles.circleRow}>
+          <TouchableOpacity
+            style={styles.circleBtn}
+            activeOpacity={0.7}
+            accessibilityLabel={t('home.settings')}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Settings size={20} color={colors.textDarkGray} />
+          </TouchableOpacity>
+          <View style={styles.circleRowRight}>
+            <TouchableOpacity
+              style={styles.circleBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t('device.manage')}
+              onPress={() => navigation.navigate('DeviceManage')}
             >
-              {agents.map((agent) => {
-                const isCurrent = currentAgentId === agent.id;
-                const isRunning = runningAgentIds.includes(agent.id);
-                return (
-                  <TouchableOpacity
-                    key={agent.id}
-                    style={styles.agentItem}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      isCurrent
-                        ? openAgentDetail()
-                        : handleSelectAgent(agent.id)
-                    }
-                  >
-                    {/* 圈只答选中保持静态实色，运行信号由头像变淡承担，互不干涉 */}
-                    <View
-                      style={[
-                        styles.avatarRing,
-                        isCurrent && styles.avatarRingCurrent,
-                      ]}
-                    >
-                      <AgentAvatarFade agentId={agent.id} running={isRunning}>
-                        <AgentAvatar
-                          agentId={agent.id}
-                          serverAddress={serverAddress}
-                          size={64}
-                          fallbackIconSize={32}
-                        />
-                      </AgentAvatarFade>
-                      {unreadAgentIds.includes(agent.id) && (
-                        <View style={styles.avatarUnreadDot} />
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.agentItemName,
-                        isCurrent && styles.agentItemNameCurrent,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {agent.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            {/* 状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
-            <ConnectionBanner />
-            {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
-            <View style={styles.fixedShadow} />
+              <MonitorSmartphone size={20} color={serverIconColor} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.circleBtn}
+              activeOpacity={0.7}
+              accessibilityLabel={t('home.newSession')}
+              onPress={handleNewChat}
+            >
+              <Plus size={20} color={colors.textDarkGray} />
+            </TouchableOpacity>
           </View>
+        </View>
+        {/* agent 横向条，原生横滑，点当前头像进配置页，点其他头像切换 */}
+        <ScrollView
+          style={styles.agentStrip}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.agentTrack}
+        >
+          {agents.map((agent) => {
+            const isCurrent = currentAgentId === agent.id;
+            const isRunning = runningAgentIds.includes(agent.id);
+            return (
+              <TouchableOpacity
+                key={agent.id}
+                style={styles.agentItem}
+                activeOpacity={0.8}
+                onPress={() =>
+                  isCurrent ? openAgentDetail() : handleSelectAgent(agent.id)
+                }
+              >
+                {/* 圈只答选中保持静态实色，运行信号由头像变淡承担，互不干涉 */}
+                <View
+                  style={[
+                    styles.avatarRing,
+                    isCurrent && styles.avatarRingCurrent,
+                  ]}
+                >
+                  <AgentAvatarFade agentId={agent.id} running={isRunning}>
+                    <AgentAvatar
+                      agentId={agent.id}
+                      serverAddress={serverAddress}
+                      size={64}
+                      fallbackIconSize={32}
+                    />
+                  </AgentAvatarFade>
+                  {unreadAgentIds.includes(agent.id) && (
+                    <View style={styles.avatarUnreadDot} />
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.agentItemName,
+                    isCurrent && styles.agentItemNameCurrent,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {agent.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        {/* 状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        <ConnectionBanner />
+        {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
+        <View style={styles.fixedShadow} />
+      </View>
 
-          {/* === 滚动区，从聊天入口开始，底部避让 home indicator === */}
-          <FlatList
-            data={sessionListData}
-            style={styles.flatList}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingBottom: insets.bottom }}
-            renderItem={({ item }) => (
-              <SessionListItem
-                item={item}
-                onPress={handleOpenSession}
-                onDelete={handleDelete}
-              />
-            )}
-            ListHeaderComponent={
-              <>
-                {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
-                <View style={styles.divider} />
-                {/* 未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
-                <HomeListHeader
-                  preview={chatEntryPreview}
-                  running={chatRunning}
-                  unread={chatUnread}
-                  onOpenChat={openChatSession}
-                />
-              </>
-            }
-            ListEmptyComponent={
-              <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
-            }
+      {/* === 滚动区，从聊天入口开始，底部避让 home indicator === */}
+      <FlatList
+        data={sessionListData}
+        style={styles.flatList}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
+        renderItem={({ item }) => (
+          <SessionListItem
+            item={item}
+            onPress={handleOpenSession}
+            onDelete={handleDelete}
           />
-        </>
-      )}
+        )}
+        ListHeaderComponent={
+          <>
+            {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
+            <View style={styles.divider} />
+            {/* 未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
+            <HomeListHeader
+              preview={chatEntryPreview}
+              running={chatRunning}
+              unread={chatUnread}
+              onOpenChat={openChatSession}
+            />
+          </>
+        }
+        ListEmptyComponent={
+          <Text style={styles.emptySessions}>{t('home.startChat')}</Text>
+        }
+      />
     </View>
   );
 };
