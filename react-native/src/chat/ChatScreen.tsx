@@ -153,11 +153,8 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardBottomStyle, keyboardHeight } = useKeyboardLayout(
-    textInputViewRef,
-    scroll.scrollToBottom,
-    insets.bottom
-  );
+  const { keyboardLiftStyle, keyboardPaddingStyle, keyboardHeight } =
+    useKeyboardLayout(textInputViewRef, scroll.scrollToBottom, insets.bottom);
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const attachments = useAttachments();
   const clearDraft = attachments.clear;
@@ -591,8 +588,8 @@ function ChatScreen(): React.JSX.Element {
           </Pressable>
         </Animated.View>
       </View>
-      {/* FIB 容器：绝对定位浮在内容上方 */}
-      <View style={styles.fibWrapper}>
+      {/* FIB 容器：绝对定位浮在内容上方，键盘弹出时整体抬升，气泡与输入栏同步让位 */}
+      <Animated.View style={[styles.fibWrapper, keyboardLiftStyle]}>
         {/* 陪伴回复气泡 */}
         {companionBubbleVisible && lastAgentMessage && (
           <View
@@ -612,8 +609,8 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         )}
-        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，安卓为半透明降级底色 */}
-        <Animated.View style={keyboardBottomStyle}>
+        {/* 底部避让容器持安全区让位动画，模糊背景覆盖输入栏与安全区，间距缝在容器外露出背景，安卓为半透明降级底色 */}
+        <Animated.View style={keyboardPaddingStyle}>
           <BackdropBlur />
           {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
           {notice && (
@@ -647,7 +644,7 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
