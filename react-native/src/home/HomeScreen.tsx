@@ -77,6 +77,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useMirrorStore } from '../stores/mirrorStore';
 import { Chat, ChatStatus } from '../types/Chat.ts';
 import { SignalSlot } from '../component/SignalSlot.tsx';
+import { PressableRow } from '../component/PressableRow.tsx';
 import AgentAvatar from '../chat/component/AgentAvatar.tsx';
 import SessionListItem from '../history/SessionListItem.tsx';
 import ConnectionBanner from './ConnectionBanner.tsx';
@@ -114,12 +115,8 @@ const HomeListHeader = React.memo(function ({
 
   return (
     <View>
-      {/* 常驻聊天入口，续聊当前 agent 最近会话，只留按压反馈 */}
-      <TouchableOpacity
-        style={styles.chatCard}
-        activeOpacity={0.7}
-        onPress={onOpenChat}
-      >
+      {/* 常驻聊天入口，续聊当前 agent 最近会话，按压反馈走 PressableRow */}
+      <PressableRow style={styles.chatCard} onPress={onOpenChat}>
         <MessageCircle
           size={20}
           color={colors.textSecondary}
@@ -137,12 +134,11 @@ const HomeListHeader = React.memo(function ({
           unread={unread}
           style={styles.chatCardSignal}
         />
-      </TouchableOpacity>
+      </PressableRow>
       <View style={styles.divider} />
       {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
-      <TouchableOpacity
+      <PressableRow
         style={styles.navEntryRow}
-        activeOpacity={0.7}
         onPress={() => {
           logger.info('[Home] open agent nav: tools');
           navigation.navigate('AgentNav', { view: 'tools' });
@@ -151,10 +147,9 @@ const HomeListHeader = React.memo(function ({
         <Wrench size={20} color={colors.textSecondary} />
         <Text style={styles.navEntryText}>{t('nav.titleTools')}</Text>
         <ChevronRight size={16} color={colors.textTertiary} />
-      </TouchableOpacity>
-      <TouchableOpacity
+      </PressableRow>
+      <PressableRow
         style={styles.navEntryRow}
-        activeOpacity={0.7}
         onPress={() => {
           logger.info('[Home] open agent nav: skills');
           navigation.navigate('AgentNav', { view: 'skills' });
@@ -163,7 +158,7 @@ const HomeListHeader = React.memo(function ({
         <Sparkles size={20} color={colors.textSecondary} />
         <Text style={styles.navEntryText}>{t('nav.titleSkills')}</Text>
         <ChevronRight size={16} color={colors.textTertiary} />
-      </TouchableOpacity>
+      </PressableRow>
       {/* 会话区标题行并入导航组，新建入口已迁至右上角圆钮 */}
       <View style={styles.sessionsHeader}>
         <MessagesSquare size={20} color={colors.textSecondary} />
