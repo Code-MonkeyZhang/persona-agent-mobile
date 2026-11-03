@@ -42,11 +42,7 @@ import { useSettingsStore } from '../../stores/settingsStore.ts';
 interface CustomMessageProps extends MessageProps<ChatMessage> {
   chatStatus: ChatStatus;
   isLastAIMessage?: boolean;
-  onReasoningToggle?: (
-    expanded: boolean,
-    height: number,
-    animated: boolean
-  ) => void;
+  onReasoningToggle?: (expanded: boolean, height: number) => void;
   agentId: string;
   /** 实时角色名，来自 chatStore.agentName，改名或切换 agent 后即时跟随 */
   agentName: string;
@@ -118,14 +114,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   }, []);
 
   const customMarkdownRenderer = useMemo(
-    () =>
-      new CustomMarkdownRenderer(
-        handleImagePress,
-        colors,
-        [],
-        onReasoningToggle
-      ),
-    [handleImagePress, colors, onReasoningToggle]
+    () => new CustomMarkdownRenderer(handleImagePress, colors, []),
+    [handleImagePress, colors]
   );
 
   const customTokenizer = useMemo(() => new CustomTokenizer(), []);
