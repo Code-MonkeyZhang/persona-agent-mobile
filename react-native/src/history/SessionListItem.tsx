@@ -1,14 +1,19 @@
 /**
  * @file SessionListItem.tsx
  * @description 会话列表项组件：点击切换会话，左滑露出整块红色删除按钮，点按删除。
- *   用 RNGH 经典版 Swipeable，按钮宽度走 onLayout 测量。应用当前是旧架构，
- *   ReanimatedSwipeable 靠 worklet 内同步测量取宽，旧架构上量不到导致松手永远回弹，
- *   故弃用，升新架构后可再切回。
+ *   行结构与桌面端 SessionItem 同构：信号位绝对定位在左侧 gutter，标题列恒定与入口行文字同列。
+ *   用 RNGH 经典版 Swipeable，按钮宽度走 onLayout 测量；菜单化操作待 SDK 升级后启用官方组件，另行成议题处理。
  *   展开协调走模块级登记，新行展开时收起上一个展开行，不经 React 状态，滑动全程零重渲染。
  */
 import * as React from 'react';
 import { useCallback, useEffect } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { X } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
@@ -43,13 +48,12 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
   /** 本行收起函数的留存引用，供卸载清理时比对登记身份 */
   const selfCloseRef = React.useRef<(() => void) | null>(null);
 
-  // 运行腿与前台抑制经 store 自订阅,集合加本机取或,props 维持纯数据行,memo 隔离不受损
+  // 运行腿经 store 自订阅,集合加本机取或,props 维持纯数据行,memo 隔离不受损
   const running = useChatStore(
     (s) =>
       s.runningSessions.includes(item.id) ||
       s.sessions[item.id]?.status === ChatStatus.Running
   );
-  const onStage = useChatStore((s) => s.displayedSessionId === item.id);
 
   const performDelete = useCallback(() => {
     trigger(HapticFeedbackTypes.notificationWarning);
@@ -118,12 +122,11 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
         onPress={() => onPress(item)}
         style={styles.touch}
       >
-        {/* 运行与未读收敛到行首占位区同一个信号位,标题位置恒定不移 */}
-        <SignalSlot
-          running={running}
-          unread={Boolean(item.hasUnread) && !onStage}
-          style={styles.signal}
-        />
+        {/* 运行与未读收敛到行首 gutter 同一个信号位,锚区铺满行高内部居中,标题列恒定不移。
+            未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
+        <View pointerEvents="none" style={styles.signalAnchor}>
+          <SignalSlot running={running} unread={Boolean(item.hasUnread)} />
+        </View>
         <Text numberOfLines={1} style={styles.title}>
           {item.title}
         </Text>
@@ -137,23 +140,28 @@ const SessionListItem: React.FC<SessionListItemProps> = ({
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     swipeable: {
-      marginHorizontal: 12,
+      marginHorizontal: 10,
       marginVertical: 2,
-      borderRadius: 8,
+      borderRadius: 12,
     },
-    /** 信号位与标题横排,起点合计 42 与四行入口文字同列 */
+    /** 标题列恒定 54：轨道边距 10 加左内边距 44，与上方入口行文字起点同列 */
     touch: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingLeft: 10,
-      paddingRight: 16,
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingLeft: 44,
+      paddingRight: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
     },
-    /** 行首信号位,两侧各留 8px 间隙 */
-    signal: {
-      marginLeft: 8,
-      marginRight: 8,
+    /** 信号位锚区,绝对定位铺满行高,top 与 bottom 拉伸不依赖百分比定位,内部居中放信号位 */
+    signalAnchor: {
+      position: 'absolute',
+      left: 12,
+      top: 0,
+      bottom: 0,
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     title: {
       ...typography.titleDisplay,

@@ -224,9 +224,6 @@ const HomeScreen: React.FC = () => {
       s.runningSessions.includes(currentChatSessionId) ||
       s.sessions[currentChatSessionId]?.status === ChatStatus.Running
   );
-  const chatOnStage = useChatStore(
-    (s) => s.displayedSessionId === currentChatSessionId
-  );
   /** 运行中 Agent 集合，agent 横向条的头像运行圈据此起转停转 */
   const runningAgentIds = useChatStore((s) => s.runningAgents);
 
@@ -592,10 +589,11 @@ const HomeScreen: React.FC = () => {
               <>
                 {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
                 <View style={styles.divider} />
+                {/* 未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
                 <HomeListHeader
                   preview={chatEntryPreview}
                   running={chatRunning}
-                  unread={chatUnread && !chatOnStage}
+                  unread={chatUnread}
                   onOpenChat={openChatSession}
                 />
               </>
