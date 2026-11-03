@@ -35,17 +35,11 @@ const MemoizedCodeHighlighter = React.memo(
     text,
     language,
     colors,
-    onPreviewToggle: _onPreviewToggle,
     isCompleted,
   }: {
     text: string;
     language?: string;
     colors: ColorScheme;
-    onPreviewToggle?: (
-      expanded: boolean,
-      height: number,
-      animated: boolean
-    ) => void;
     isCompleted?: boolean;
   }) => {
     const styles = createCustomStyles(colors);
@@ -108,26 +102,15 @@ export class CustomMarkdownRenderer
   private height = Dimensions.get('window').height;
   private colors: ColorScheme;
   private styles: ReturnType<typeof createCustomStyles>;
-  private onPreviewToggle?: (
-    expanded: boolean,
-    height: number,
-    animated: boolean
-  ) => void;
 
   constructor(
     private onImagePress: (pressMode: PressMode, url: string) => void,
     colors: ColorScheme,
-    _citations: never[] = [],
-    onPreviewToggle?: (
-      expanded: boolean,
-      height: number,
-      animated: boolean
-    ) => void
+    _citations: never[] = []
   ) {
     super();
     this.colors = colors;
     this.styles = createCustomStyles(colors);
-    this.onPreviewToggle = onPreviewToggle;
   }
 
   getTextView(children: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -244,7 +227,6 @@ export class CustomMarkdownRenderer
           text={text}
           language={language}
           colors={this.colors}
-          onPreviewToggle={this.onPreviewToggle}
           isCompleted={isCompleted}
         />
       );
