@@ -13,7 +13,11 @@ type ErrorUtilsLike = {
  * - 接管未捕获的 JS 异常写入日志文件，并链回默认 handler 保留 dev 红框 / release 崩溃行为
  */
 export const configureErrorHandling = () => {
-  LogBox.ignoreLogs([/Invalid\s+responseType:\s+blob/i]);
+  LogBox.ignoreLogs([
+    /Invalid\s+responseType:\s+blob/i,
+    // edge-to-edge 生效后 translucent 属性被键盘库忽略，属性由 gifted-chat 内部透传无法移除
+    /statusBarTranslucent and navigationBarTranslucent values are ignored/i,
+  ]);
   logger.info('[App] LogBox ignoreLogs configured');
 
   const errorUtils = (globalThis as { ErrorUtils?: ErrorUtilsLike }).ErrorUtils;

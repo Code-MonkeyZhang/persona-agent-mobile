@@ -78,7 +78,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const thoughtProcessVisible = useSettingsStore(
     (s) => s.thoughtProcessVisible
   );
-  const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
 
@@ -141,7 +140,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
             styles={customMarkedStyles}
             renderer={customMarkdownRenderer}
             tokenizer={customTokenizer}
-            chatStatus={chatStatusRef.current}
           />
         </View>
       );
