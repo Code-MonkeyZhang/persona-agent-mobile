@@ -32,7 +32,7 @@ import {
 import { cacheDb } from '../storage/cache-db.ts';
 import { toServerChatMessages } from '../storage/sync-shapes.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
-import { getFileTypeSummary, isAllFileReady } from '../chat/util/FileUtils.ts';
+import { toContentBlocks, fromContentBlocks } from '../api/server-api.ts';
 import {
   summarizeToolInput,
   type LiveRunState,
@@ -48,7 +48,7 @@ import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import { logger } from '../lib/logger';
 import i18n from '../i18n/index';
-import type { ChatMessage, FileInfo } from '../types/Chat.ts';
+import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { ChatStatus } from '../types/Chat.ts';
 
@@ -59,6 +59,9 @@ export const textPlaceholder = '...';
 /** 空消息数组的模块级常量，避免组件内兜底取值每次产生新引用引发多余渲染 */
 export const EMPTY_MESSAGES: ChatMessage[] = [];
 
+/** 提示气泡的序号，新的提示顶掉旧的并让旧计时失效 */
+let noticeSeq = 0;
+
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
 const createBotMessage = (): ChatMessage => ({
   _id: uuidv4(),
@@ -68,15 +71,27 @@ const createBotMessage = (): ChatMessage => ({
   steps: [],
 });
 
-/** 创建一条待注入插话的灰气泡消息，pendingId 关联服务端缓冲条目 */
-const createPendingMessage = (input: PendingInput): ChatMessage => ({
-  _id: uuidv4(),
-  text: input.content,
-  createdAt: new Date(),
-  user: { _id: 1 },
-  queued: true,
-  pendingId: input.id,
-});
+/** 解析用户消息载荷为正文与附件，插话灰气泡与远端用户气泡共用 */
+function parseUserContent(content: string | ContentBlock[]): {
+  text: string;
+  files: FileInfo[];
+} {
+  return fromContentBlocks(content, getServerAddress());
+}
+
+/** 创建一条待注入插话的灰气泡消息，pendingId 关联服务端缓冲条目，附件载荷沿用 image 字段 JSON 约定 */
+const createPendingMessage = (input: PendingInput): ChatMessage => {
+  const { text, files } = parseUserContent(input.content);
+  return {
+    _id: uuidv4(),
+    text,
+    createdAt: new Date(),
+    user: { _id: 1 },
+    queued: true,
+    pendingId: input.id,
+    ...(files.length > 0 ? { image: JSON.stringify(files) } : {}),
+  };
+};
 
 /**
  * 将一个 step_complete 事件转换为 Thought 数组。
@@ -168,10 +183,14 @@ interface ChatStore {
    * ws 单订阅决定同时只有一条活动时间线，顶栏时间线据此渲染活动尾巴。
    */
   liveRun: LiveRunState | null;
+  /**
+   * 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除。
+   */
+  notice: { key: string; values?: Record<string, string> } | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
-  /** 发送用户消息，空闲走新回合占位链路，忙时进服务端待注入缓冲 */
+  /** 发送用户消息，附件已达 uploaded 态，空闲走新回合占位链路，忙时进服务端待注入缓冲 */
   sendMessage: (text: string, files: FileInfo[]) => Promise<void>;
   /** 请求服务端中止当前会话的生成 */
   stopGeneration: () => void;
@@ -183,6 +202,8 @@ interface ChatStore {
   setPoseError: (sessionId: string, value: boolean) => void;
   /** 主机切换后清空全部会话分片与展示态，旧主机的内存现场不再串台 */
   resetForHostSwitch: () => void;
+  /** 提示气泡的唯一写入口，新的提示顶掉旧的并重置计时 */
+  showNotice: (key: string, values?: Record<string, string>) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -194,6 +215,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   runningAgents: [],
   agentName: 'AI',
   liveRun: null,
+  notice: null,
 
   activateSession: async (sessionId) => {
     if (get().displayedSessionId === sessionId) {
@@ -230,7 +252,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         lastRefreshedAt[sessionId] = view.updatedAt;
         updateSlice(sessionId, (slice) => ({
           ...slice,
-          messages: convertToChatMessages(view.messages, view.createdAt),
+          messages: convertToChatMessages(
+            view.messages,
+            view.createdAt,
+            address
+          ),
           pose: view.currentPose ?? 'default',
           poseError: false,
         }));
@@ -264,9 +290,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!text && files.length === 0) {
       return;
     }
-    if (!isAllFileReady(files)) {
-      return;
-    }
     const agentId = getServerAgentId();
     const address = getServerAddress();
     if (!agentId || !address) {
@@ -275,26 +298,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     const sessionId = get().displayedSessionId;
-    const messageText = text || getFileTypeSummary(files);
+    // 消息载荷：附件为空保持纯字符串，带附件组装为块数组，只消费上传返回值
+    const payload = toContentBlocks(text, files);
+    // 纯附件消息的预览取文件名，避免会话列表出现空行
+    const previewText = text || files.map((f) => f.fileName).join(' ');
 
     // 忙时插话：消息进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染，失败不上屏无需回滚
     if (sessionId && get().sessions[sessionId]?.status === ChatStatus.Running) {
       useSessionStore
         .getState()
-        .updateSessionPreview(sessionId, extractPreview(messageText));
+        .updateSessionPreview(sessionId, extractPreview(previewText));
       wsClient.subscribe(sessionId);
       try {
         const result = await sendChatMessage(
           agentId,
           sessionId,
-          messageText,
+          payload,
           address,
           useVoiceStore.getState().voiceEnabled
         );
         logger.info(
           `${TAG} interjection queued, session=${sessionId} pendingId=${
             result.pendingId ?? 'none'
-          }`
+          } attachments=${files.length}`
         );
       } catch (e) {
         logger.warn(
@@ -305,7 +331,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     const message: ChatMessage = {
-      text: messageText,
+      text,
       user: { _id: 1 },
       createdAt: new Date(),
       _id: uuidv4(),
@@ -326,17 +352,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         logger.debug(`${TAG} send: auto-created session ${sid}`);
       }
       logger.debug(
-        `${TAG} send: text="${messageText.substring(0, 80)}" sessionId=${sid}`
+        `${TAG} send: text="${text.substring(
+          0,
+          80
+        )}" sessionId=${sid} attachments=${files.length}`
       );
       // 更新会话列表预览为用户消息
       useSessionStore
         .getState()
-        .updateSessionPreview(sid, extractPreview(messageText));
+        .updateSessionPreview(sid, extractPreview(previewText));
       wsClient.subscribe(sid);
       await sendChatMessage(
         agentId,
         sid,
-        messageText,
+        payload,
         address,
         useVoiceStore.getState().voiceEnabled
       );
@@ -389,6 +418,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       runningAgents: [],
       liveRun: null,
     });
+  },
+
+  showNotice: (key, values) => {
+    const seq = ++noticeSeq;
+    set({ notice: { key, values } });
+    setTimeout(() => {
+      if (noticeSeq === seq) {
+        set({ notice: null });
+      }
+    }, 2600);
   },
 }));
 
@@ -660,7 +699,7 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     lastRefreshedAt[sessionId] = view.updatedAt;
     updateSlice(sessionId, (prev) => ({
       ...prev,
-      messages: convertToChatMessages(view.messages, view.createdAt),
+      messages: convertToChatMessages(view.messages, view.createdAt, address),
     }));
     logger.info(`${TAG} messages refreshed from disk, session=${sessionId}`);
   } catch (e) {
@@ -1029,17 +1068,20 @@ function registerWsHandler(): void {
         logger.debug(`${TAG} user_message echo skipped, session=${sessionId}`);
         return;
       }
+      // 块数组载荷解析出正文与附件，远端用户气泡与乐观消息同形
+      const { text, files } = parseUserContent(content);
       appendUserBubble(sessionId, {
-        text: content,
+        text,
         user: { _id: 1 },
         createdAt: new Date(),
         _id: uuidv4(),
+        ...(files.length > 0 ? { image: JSON.stringify(files) } : {}),
       });
       useSessionStore
         .getState()
-        .updateSessionPreview(sessionId, extractPreview(content));
+        .updateSessionPreview(sessionId, extractPreview(text));
       logger.info(
-        `${TAG} user_message appended, session=${sessionId} contentLen=${content.length}`
+        `${TAG} user_message appended, session=${sessionId} contentLen=${text.length} attachments=${files.length}`
       );
     },
     onPendingChanged: (sessionId, pending) => {

@@ -7,7 +7,14 @@
     "shareImageTitle": "AI 图片",
     "stop": "停止生成",
     "generating": "正在生成",
-    "loadEarlier": "加载更早的消息"
+    "loadEarlier": "加载更早的消息",
+    "attachmentUploading": "附件还在上传中，稍等一下",
+    "attachmentLimit": "最多添加 {{max}} 个附件",
+    "fileOversize": "单个附件不能超过 {{size}}MB",
+    "sendUploadFailed": "有附件上传失败，点击红卡重试或删除后再发送",
+    "retryUpload": "重试上传",
+    "modelNoVision": "当前模型不支持图片输入，发送后图片将以占位文字代替",
+    "downloadFile": "下载文件"
   },
   "settings": {
     "vibration": "震动",

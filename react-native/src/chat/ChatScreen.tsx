@@ -22,6 +22,7 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -31,7 +32,7 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { ColorScheme, useTheme } from '../theme/index.ts';
+import { ColorScheme, useTheme, typography } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
@@ -50,16 +51,13 @@ import { cacheDb } from '../storage/cache-db.ts';
 import { useMirrorStore } from '../stores/mirrorStore';
 import { viewed as wsViewed } from '../api/ws-client.ts';
 import { logger } from '../lib/logger';
-import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
+import { fetchAgentDetail, listProviders } from '../api/server-api.ts';
+import { ChatStatus, ChatMessage, FileType } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
 import CompanionContent from './component/CompanionContent.tsx';
-import {
-  checkFileNumberLimit,
-  getFileTypeSummary,
-  isAllFileReady,
-} from './util/FileUtils.ts';
+import { useAttachments } from './hooks/useAttachments.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
@@ -108,17 +106,17 @@ function ChatScreen(): React.JSX.Element {
   // ==================== 本地状态 ====================
   /** 当前 agent，进页时从 MMKV 读一次，本页存续期间不会变化 */
   const [currentAgentId] = useState(getServerAgentId() || '');
-  const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
   const [inputBarHeight, setInputBarHeight] = useState(96);
   const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
+  /** 非视觉横幅的数据源，agent 默认模型与供应商视觉清单任一取不到就不出横幅 */
+  const [modelNoVision, setModelNoVision] = useState(false);
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
   const serverAddressRef = useRef(getServerAddress());
-  const selectedFilesRef = useRef(selectedFiles);
   const chatStatusRef = useRef<ChatStatus>(ChatStatus.Init);
   /** 上一帧消息数量，用于生成期间消息增长时自动滚底 */
   const prevMessageCountRef = useRef(0);
@@ -138,6 +136,8 @@ function ChatScreen(): React.JSX.Element {
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
   const agentName = useChatStore((s) => s.agentName);
+  /** 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除 */
+  const notice = useChatStore((s) => s.notice);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -159,15 +159,13 @@ function ChatScreen(): React.JSX.Element {
     insets.bottom
   );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
+  const attachments = useAttachments();
+  const clearDraft = attachments.clear;
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
     chatStatusRef.current = chatStatus;
   }, [chatStatus]);
-
-  useEffect(() => {
-    selectedFilesRef.current = selectedFiles;
-  }, [selectedFiles]);
 
   /** AI 流式输出期间保持屏幕常亮 */
   useEffect(() => {
@@ -244,7 +242,7 @@ function ChatScreen(): React.JSX.Element {
     if (useChatStore.getState().displayedSessionId === activeSessionId) {
       return;
     }
-    setSelectedFiles([]);
+    clearDraft();
     setWindowCount(MESSAGE_WINDOW_BASE);
 
     // NEW_CHAT_SESSION 表示新建聊天
@@ -267,7 +265,7 @@ function ChatScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, scroll]);
+  }, [activeSessionId, scroll, clearDraft]);
 
   // ==================== 会话切换 & 消息加载 ====================
   /**
@@ -325,40 +323,73 @@ function ChatScreen(): React.JSX.Element {
   }, [messages, chatStatus, scroll]);
 
   // ==================== 消息发送 ====================
+  /** 发送流程：上传期间再点发送提示稍等，附件先压缩再统一起传，
+   *  全部成功才清空草稿发出消息，有失败保留草稿与正文等用户重试或删除。
+   *  消息只用 uploadAll 的返回值组装，上传落定的哈希与元数据不在旧快照里读 */
   const handleSend = useCallback(
-    (text: string) => {
-      const files = selectedFilesRef.current;
-      if (!isAllFileReady(files)) {
-        return;
+    async (text: string): Promise<boolean> => {
+      if (attachments.isUploading) {
+        logger.info('[inputBox] send blocked, attachments uploading');
+        useChatStore.getState().showNotice('chat.attachmentUploading');
+        return false;
       }
-      const messageText =
-        text || (files.length > 0 ? getFileTypeSummary(files) : '');
-      if (!messageText && files.length === 0) {
-        return;
+      const settled = await attachments.uploadAll();
+      if (!settled) {
+        logger.warn('[inputBox] send blocked, attachment upload failed');
+        useChatStore.getState().showNotice('chat.sendUploadFailed');
+        return false;
       }
+      logger.info(
+        `[inputBox] send delivered, textLength=${text.length} files=${settled.length}`
+      );
       scroll.setUserScrolled(false);
       setWindowCount(MESSAGE_WINDOW_BASE);
       trigger(HapticFeedbackTypes.impactMedium);
       scroll.scrollToBottom();
-      if (files.length > 0) {
-        setSelectedFiles([]);
+      if (settled.length > 0) {
+        attachments.clear();
       }
-      useChatStore.getState().sendMessage(messageText, files);
+      await useChatStore.getState().sendMessage(text, settled);
+      return true;
     },
-    [scroll]
+    [scroll, attachments]
   );
 
   const handleStop = useCallback(() => {
     useChatStore.getState().stopGeneration();
   }, []);
 
-  // ==================== 文件处理 ====================
-  const handleNewFileSelected = useCallback((newFiles: FileInfo[]) => {
-    setSelectedFiles((prev) => checkFileNumberLimit(prev, newFiles));
-  }, []);
-
-  const handleFileUpdated = useCallback((files: FileInfo[]) => {
-    setSelectedFiles(files);
+  // ==================== 模型视觉能力 ====================
+  /** 非视觉横幅的数据源，agent 默认模型不在供应商视觉清单时置位，任一环取不到就维持不出横幅 */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const address = getServerAddress();
+        const agentId = getServerAgentId();
+        if (!address || !agentId) {
+          return;
+        }
+        const [agent, providers] = await Promise.all([
+          fetchAgentDetail(address, agentId),
+          listProviders(address),
+        ]);
+        const provider = providers.find(
+          (p) => p.id === agent.defaultModel.provider
+        );
+        if (cancelled || !provider?.visionModelIds) {
+          return;
+        }
+        setModelNoVision(
+          !provider.visionModelIds.includes(agent.defaultModel.model)
+        );
+      } catch (e) {
+        logger.warn(`[ChatScreen] vision capability check failed: ${e}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ==================== UI 渲染 ====================
@@ -584,6 +615,14 @@ function ChatScreen(): React.JSX.Element {
         {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，安卓为半透明降级底色 */}
         <Animated.View style={keyboardBottomStyle}>
           <BackdropBlur />
+          {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
+          {notice && (
+            <View style={styles.noticeBubble}>
+              <Text style={styles.noticeText}>
+                {t(notice.key, notice.values)}
+              </Text>
+            </View>
+          )}
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -596,10 +635,15 @@ function ChatScreen(): React.JSX.Element {
               textInputRef={textInputViewRef}
               onSend={handleSend}
               onStop={handleStop}
-              selectedFiles={selectedFiles}
+              selectedFiles={attachments.items}
               chatStatus={chatStatus}
-              onFileSelected={handleNewFileSelected}
-              onFileUpdated={handleFileUpdated}
+              onFileSelected={attachments.addFiles}
+              onRemoveFile={attachments.remove}
+              onRetryFile={attachments.retry}
+              showNoVisionHint={
+                modelNoVision &&
+                attachments.items.some((f) => f.type === FileType.image)
+              }
             />
           </View>
         </Animated.View>
@@ -638,6 +682,20 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
+    },
+    /** 附件与上传类事件的提示气泡，浮在输入卡上方居中 */
+    noticeBubble: {
+      alignSelf: 'center',
+      backgroundColor: colors.overlay,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      marginBottom: 6,
+      maxWidth: '80%',
+    },
+    noticeText: {
+      ...typography.body,
+      color: colors.primaryForeground,
     },
   });
 

@@ -4,7 +4,8 @@
  *              和 WebSocket 连接（流式接收 AI 回复）两种通信方式。
  */
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatMessage } from '../types/Chat.ts';
+import { FileType } from '../types/Chat.ts';
+import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { logger } from '../lib/logger';
 import type {
@@ -56,7 +57,8 @@ export interface PendingInput {
   id: string;
   source: 'user' | 'app';
   sourceName?: string;
-  content: string;
+  /** user 来源携带原始消息，纯文本为字符串，带附件为块数组 */
+  content: string | ContentBlock[];
 }
 
 /** 运行中会话的带归属条目，Agent 级运行集合的数据源 */
@@ -161,7 +163,8 @@ export type ServerMessage =
       /** 普通用户消息落盘广播，空闲订阅端据此追加用户气泡并切入生成态 */
       type: 'user_message';
       sessionId: string;
-      content: string;
+      /** 原始消息载荷，纯文本为字符串，带附件为块数组 */
+      content: string | ContentBlock[];
     }
   | {
       /** 变更流推送，服务端向全部在线客户端广播，镜像库据此增量回放 */
@@ -321,15 +324,16 @@ export interface SendChatResult {
 export async function sendChatMessage(
   agentId: string,
   sessionId: string,
-  content: string,
+  content: string | ContentBlock[],
   serverAddress: string,
   voiceEnabled: boolean
 ): Promise<SendChatResult> {
+  const preview =
+    typeof content === 'string'
+      ? `"${content.substring(0, 80)}"`
+      : `blocks:${content.length}`;
   logger.info(
-    `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content="${content.substring(
-      0,
-      80
-    )}" voiceEnabled=${voiceEnabled}`
+    `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content=${preview} voiceEnabled=${voiceEnabled}`
   );
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
   const body = await httpPost(url, { content, voiceEnabled });
@@ -466,6 +470,8 @@ export interface ProviderStatus {
   models: string[];
   hasAuth: boolean;
   docUrl: string;
+  /** 视觉模型清单，服务端按模型 input 是否含图片过滤生成，缺失时不做视觉判定 */
+  visionModelIds?: string[];
 }
 
 /** 音色条目（对应 GET /api/voices 的返回，预置与克隆一起返回） */
@@ -764,40 +770,180 @@ export interface WallpaperUploadPair {
 }
 
 /**
- * 上传自定义壁纸，multipart 字段为 image、thumb、name，XHR 直发 FormData。
- * 这是仓内第一个 FormData 上传，fetch 封装不带进度与超时语义，故单走 XHR。
+ * multipart 表单直发 XHR，fetch 封装不带超时语义，FormData 上传统一走这里。
+ * @param url 完整请求地址
+ * @param form 已装填的 FormData
+ * @param timeout 超时毫秒数，默认 60000
+ * @returns 响应体文本
  */
-export function uploadLauncherWallpaper(
-  serverAddress: string,
-  pair: WallpaperUploadPair
-): Promise<LauncherPrefEntry<WallpaperDoc>> {
-  const url = `${serverAddress}/api/launcher/wallpaper/image`;
+function postFormData(
+  url: string,
+  form: FormData,
+  timeout = 60000
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.timeout = 60000;
+    xhr.timeout = timeout;
     xhr.open('POST', url);
-    const form = new FormData();
-    form.append('image', pair.image);
-    form.append('thumb', pair.thumb);
-    form.append('name', 'wallpaper');
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(
-            JSON.parse(xhr.responseText) as LauncherPrefEntry<WallpaperDoc>
-          );
-        } catch (e) {
-          reject(new Error(`bad response: ${e}`));
-        }
+        resolve(xhr.responseText);
       } else {
         reject(new Error(`HTTP ${xhr.status}`));
       }
     };
     xhr.onerror = () => reject(new Error('Network error'));
     xhr.ontimeout = () => reject(new Error('Request timeout'));
-    logger.info(`${TAG} upload wallpaper → ${url}`);
+    logger.info(`${TAG} POST form ${url}`);
     xhr.send(form);
   });
+}
+
+/**
+ * 上传自定义壁纸，multipart 字段为 image、thumb、name。
+ * 这是仓内第一个 FormData 上传，fetch 封装不带进度与超时语义，故单走 XHR。
+ */
+export async function uploadLauncherWallpaper(
+  serverAddress: string,
+  pair: WallpaperUploadPair
+): Promise<LauncherPrefEntry<WallpaperDoc>> {
+  const url = `${serverAddress}/api/launcher/wallpaper/image`;
+  const form = new FormData();
+  form.append('image', pair.image);
+  form.append('thumb', pair.thumb);
+  form.append('name', 'wallpaper');
+  const responseText = await postFormData(url, form);
+  return JSON.parse(responseText) as LauncherPrefEntry<WallpaperDoc>;
+}
+
+/** 附件上传的落定结果，hash 是内容寻址的唯一凭据 */
+export interface AttachmentUploadResult {
+  hash: string;
+  format: string;
+  size: number;
+  name: string;
+}
+
+/**
+ * 上传聊天附件，multipart 单字段 file，服务端按内容哈希落盘去重。
+ * @param serverAddress 服务器地址
+ * @param file 上传的单文件字段
+ */
+export async function uploadAttachment(
+  serverAddress: string,
+  file: UploadFilePart
+): Promise<AttachmentUploadResult> {
+  const url = `${serverAddress}/api/attachments`;
+  const form = new FormData();
+  form.append('file', file);
+  const responseText = await postFormData(url, form);
+  const result = JSON.parse(responseText) as AttachmentUploadResult;
+  logger.info(
+    `${TAG} uploadAttachment → hash=${result.hash} size=${result.size}`
+  );
+  return result;
+}
+
+/**
+ * 拼接附件读取地址，h 参数就是 CachedImage 的缓存键，与头像立绘同款管线。
+ */
+export function getAttachmentUrl(hash: string, serverAddress: string): string {
+  return `${serverAddress}/api/attachments/${hash}?h=${hash}`;
+}
+
+/** 扩展名到图片 MIME 的映射，jpg 统一归一为 jpeg */
+export const MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+};
+
+/** 图片 MIME 到扩展名的反向映射，历史图片块的展示文件名由此合成 */
+const EXT_BY_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+/**
+ * 把发送正文与已上传的附件组装为消息内容。
+ * 附件为空返回纯字符串，否则返回块数组，宽高取选择器自带的返回值。
+ */
+export function toContentBlocks(
+  text: string,
+  files: FileInfo[]
+): string | ContentBlock[] {
+  if (files.length === 0) return text;
+  const blocks: ContentBlock[] = [];
+  if (text.length > 0) blocks.push({ type: 'text', text });
+  for (const file of files) {
+    if (file.type === FileType.image) {
+      blocks.push({
+        type: 'image',
+        hash: file.hash!,
+        mimeType: MIME_BY_EXT[file.format] ?? file.format,
+        width: file.width ?? 0,
+        height: file.height ?? 0,
+        bytes: file.fileSize,
+      });
+    } else {
+      blocks.push({
+        type: 'file',
+        hash: file.hash!,
+        name: file.fileName,
+        bytes: file.fileSize,
+      });
+    }
+  }
+  return blocks;
+}
+
+/**
+ * 把消息内容解析回正文与附件视图。
+ * 图片块经哈希地址走缓存管线，文件块不带地址，展示与下载都按哈希取。
+ */
+export function fromContentBlocks(
+  content: string | ContentBlock[],
+  serverAddress: string
+): { text: string; files: FileInfo[] } {
+  if (typeof content === 'string') return { text: content, files: [] };
+  let text = '';
+  const files: FileInfo[] = [];
+  for (const block of content) {
+    if (block.type === 'text') {
+      text += block.text;
+    } else if (block.type === 'image') {
+      const ext = EXT_BY_MIME[block.mimeType] ?? 'png';
+      files.push({
+        id: `blk-${block.hash}-${files.length}`,
+        fileName: `image.${ext}`,
+        url: getAttachmentUrl(block.hash, serverAddress),
+        fileSize: block.bytes,
+        format: ext,
+        type: FileType.image,
+        width: block.width,
+        height: block.height,
+        status: 'uploaded',
+        hash: block.hash,
+      });
+    } else {
+      files.push({
+        id: `blk-${block.hash}-${files.length}`,
+        fileName: block.name,
+        url: getAttachmentUrl(block.hash, serverAddress),
+        fileSize: block.bytes,
+        format: block.name.includes('.')
+          ? (block.name.split('.').pop() ?? '').toLowerCase()
+          : '',
+        type: FileType.document,
+        status: 'uploaded',
+        hash: block.hash,
+      });
+    }
+  }
+  return { text, files };
 }
 
 /**
@@ -932,7 +1078,8 @@ export interface ServerChatMessage {
     | 'app_notification'
     | 'context'
     | 'error';
-  content?: string;
+  /** user 角色的原始载荷，纯文本为字符串，带附件为块数组 */
+  content?: string | ContentBlock[];
   thinking?: string;
   tool_calls?: ServerToolCall[];
   /** 轮次边界标志，接口层把落盘的 turn_end 标记行映射成此形状的 system 条目 */
@@ -987,7 +1134,7 @@ export async function deleteSession(
  * 将服务器返回的 Message[] 转换为 GiftedChat 能用的 ChatMessage[]，双信号单规则。
  * 每条 assistant 消息是一个步骤的落盘产物，同一轮次的连续 assistant 消息合并为一个气泡：
  * - 从 thinking/tool_calls/content 重建结构化 Thought[] 时间线，经 stripLastTextThought 去重
- * - 用户消息原地显示从不结组，插话因此排在整轮回复之前
+ * - 用户消息原地显示从不结组，块数组解析为正文与附件载荷，插话因此排在整轮回复之前
  * - 收尾信号取双信号，遇到边界条目或不带 tool_calls 的助手消息即结组
  * - error 角色结组并单独成泡，app_notification 与 context 跳过不渲染
  * - 扫描结束强制结一次，兜底崩溃留下的半截内容
@@ -1010,7 +1157,8 @@ export function stripLastTextThought(thoughts: Thought[]): Thought[] {
 
 export function convertToChatMessages(
   serverMessages: ServerChatMessage[],
-  sessionCreatedAt: number
+  sessionCreatedAt: number,
+  serverAddress: string
 ): ChatMessage[] {
   const result: ChatMessage[] = [];
   let pendingThoughts: Thought[] = [];
@@ -1080,11 +1228,13 @@ export function convertToChatMessages(
       });
 
       if (msg.content) {
-        pendingContent = msg.content;
+        // assistant 的 content 落盘为纯文本，块数组只属于 user 角色
+        const text = typeof msg.content === 'string' ? msg.content : '';
+        pendingContent = text;
         pendingThoughts.push({
           id: `thought-${i}-text`,
           type: 'text',
-          content: msg.content,
+          content: text,
         });
       }
 
@@ -1104,12 +1254,17 @@ export function convertToChatMessages(
       });
     } else {
       // 用户消息原地显示从不结组，插话因此排在整轮回复之前
-      const text = typeof msg.content === 'string' ? msg.content : '';
+      // 块数组解析出正文与附件载荷，图片地址带哈希走缓存管线
+      const { text, files } =
+        typeof msg.content === 'string' || msg.content === undefined
+          ? { text: msg.content ?? '', files: [] as FileInfo[] }
+          : fromContentBlocks(msg.content, serverAddress);
       result.push({
         _id: uuidv4(),
         text,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: 1 },
+        ...(files.length > 0 ? { image: JSON.stringify(files) } : {}),
       });
     }
   }

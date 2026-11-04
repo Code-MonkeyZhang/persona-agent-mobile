@@ -14,7 +14,13 @@ import Share from 'react-native-share';
 import { MessageProps } from 'react-native-gifted-chat';
 import { CustomMarkdownRenderer } from './markdown/CustomMarkdownRenderer.tsx';
 import { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
-import { ChatStatus, PressMode, ChatMessage } from '../../types/Chat.ts';
+import {
+  ChatStatus,
+  PressMode,
+  ChatMessage,
+  FileType,
+  FileInfo,
+} from '../../types/Chat.ts';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import {
@@ -49,6 +55,18 @@ interface CustomMessageProps extends MessageProps<ChatMessage> {
 
 const { width: screenWidth } = Dimensions.get('window');
 
+/** 气泡载荷复原，仅收留图片与文件两档，旧载荷的退役类型不渲染 */
+const parseAttachmentPayload = (raw: string): FileInfo[] => {
+  try {
+    const parsed = JSON.parse(raw) as FileInfo[];
+    return parsed.filter(
+      (file) => file.type === FileType.image || file.type === FileType.document
+    );
+  } catch {
+    return [];
+  }
+};
+
 /** 自定义消息渲染组件：根据消息类型（用户/AI）渲染不同的 UI 层（头部、思考过程、正文、操作按钮、附件） */
 const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   currentMessage,
@@ -67,6 +85,13 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
   const chatStatusRef = useRef(chatStatus);
   const [forceShowButtons, setForceShowButtons] = useState(false);
   const isUser = useRef(currentMessage?.user?._id === 1);
+
+  /** 气泡载荷复原的附件清单，与正文一起参与用户气泡的门控与排版 */
+  const attachments = useMemo(
+    () =>
+      currentMessage?.image ? parseAttachmentPayload(currentMessage.image) : [],
+    [currentMessage?.image]
+  );
 
   const toggleButtons = useCallback(() => {
     setForceShowButtons((prev) => !prev);
@@ -132,6 +157,12 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
       );
     }
 
+    const hasText = currentMessage.text.length > 0;
+    const hasAttachments = attachments.length > 0;
+    // 文字与附件同框文字上附件下，纯附件消息框里只有附件不出空框
+    if (!hasText && !hasAttachments) {
+      return null;
+    }
     return (
       <View
         style={[
@@ -140,19 +171,30 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
           { maxWidth: (screenWidth * 3) / 4 },
         ]}
       >
-        <Text
-          style={[
-            styles.questionText,
-            currentMessage.queued && styles.questionTextQueued,
-          ]}
-          selectable
-        >
-          {currentMessage.text}
-        </Text>
+        {hasText && (
+          <Text
+            style={[
+              styles.questionText,
+              currentMessage.queued && styles.questionTextQueued,
+            ]}
+            selectable
+          >
+            {currentMessage.text}
+          </Text>
+        )}
+        {hasAttachments && (
+          <View style={hasText ? styles.questionAttachments : undefined}>
+            <CustomFileListComponent
+              files={attachments}
+              mode={DisplayMode.Display}
+            />
+          </View>
+        )}
       </View>
     );
   }, [
     currentMessage,
+    attachments,
     customMarkdownRenderer,
     customTokenizer,
     styles.questionContainer,
@@ -160,6 +202,7 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     styles.questionContainerQueued,
     styles.questionText,
     styles.questionTextQueued,
+    styles.questionAttachments,
   ]);
 
   /** 回合结束后的性能指标行，宿主按显隐门槛条件渲染 */
@@ -221,12 +264,6 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
           chatStatus !== ChatStatus.Running &&
           (isLastAIMessage || forceShowButtons) &&
           messageActionButtons}
-        {currentMessage.image && (
-          <CustomFileListComponent
-            files={JSON.parse(currentMessage.image)}
-            mode={DisplayMode.Display}
-          />
-        )}
       </View>
     </View>
   );
@@ -281,6 +318,10 @@ const createStyles = (colors: ColorScheme) =>
     /** 待注入插话的灰色草稿态气泡 */
     questionContainerQueued: {
       backgroundColor: colors.messageBackground,
+    },
+    /** 气泡内附件区与正文的间隔 */
+    questionAttachments: {
+      marginTop: 6,
     },
     questionText: {
       ...typography.body,
