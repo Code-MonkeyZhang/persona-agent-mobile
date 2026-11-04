@@ -478,8 +478,9 @@ function ChatScreen(): React.JSX.Element {
     ]
   );
 
-  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位
-  const companionBubbleVisible = companion.companionOpen && !!lastAgentMessage;
+  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位，首轮尚无 agent 消息时运行期也显气泡承载动向行
+  const companionBubbleVisible =
+    companion.companionOpen && (!!lastAgentMessage || isThinking);
   useEffect(() => {
     if (!companionBubbleVisible) {
       setCompanionBubbleHeight(0);
@@ -493,10 +494,10 @@ function ChatScreen(): React.JSX.Element {
         <View style={styles.bannerOverlay}>
           <ConnectionBanner />
         </View>
-        <LiveStrip />
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
-          {/* Pane 1: 聊天列表 */}
+          {/* Pane 1: 聊天列表，时间线挂进 pane 内随滑动一起退场，陪伴态顶部不再悬条 */}
           <View style={slideStyle.pane}>
+            <LiveStrip />
             <GiftedChat
               messagesContainerRef={
                 // 库声明不接纳空值引用，创建引用时初始值必为空，此处仅收窄空值差异
@@ -590,8 +591,8 @@ function ChatScreen(): React.JSX.Element {
       </View>
       {/* FIB 容器：绝对定位浮在内容上方，键盘弹出时整体抬升，气泡与输入栏同步让位 */}
       <Animated.View style={[styles.fibWrapper, keyboardLiftStyle]}>
-        {/* 陪伴回复气泡 */}
-        {companionBubbleVisible && lastAgentMessage && (
+        {/* 陪伴回复气泡：运行期一次一条动向居中整句替换，轮末照旧落回复正文 */}
+        {companionBubbleVisible && (
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -601,8 +602,8 @@ function ChatScreen(): React.JSX.Element {
             }}
           >
             <CompanionReplyBubble
-              messageKey={lastAgentMessage._id as string}
-              text={lastAgentMessage.text}
+              messageKey={(lastAgentMessage?._id as string) ?? 'live'}
+              text={lastAgentMessage?.text ?? ''}
               isThinking={isThinking}
               thinkingText={t('chat.thinking')}
               colors={colors}

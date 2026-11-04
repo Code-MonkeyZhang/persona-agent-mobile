@@ -1,8 +1,10 @@
 /**
  * @file component/CompanionReplyBubble.tsx
  * @description 陪伴模式下浮在输入框上方的 AI 回复气泡。
+ *   运行期与顶栏时间线同一份 liveRun 驱动，一次只显一条动向居中整句替换，
+ *   失败步红字不带圆点，轮末落回回复正文，liveRun 消费前校验归属防其他会话串台。
  */
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   Extrapolation,
@@ -12,8 +14,11 @@ import Animated, {
   useDerivedValue,
   useSharedValue,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { ColorScheme, typography } from '../../theme/index';
 import EdgeFade, { EDGE_FADE_H } from '../../component/EdgeFade';
+import { useChatStore } from '../../stores/chatStore';
+import { Dots, FAIL_RED, liveRunLabel, phaseIcon } from './LiveStrip';
 import { logger } from '../../lib/logger';
 
 const createBubbleStyles = (colors: ColorScheme) =>
@@ -54,6 +59,27 @@ const createBubbleStyles = (colors: ColorScheme) =>
       paddingHorizontal: 16,
       paddingVertical: 10,
     },
+    liveRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    liveLabel: {
+      // 自然宽度不撑满整行，圆点紧跟文字右侧，空间不足先收缩截断
+      flexShrink: 1,
+      ...typography.caption,
+    },
+    liveLabelNormal: {
+      fontWeight: '500',
+      color: '#333333',
+    },
+    liveLabelRed: {
+      fontWeight: '600',
+      color: FAIL_RED,
+    },
   });
 
 interface CompanionReplyBubbleProps {
@@ -71,11 +97,29 @@ export function CompanionReplyBubble({
   thinkingText,
   colors,
 }: CompanionReplyBubbleProps) {
+  const { t } = useTranslation();
   const styles = createBubbleStyles(colors);
+  const liveRun = useChatStore((s) => s.liveRun);
+  const displayedSessionId = useChatStore((s) => s.displayedSessionId);
   const scrollY = useSharedValue(0);
   const contentH = useSharedValue(0);
   const viewH = useSharedValue(0);
   const scrollableRef = useRef(false);
+
+  // 运行期动向与顶栏时间线同源，liveRun 归属当前会话时框内只显当前这一步
+  const liveOwned = !!liveRun && liveRun.sessionId === displayedSessionId;
+  const liveFailed = liveOwned
+    ? !!liveRun.steps[liveRun.steps.length - 1]?.failed
+    : false;
+  const liveLabelText = liveOwned ? liveRunLabel(t, liveRun) : '';
+  const LiveIcon = liveOwned ? phaseIcon(liveRun) : null;
+
+  // 每步动向进框时留一条日志，陪伴态反馈缺失时可据此排查数据链路
+  useEffect(() => {
+    if (liveOwned) {
+      logger.debug(`[CompanionReplyBubble] live动向: ${liveLabelText}`);
+    }
+  }, [liveOwned, liveLabelText]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -115,7 +159,23 @@ export function CompanionReplyBubble({
     >
       <View style={styles.inner}>
         {isThinking ? (
-          <Text style={styles.thinking}>{thinkingText}</Text>
+          liveOwned && LiveIcon ? (
+            <View style={styles.liveRow}>
+              <LiveIcon size={11} color={colors.primary} />
+              <Text
+                style={[
+                  styles.liveLabel,
+                  liveFailed ? styles.liveLabelRed : styles.liveLabelNormal,
+                ]}
+                numberOfLines={1}
+              >
+                {liveLabelText}
+              </Text>
+              {!liveFailed && <Dots />}
+            </View>
+          ) : (
+            <Text style={styles.thinking}>{thinkingText}</Text>
+          )
         ) : (
           <>
             <Animated.ScrollView

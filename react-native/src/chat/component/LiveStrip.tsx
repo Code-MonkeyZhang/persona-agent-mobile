@@ -482,8 +482,8 @@ function BreathingDot({ delayMs }: { delayMs: number }) {
   return <Animated.View style={[styles.dot, dotStyle]} />;
 }
 
-/** 运行指示的三颗呼吸圆点，紧跟文字右侧对齐首行，由宿主传间距与偏移 */
-function Dots({ style }: { style?: StyleProp<ViewStyle> }) {
+/** 运行指示的三颗呼吸圆点，紧跟文字右侧对齐首行，由宿主传间距与偏移，导出供陪伴气泡动向行复用 */
+export function Dots({ style }: { style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.dots, style]} pointerEvents="none">
       <BreathingDot delayMs={0} />
