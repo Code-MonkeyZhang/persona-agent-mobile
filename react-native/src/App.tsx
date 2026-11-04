@@ -5,7 +5,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, StatusBar, AppState, StyleSheet } from 'react-native';
+import { Keyboard, AppState, StyleSheet } from 'react-native';
+import { SystemBars } from 'react-native-edge-to-edge';
 import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
@@ -143,7 +144,7 @@ const AppNavigator = () => {
 
 /**
  * 带主题的导航容器
- * - StatusBar: 显示时间/信号/电量的顶部状态栏，根据深色/浅色模式切换文字颜色
+ * - SystemBars: 系统栏图标随深浅色模式切换，安卓 edge-to-edge 下替代退役的 StatusBar API
  * - NavigationContainer: 管理所有页面的跳转和状态，包裹导航器使其具备页面跳转能力
  *   - onStateChange: 导航状态变化时触发的回调，以下操作都会触发：
  *     1. 页面跳转（如从聊天页跳转到设置页）
@@ -153,10 +154,9 @@ const AppNavigator = () => {
  *   - 此处用于每次切换页面时自动收起键盘，防止键盘遮挡其他页面内容
  */
 const AppWithTheme = () => {
-  const { colors } = useTheme();
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <SystemBars style="auto" />
       {/* 手势根视图：左滑删除等 RNGH 手势组件依赖此包装，原抽屉导航器自带的隐式包装已随抽屉移除 */}
       <GestureHandlerRootView style={styles.flex}>
         {/* 键盘宿主：接管双端键盘事件与逐帧高度，安卓 edge-to-edge 的覆盖式键盘靠它避让 */}

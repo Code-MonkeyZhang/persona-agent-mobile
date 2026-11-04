@@ -2,10 +2,11 @@
  * @file hooks/useKeyboardLayout.ts
  * @description 键盘避让由 react-native-keyboard-controller 驱动。
  *   库在 UI 线程逐帧供给双端一致的键盘高度，底部浮层整体抬升贴住键盘上沿，
- *   间距缝落在浮层之外露出背景，双端同一条公式，安卓 edge-to-edge 的覆盖式键盘同样适用。
+ *   间距缝落在浮层之外露出背景，安卓 edge-to-edge 的覆盖式键盘同样适用。
+ *   安全区避让两端分工，安卓垫在浮层外露出背景，iOS 垫在浮层内由毛玻璃底座收编。
  */
 import { useEffect, useRef } from 'react';
-import { TextInput } from 'react-native';
+import { Platform, TextInput } from 'react-native';
 import {
   useKeyboardState,
   useReanimatedKeyboardAnimation,
@@ -83,13 +84,19 @@ export function useKeyboardLayout(
     ],
   }));
 
-  /** 浮层内安全区避让，键盘升起处接管底部后逐帧让位归零，闭合时回到安全区全量 */
-  const keyboardPaddingStyle = useAnimatedStyle(() => ({
-    paddingBottom: Math.max(
+  /** 安卓避让垫在容器外露出背景，iOS 垫在容器内由毛玻璃底座收编 */
+  const isAndroid = Platform.OS === 'android';
+
+  /** 浮层安全区避让，键盘升起处接管底部后逐帧让位归零，闭合时回到安全区全量 */
+  const keyboardPaddingStyle = useAnimatedStyle(() => {
+    const avoidance = Math.max(
       insetsBottom - Math.abs(keyboardHeightAnimated.value),
       0
-    ),
-  }));
+    );
+    return isAndroid
+      ? { marginBottom: avoidance }
+      : { paddingBottom: avoidance };
+  });
 
   return { keyboardLiftStyle, keyboardPaddingStyle, keyboardHeight };
 }

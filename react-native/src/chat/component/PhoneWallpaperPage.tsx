@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Upload } from 'lucide-react-native';
 import { typography, useTheme } from '../../theme/index.ts';
@@ -39,6 +40,7 @@ const TAG = '[PhoneWallpaperPage]';
 const PhoneWallpaperPage: React.FC = (): React.JSX.Element => {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const wallpaperDoc = useAppPanelStore((s) => s.wallpaperDoc);
   const setWallpaper = useAppPanelStore((s) => s.setWallpaper);
   const [uploading, setUploading] = useState(false);
@@ -110,7 +112,10 @@ const PhoneWallpaperPage: React.FC = (): React.JSX.Element => {
 
   return (
     // 安卓端 style 上的垂直 padding 会让滚动区底部不可达，padding 挂内容容器
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom }]}
+    >
       <Text style={[styles.section, { color: colors.textSecondary }]}>
         {t('wallpaper.presets')}
       </Text>

@@ -610,7 +610,7 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         )}
-        {/* 底部避让容器持安全区让位动画，模糊背景覆盖输入栏与安全区，间距缝在容器外露出背景，安卓为半透明降级底色 */}
+        {/* 底部避让容器持安全区让位动画，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
         <Animated.View style={keyboardPaddingStyle}>
           <BackdropBlur />
           {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
