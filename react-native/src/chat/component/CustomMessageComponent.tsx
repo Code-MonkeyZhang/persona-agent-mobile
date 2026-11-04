@@ -291,7 +291,6 @@ const createStyles = (colors: ColorScheme) =>
       alignSelf: 'flex-start',
       backgroundColor: colors.surface,
       borderRadius: 20,
-      borderBottomLeftRadius: 4,
       paddingHorizontal: 16,
       paddingVertical: 10,
       overflow: 'hidden',
