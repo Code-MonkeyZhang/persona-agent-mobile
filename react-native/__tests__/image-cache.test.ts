@@ -2,7 +2,7 @@
  * @file __tests__/image-cache.test.ts
  * @description 图片缓存核心的单测，依赖注入替身，覆盖键提取、目录扫描命中、
  *   下载校验落盘、哈希不符拒绝、并发合并、并发首访共享扫描、覆盖写清旧、
- *   warmup 预热与临时残留排除等主路径。
+ *   warmup 预热、临时残留排除与种入路径等主路径。
  */
 import {
   ImageCache,
@@ -19,6 +19,7 @@ const DIR = '/docs/image-cache';
 interface CallStats {
   download: string[];
   moveFile: Array<[string, string]>;
+  copyFile: Array<[string, string]>;
   unlink: string[];
 }
 
@@ -34,6 +35,9 @@ function makeDeps(
     },
     moveFile: async (from, to) => {
       stats.moveFile.push([from, to]);
+    },
+    copyFile: async (from, to) => {
+      stats.copyFile.push([from, to]);
     },
     sha256: async () => KEY,
     download: async (url) => {
@@ -55,14 +59,24 @@ test('parseHashKey 只认 64 位十六进制的 h 参数', () => {
 });
 
 test('resolve 无 h 参数时直接返回 null 不触任何文件操作', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(DIR, makeDeps(stats));
   expect(await cache.resolve('http://x/api/agents/a1/avatar')).toBeNull();
   expect(stats.download.length).toBe(0);
 });
 
 test('目录扫描命中已有文件时不发起下载', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const deps = makeDeps(stats, {
     readDir: async () => [`${KEY}.png`, 'not-a-hash.txt'],
   });
@@ -73,7 +87,12 @@ test('目录扫描命中已有文件时不发起下载', async () => {
 });
 
 test('未命中路径下载校验落盘并按内容类型取扩展名', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(DIR, makeDeps(stats));
   const path = await cache.resolve(URL_WITH_H);
   expect(stats.download).toEqual([URL_WITH_H]);
@@ -84,7 +103,12 @@ test('未命中路径下载校验落盘并按内容类型取扩展名', async ()
 });
 
 test('哈希不符拒绝落盘并记住失败，不反复下载', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(
     DIR,
     makeDeps(stats, { sha256: async () => OTHER_KEY })
@@ -97,7 +121,12 @@ test('哈希不符拒绝落盘并记住失败，不反复下载', async () => {
 });
 
 test('同键并发请求共享一次下载', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -119,7 +148,12 @@ test('同键并发请求共享一次下载', async () => {
 });
 
 test('非 2xx 下载失败清理临时文件并返回 null', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(
     DIR,
     makeDeps(stats, {
@@ -132,7 +166,12 @@ test('非 2xx 下载失败清理临时文件并返回 null', async () => {
 });
 
 test('并发首访共享同一次目录扫描，已落盘文件不重复下载', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const deps = makeDeps(stats, {
     readDir: async () => {
       await Promise.resolve();
@@ -150,7 +189,12 @@ test('并发首访共享同一次目录扫描，已落盘文件不重复下载',
 });
 
 test('落盘前清除同名旧文件，覆盖写幂等', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const files = new Set([`${DIR}/${KEY}.png`]);
   const cache = new ImageCache(
     DIR,
@@ -176,7 +220,12 @@ test('落盘前清除同名旧文件，覆盖写幂等', async () => {
 });
 
 test('warmup 预热记忆映射，之后的 peek 同步命中不再下载', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(
     DIR,
     makeDeps(stats, {
@@ -190,7 +239,12 @@ test('warmup 预热记忆映射，之后的 peek 同步命中不再下载', asyn
 });
 
 test('目录扫描忽略 download 临时残留', async () => {
-  const stats: CallStats = { download: [], moveFile: [], unlink: [] };
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
   const cache = new ImageCache(
     DIR,
     makeDeps(stats, {
@@ -199,4 +253,90 @@ test('目录扫描忽略 download 临时残留', async () => {
   );
   expect(await cache.resolve(URL_WITH_H)).toBe(`${DIR}/${KEY}.png`);
   expect(stats.download.length).toBe(1);
+});
+
+test('seed 复制压缩件校验落盘进记忆映射', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const cache = new ImageCache(DIR, makeDeps(stats));
+  const path = await cache.seed(KEY, 'file:///tmp/a.jpg', 'image/jpeg');
+  expect(stats.copyFile).toEqual([
+    ['file:///tmp/a.jpg', `${DIR}/${KEY}.download`],
+  ]);
+  expect(stats.moveFile).toEqual([
+    [`${DIR}/${KEY}.download`, `${DIR}/${KEY}.jpg`],
+  ]);
+  expect(path).toBe(`${DIR}/${KEY}.jpg`);
+  expect(cache.peek(URL_WITH_H)).toBe(`${DIR}/${KEY}.jpg`);
+});
+
+test('seed 哈希不符清临时文件拒写', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const cache = new ImageCache(
+    DIR,
+    makeDeps(stats, { sha256: async () => OTHER_KEY })
+  );
+  expect(await cache.seed(KEY, 'file:///tmp/a.jpg', 'image/png')).toBeNull();
+  expect(stats.moveFile.length).toBe(0);
+  expect(stats.unlink).toEqual([`${DIR}/${KEY}.download`]);
+  expect(cache.peek(URL_WITH_H)).toBeNull();
+});
+
+test('seed 记忆映射已有时跳过复制幂等返回', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const cache = new ImageCache(
+    DIR,
+    makeDeps(stats, { readDir: async () => [`${KEY}.png`] })
+  );
+  expect(await cache.seed(KEY, 'file:///tmp/a.jpg', 'image/jpeg')).toBe(
+    `${DIR}/${KEY}.png`
+  );
+  expect(stats.copyFile.length).toBe(0);
+});
+
+test('seed 落盘后 resolve 直接命中零下载', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const cache = new ImageCache(DIR, makeDeps(stats));
+  await cache.seed(KEY, 'file:///tmp/a.jpg', 'image/jpeg');
+  expect(await cache.resolve(URL_WITH_H)).toBe(`${DIR}/${KEY}.jpg`);
+  expect(stats.download.length).toBe(0);
+});
+
+test('seed 复制失败静默清理临时文件返回 null', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const cache = new ImageCache(
+    DIR,
+    makeDeps(stats, {
+      copyFile: async () => {
+        throw new Error('no space');
+      },
+    })
+  );
+  expect(await cache.seed(KEY, 'file:///tmp/a.jpg', 'image/jpeg')).toBeNull();
+  expect(stats.moveFile.length).toBe(0);
+  expect(stats.unlink).toEqual([`${DIR}/${KEY}.download`]);
 });

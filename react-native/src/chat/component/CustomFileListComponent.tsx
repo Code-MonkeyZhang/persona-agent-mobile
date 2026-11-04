@@ -3,7 +3,7 @@
  * @description 聊天附件的文件列表组件，有编辑与展示两种模式。
  *              编辑态是输入栏的横向草稿条，带删除按钮与发送期状态蒙层，上传中转圈、失败红卡点击重试。
  *              展示态是消息气泡内的附件区，单图原比例高度封顶、多图两列网格、文件卡白底彩徽章，
- *              图片经 CachedImage 走哈希缓存，文件卡点击下载后打开。
+ *              图片经 CachedImage 走哈希缓存，大图查看先过同一缓存管线，文件卡点击下载后打开。
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -23,6 +23,7 @@ import { ImageSource } from 'react-native-image-viewing/dist/@types/index';
 import FileViewer from 'react-native-file-viewer';
 import { RotateCw } from 'lucide-react-native';
 import CachedImage from '../../component/CachedImage.tsx';
+import { imageCache } from '../../storage/image-cache-rn.ts';
 import {
   formatFileSize,
   getAttachmentPresentation,
@@ -183,14 +184,26 @@ export const CustomFileListComponent: React.FC<CustomFileProps> = ({
     }
   }, [files, mode]);
 
-  /** 打开全屏大图，预览范围为列表内全部图片 */
-  const openImageViewer = (file: FileInfo) => {
-    const images = files
-      .filter((item) => item.type === FileType.image)
-      .map((item) => ({ uri: item.url }));
-    const currentIndex = images.findIndex((img) => img.uri === file.url);
-    setImageUrls(images);
-    setIndex(currentIndex);
+  /**
+   * 打开全屏大图，预览范围为列表内全部图片。
+   * 每张图先过缓存管线，命中交给查看器本地路径零网络，未命中下载校验落盘
+   * 后打开，地址无 h 参数回退原地址，与 CachedImage 的远端直显同姿态。
+   */
+  const openImageViewer = async (file: FileInfo) => {
+    const images = files.filter((item) => item.type === FileType.image);
+    const resolved = await Promise.all(
+      images.map(async (item) => {
+        const localPath = await imageCache.resolve(item.url);
+        return localPath ? `file://${localPath}` : item.url;
+      })
+    );
+    logger.info(
+      `[messageList] viewer resolved, total=${resolved.length} local=${
+        resolved.filter((uri) => uri.startsWith('file://')).length
+      }`
+    );
+    setImageUrls(resolved.map((uri) => ({ uri })));
+    setIndex(images.findIndex((item) => item.id === file.id));
     setIsVisible(true);
   };
 

@@ -3,6 +3,7 @@
  * @description 客户端图片缓存核心，内容哈希承担缓存身份，照桌面端 image-cache 的图纸。
  *   已看过的图片以 sha256 十六进制串为文件名落在缓存目录，命中路径零网络回流。
  *   缓存键从图片地址的 h 查询参数提取，网络地址只承担未命中路径的一次性传输。
+ *   发送设备上传落定后经 seed 把压缩件复制校验落盘，发过的图不再回下载。
  *   文件操作与哈希函数经构造注入，模块不依赖 react-native，jest 可直测。
  */
 
@@ -28,6 +29,8 @@ export interface ImageCacheDeps {
   unlink(path: string): Promise<void>;
   /** 原子改名，落盘的临门一脚 */
   moveFile(from: string, to: string): Promise<void>;
+  /** 复制文件，种入路径把本地压缩件抄进缓存目录 */
+  copyFile(from: string, to: string): Promise<void>;
   /** 计算文件的 sha256 十六进制摘要 */
   sha256(path: string): Promise<string>;
   /** 下载 url 到文件，返回响应状态码与 Content-Type */
@@ -120,6 +123,41 @@ export class ImageCache {
   }
 
   /**
+   * 种入一张上传落定的图片，发送设备发过的图不再回下载。
+   * 复制本地压缩件到临时路径后走 settle 校验落盘，必须复制不能移动，
+   * 乐观气泡的本地 uri 还指着原压缩件。任何失败静默返回 null 不影响发送，
+   * 成功落盘顺带解除该键的失败哨兵。
+   */
+  async seed(
+    hash: string,
+    localUri: string,
+    mimeType: string
+  ): Promise<string | null> {
+    if (!HASH_PATTERN.test(hash)) {
+      return null;
+    }
+    await this.scanOnce();
+    const known = this.memo.get(hash);
+    if (known !== undefined && known !== FAILED) {
+      return known;
+    }
+    const tempPath = `${this.cacheDir}/${hash}.download`;
+    try {
+      await this.deps.mkdir(this.cacheDir);
+      await this.deps.copyFile(localUri, tempPath);
+      return await this.settle(tempPath, hash, extFromContentType(mimeType));
+    } catch (error) {
+      await this.deps.unlink(tempPath).catch(() => undefined);
+      this.deps.log(
+        `seed failed key=${hash} ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  /**
    * 清除失败哨兵，让下一次 resolve 重新尝试下载。
    * 哨兵是会话级记忆，排队下载的重试节奏靠它解除失败锁定。
    */
@@ -138,7 +176,7 @@ export class ImageCache {
     return this.scanOnce();
   }
 
-  /** 未命中路径的完整流程：扫目录、下载、校验、落盘 */
+  /** 未命中路径的完整流程：扫目录、下载、校验、落盘，失败记哨兵 */
   private async fetchToFile(
     source: string,
     key: string
@@ -158,21 +196,14 @@ export class ImageCache {
       if (statusCode < 200 || statusCode >= 300) {
         throw new Error(`download status ${statusCode}`);
       }
-      const digest = await this.deps.sha256(tempPath);
-      if (digest !== key) {
-        this.deps.log(`hash mismatch key=${key} got=${digest}`);
+      const finalPath = await this.settle(
+        tempPath,
+        key,
+        extFromContentType(contentType)
+      );
+      if (finalPath === null) {
         this.memo.set(key, FAILED);
-        await this.deps.unlink(tempPath).catch(() => undefined);
-        return null;
       }
-      const finalPath = `${this.cacheDir}/${key}.${extFromContentType(
-        contentType
-      )}`;
-      // 移动端改名原语拒绝覆盖已存在目标，先移除同名旧文件使落盘幂等
-      await this.deps.unlink(finalPath).catch(() => undefined);
-      await this.deps.moveFile(tempPath, finalPath);
-      this.memo.set(key, finalPath);
-      this.deps.log(`stored ${key} ${finalPath}`);
       return finalPath;
     } catch (error) {
       this.memo.set(key, FAILED);
@@ -184,6 +215,30 @@ export class ImageCache {
       );
       return null;
     }
+  }
+
+  /**
+   * 把已就位的临时文件校验后原子落盘并进记忆映射，下载路径与种入路径共用。
+   * 哈希不符清掉临时文件返回 null，由调用方决定是否记失败哨兵。
+   */
+  private async settle(
+    tempPath: string,
+    key: string,
+    ext: string
+  ): Promise<string | null> {
+    const digest = await this.deps.sha256(tempPath);
+    if (digest !== key) {
+      this.deps.log(`hash mismatch key=${key} got=${digest}`);
+      await this.deps.unlink(tempPath).catch(() => undefined);
+      return null;
+    }
+    const finalPath = `${this.cacheDir}/${key}.${ext}`;
+    // 移动端改名原语拒绝覆盖已存在目标，先移除同名旧文件使落盘幂等
+    await this.deps.unlink(finalPath).catch(() => undefined);
+    await this.deps.moveFile(tempPath, finalPath);
+    this.memo.set(key, finalPath);
+    this.deps.log(`stored ${key} ${finalPath}`);
+    return finalPath;
   }
 
   /**

@@ -3,6 +3,7 @@
  * @description 输入框附件状态：
  * - 草稿期纯本地零上传，选择器产物经入口映射与上限过滤进草稿
  * - 发送期先压缩再统一起传，任一失败整批返回 null 且失败项标 error
+ * - 图片上传落定后顺手种入本地缓存，失败静默不影响发送
  * - 落定结果作为值交还调用方，发送流程不回读渲染快照
  * - 失败单项可重试，重试只补失败项
  */
@@ -21,12 +22,14 @@ import {
   type UploadFilePart,
 } from '../../api/server-api.ts';
 import { getServerAddress } from '../../storage/StorageUtils.ts';
+import { imageCache } from '../../storage/image-cache-rn.ts';
 import { useChatStore } from '../../stores/chatStore.ts';
 import { logger } from '../../lib/logger';
 
 /**
  * 单项压缩后上传落定，返回成功与否的补丁。
  * 图片先过压缩判定，达标原样上传，超限压回后再传，格式与宽高与体积随产物修正。
+ * 图片落定后把压缩件复制校验种入本地缓存，发过的图重启后不再回下载。
  */
 async function settleUpload(
   item: FileInfo,
@@ -56,6 +59,14 @@ async function settleUpload(
       format = compressed.format;
     }
     const uploaded = await uploadAttachment(address, part);
+    if (item.type === FileType.image) {
+      const seeded = await imageCache.seed(uploaded.hash, part.uri, part.type);
+      logger.info(
+        `[attachments] seeded cache, name=${item.fileName} path=${
+          seeded ?? 'none'
+        }`
+      );
+    }
     return {
       status: 'uploaded',
       hash: uploaded.hash,
