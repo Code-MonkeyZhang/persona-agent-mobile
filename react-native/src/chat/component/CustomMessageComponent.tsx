@@ -287,6 +287,8 @@ const createStyles = (colors: ColorScheme) =>
     /** Agent 回复气泡框，灰底圆角贴左，对齐 demo 与桌面端样式 */
     answerContainer: {
       alignSelf: 'flex-start',
+      /** 气泡宽度封顶消息内容区，防止复合 Markdown 子树测量溢出把气泡顶满整行超出屏幕 */
+      maxWidth: '100%',
       backgroundColor: colors.surface,
       borderRadius: 20,
       paddingHorizontal: 16,

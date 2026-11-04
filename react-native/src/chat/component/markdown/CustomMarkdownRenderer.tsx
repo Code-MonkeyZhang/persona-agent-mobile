@@ -335,31 +335,15 @@ export class CustomMarkdownRenderer
         key={this.getKey()}
         startIndex={startIndex}
       >
-        {li.map((node) => node)}
+        {li.map((node, index) =>
+          React.isValidElement(node)
+            ? React.cloneElement(node, { key: `li-${index}` })
+            : node
+        )}
       </MarkedList>
     );
   }
 }
-
-const getTableWidthArr = (
-  totalCols: number,
-  windowWidth: number,
-  windowHeight: number
-) => {
-  if (totalCols < 1) {
-    return [];
-  }
-
-  return Array(totalCols)
-    .fill(0)
-    .map(() => {
-      if (windowHeight > windowWidth) {
-        return Math.min(Math.floor((windowWidth - 64) * (1 / 2)), 170);
-      } else {
-        return Math.min(Math.floor((windowWidth - 182) * (1 / 5)), 170);
-      }
-    });
-};
 
 const createCustomStyles = (colors: ColorScheme) =>
   StyleSheet.create({
