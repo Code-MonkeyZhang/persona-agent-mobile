@@ -164,7 +164,8 @@ const PhoneSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         onGrid={handleBarClose}
       />
       {page === 'settings' ? (
-        <ScrollView style={styles.body}>
+        // 安卓端 style 上的垂直 padding 会让滚动区底部不可达，padding 挂内容容器
+        <ScrollView style={styles.body} contentContainerStyle={styles.content}>
           <View
             style={[
               styles.card,
@@ -211,6 +212,8 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  content: {
     padding: 14,
   },
   card: {

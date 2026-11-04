@@ -19,15 +19,14 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withTiming,
-  type SharedValue,
   type WithTimingConfig,
 } from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ChevronRight, Lightbulb, XCircle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import type { Thought } from '../../types/Thought';
 import { phraseForThought, toolIcon, ROW_ICON, FAIL_RED } from './LiveStrip';
 import { useTheme, typography } from '../../theme';
+import EdgeFade, { EDGE_FADE_H } from '../../component/EdgeFade';
 import { logger } from '../../lib/logger';
 
 interface CollapsedThoughtProcessProps {
@@ -46,9 +45,6 @@ const PANEL_CHROME = 18;
 
 /** 滚动区高度上限，面板总高守 PANEL_MAX_H，扣除纵向装饰高 */
 const SCROLL_MAX_H = PANEL_MAX_H - PANEL_CHROME;
-
-/** 渐隐带高度，也是透明度随滚动距离拉满的行程 */
-const FADE_H = 18;
 
 /**
  * 展开收起的进度动画配置。
@@ -108,51 +104,6 @@ const ThoughtItem = memo(function ({
 });
 
 /**
- * 面板上下缘渐隐条，颜色取面板底色，把步骤文字向底色淡出。
- * 透明度共享值由滚动位置连续推导，对应方向还有未看内容时淡入，滚到头淡出。
- */
-const EdgeFade = memo(function ({
-  edge,
-  opacity,
-}: {
-  edge: 'top' | 'bottom';
-  opacity: SharedValue<number>;
-}) {
-  const { colors } = useTheme();
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  const gradientId = `thought-fade-${edge}`;
-  // 上缘从面板顶向下淡出，下缘从面板底向上淡出
-  const from = edge === 'top' ? '0' : '1';
-  const to = edge === 'top' ? '1' : '0';
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.fadeBar,
-        edge === 'top' ? styles.fadeTop : styles.fadeBottom,
-        style,
-      ]}
-    >
-      <Svg width="100%" height={FADE_H}>
-        <Defs>
-          <LinearGradient id={gradientId} x1="0" y1={from} x2="0" y2={to}>
-            <Stop offset="0" stopColor={colors.surface} stopOpacity="1" />
-            <Stop offset="1" stopColor={colors.surface} stopOpacity="0" />
-          </LinearGradient>
-        </Defs>
-        <Rect
-          x="0"
-          y="0"
-          width="100%"
-          height={FADE_H}
-          fill={`url(#${gradientId})`}
-        />
-      </Svg>
-    </Animated.View>
-  );
-});
-
-/**
  * 展开面板本体，带框步骤列表容器。
  * 滚动区挂显式高度，由内容量高驱动并与裁剪层解耦，裁剪层的高度动画不牵连滚动区量高，
  * 首量之前按上限兜底，做法与顶栏时间线面板一致。
@@ -188,12 +139,12 @@ const ThoughtPanel = memo(function ({
 
   // 上缘随已滚开的距离淡入，下缘随剩余滚动余量淡入，滚到头归零
   const topOpacity = useDerivedValue(() =>
-    interpolate(scrollY.value, [0, FADE_H], [0, 1], Extrapolation.CLAMP)
+    interpolate(scrollY.value, [0, EDGE_FADE_H], [0, 1], Extrapolation.CLAMP)
   );
   const bottomOpacity = useDerivedValue(() =>
     interpolate(
       contentH.value - viewH.value - scrollY.value,
-      [0, FADE_H],
+      [0, EDGE_FADE_H],
       [0, 1],
       Extrapolation.CLAMP
     )
@@ -236,8 +187,12 @@ const ThoughtPanel = memo(function ({
           />
         ))}
       </Animated.ScrollView>
-      <EdgeFade edge="top" opacity={topOpacity} />
-      <EdgeFade edge="bottom" opacity={bottomOpacity} />
+      <EdgeFade edge="top" opacity={topOpacity} bgColor={colors.surface} />
+      <EdgeFade
+        edge="bottom"
+        opacity={bottomOpacity}
+        bgColor={colors.surface}
+      />
     </View>
   );
 });
@@ -420,19 +375,6 @@ const styles = StyleSheet.create({
     width: 1.5,
     borderRadius: 1,
     backgroundColor: CONNECTOR,
-  },
-  /** 渐隐条贴面板内缘铺满宽度，圆角由面板裁剪 */
-  fadeBar: {
-    position: 'absolute',
-    left: 1,
-    right: 1,
-    height: FADE_H,
-  },
-  fadeTop: {
-    top: 0,
-  },
-  fadeBottom: {
-    bottom: 0,
   },
 });
 

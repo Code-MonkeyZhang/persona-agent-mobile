@@ -109,7 +109,8 @@ const PhoneWallpaperPage: React.FC = (): React.JSX.Element => {
   );
 
   return (
-    <ScrollView style={styles.container}>
+    // 安卓端 style 上的垂直 padding 会让滚动区底部不可达，padding 挂内容容器
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={[styles.section, { color: colors.textSecondary }]}>
         {t('wallpaper.presets')}
       </Text>
@@ -180,6 +181,8 @@ const PhoneWallpaperPage: React.FC = (): React.JSX.Element => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
     padding: 16,
   },
   section: {
