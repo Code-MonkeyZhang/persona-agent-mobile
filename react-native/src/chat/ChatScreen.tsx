@@ -49,7 +49,7 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import { cacheDb } from '../storage/cache-db.ts';
 import { useMirrorStore } from '../stores/mirrorStore';
-import { viewed as wsViewed } from '../api/ws-client.ts';
+import { isConnected, viewed as wsViewed } from '../api/ws-client.ts';
 import { logger } from '../lib/logger';
 import { fetchAgentDetail, listProviders } from '../api/server-api.ts';
 import { ChatStatus, ChatMessage, FileType } from '../types/Chat.ts';
@@ -320,11 +320,16 @@ function ChatScreen(): React.JSX.Element {
   }, [messages, chatStatus, scroll]);
 
   // ==================== 消息发送 ====================
-  /** 发送流程：上传期间再点发送提示稍等，附件先压缩再统一起传，
-   *  全部成功才清空草稿发出消息，有失败保留草稿与正文等用户重试或删除。
-   *  消息只用 uploadAll 的返回值组装，上传落定的哈希与元数据不在旧快照里读 */
+  /** 发送流程：连接未建立当场提示保留正文，上传期间再点发送提示稍等，附件先压缩再统一起传，
+   *  落定即清空草稿并在后台发出消息，网络成败由 chatStore 回滚生成态与提示兜底，
+   *  乐观用户气泡保留在聊天记录里。消息只用 uploadAll 的返回值组装，上传落定的哈希与元数据不在旧快照里读 */
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
+      if (!isConnected()) {
+        logger.warn('[inputBox] send blocked, ws not connected');
+        useChatStore.getState().showNotice('chat.notConnected');
+        return false;
+      }
       if (attachments.isUploading) {
         logger.info('[inputBox] send blocked, attachments uploading');
         useChatStore.getState().showNotice('chat.attachmentUploading');
@@ -343,10 +348,9 @@ function ChatScreen(): React.JSX.Element {
       setWindowCount(MESSAGE_WINDOW_BASE);
       trigger(HapticFeedbackTypes.impactMedium);
       scroll.scrollToBottom();
-      if (settled.length > 0) {
-        attachments.clear();
-      }
-      await useChatStore.getState().sendMessage(text, settled);
+      attachments.clear();
+      // 清空不等网络往返，发送在后台走完，失败由 chatStore 回滚与提示兜底
+      useChatStore.getState().sendMessage(text, settled);
       return true;
     },
     [scroll, attachments]

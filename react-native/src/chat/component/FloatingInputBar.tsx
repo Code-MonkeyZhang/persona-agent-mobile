@@ -3,7 +3,7 @@
  * @description 聊天页底部的浮动输入框组件。
  * 白底圆角卡片，纵向排列非视觉提示行、文件标签区、TextInput 和按钮行。
  * 按钮行左侧为加号按钮、右侧运行中为停止加发送双按钮，其余时间为单个发送按钮。
- * 组件内部持有文本 state，发送失败时 onSend 返回 false，正文与草稿都保留。
+ * 组件内部持有文本 state，附件落定即清空，onSend 返回 false 表示被拦截，正文与草稿都保留。
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View, Text } from 'react-native';
@@ -14,11 +14,12 @@ import CustomSendComponent from './CustomSendComponent.tsx';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { CustomChatFooter } from './CustomChatFooter.tsx';
 import type { PickedFile } from '../util/FileUtils.ts';
+import { logger } from '../../lib/logger';
 
 /** 浮动输入框 Props */
 interface FloatingInputBarProps {
   textInputRef: React.RefObject<TextInput | null>;
-  /** 发送动作，附件上传与消息发出在此完成，返回 false 表示未发出需保留正文与草稿 */
+  /** 发送动作，附件上传在此完成并落定，返回 false 表示被拦截需保留正文与草稿，消息网络发送转入后台 */
   onSend: (text: string) => Promise<boolean>;
   onStop?: () => void;
   selectedFiles: FileInfo[];
@@ -46,17 +47,25 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState('');
 
-  /** 发送点击。运行中同样放行，忙时插话语义由 chatStore 分流 */
+  /** 发送点击。运行中同样放行，忙时插话语义由 chatStore 分流，流程异常兜底保留正文 */
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (trimmed.length === 0 && selectedFiles.length === 0) {
       return;
     }
-    const sent = await onSend(trimmed);
+    let sent = false;
+    try {
+      sent = await onSend(trimmed);
+    } catch (e) {
+      logger.warn(
+        `[inputBox] send flow threw: ${e instanceof Error ? e.message : e}`
+      );
+    }
     if (sent) {
       // clear 命令更新原生输入控件的内部状态并触发重新量高，只改 value 属性不会触发。
       textInputRef.current?.clear();
       setText('');
+      logger.info('[inputBox] input cleared after send accepted');
     }
   }, [text, selectedFiles.length, onSend, textInputRef]);
 

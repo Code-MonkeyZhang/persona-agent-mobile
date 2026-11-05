@@ -12,6 +12,8 @@
     "attachmentLimit": "最多添加 {{max}} 个附件",
     "fileOversize": "单个附件不能超过 {{size}}MB",
     "sendUploadFailed": "有附件上传失败，点击红卡重试或删除后再发送",
+    "notConnected": "未连接到主机，请检查网络后重试",
+    "sendFailed": "发送失败，请检查与主机的连接",
     "retryUpload": "重试上传",
     "modelNoVision": "当前模型不支持图片输入，发送后图片将以占位文字代替",
     "downloadFile": "下载文件"

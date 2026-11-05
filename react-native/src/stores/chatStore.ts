@@ -184,13 +184,13 @@ interface ChatStore {
    */
   liveRun: LiveRunState | null;
   /**
-   * 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除。
+   * 附件与发送类事件的提示气泡，键走 i18n，一段时间后自动清除。
    */
   notice: { key: string; values?: Record<string, string> } | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
-  /** 发送用户消息，附件已达 uploaded 态，空闲走新回合占位链路，忙时进服务端待注入缓冲 */
+  /** 发送用户消息，附件已达 uploaded 态，空闲走新回合占位链路，忙时进服务端待注入缓冲，失败回滚生成态并提示 */
   sendMessage: (text: string, files: FileInfo[]) => Promise<void>;
   /** 请求服务端中止当前会话的生成 */
   stopGeneration: () => void;
@@ -294,6 +294,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const address = getServerAddress();
     if (!agentId || !address) {
       logger.warn(`${TAG} send skipped: no agent or server address`);
+      useChatStore.getState().showNotice('chat.notConnected');
       return;
     }
 
@@ -317,15 +318,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           address,
           useVoiceStore.getState().voiceEnabled
         );
-        logger.info(
-          `${TAG} interjection queued, session=${sessionId} pendingId=${
-            result.pendingId ?? 'none'
-          } attachments=${files.length}`
-        );
+        if (result.success) {
+          logger.info(
+            `${TAG} interjection queued, session=${sessionId} pendingId=${
+              result.pendingId ?? 'none'
+            } attachments=${files.length}`
+          );
+        } else {
+          logger.warn(
+            `${TAG} interjection rejected: ${result.error ?? 'unknown'}`
+          );
+          useChatStore.getState().showNotice('chat.sendFailed');
+        }
       } catch (e) {
         logger.warn(
           `${TAG} interjection failed: ${e instanceof Error ? e.message : e}`
         );
+        useChatStore.getState().showNotice('chat.sendFailed');
       }
       return;
     }
@@ -362,15 +371,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .getState()
         .updateSessionPreview(sid, extractPreview(previewText));
       wsClient.subscribe(sid);
-      await sendChatMessage(
+      const result = await sendChatMessage(
         agentId,
         sid,
         payload,
         address,
         useVoiceStore.getState().voiceEnabled
       );
+      if (!result.success) {
+        rollbackGeneratingState(get().displayedSessionId);
+        logger.warn(`${TAG} send rejected: ${result.error ?? 'unknown'}`);
+        useChatStore.getState().showNotice('chat.sendFailed');
+      }
     } catch (e) {
       logger.error(`${TAG} send error: ${e instanceof Error ? e.message : e}`);
+      rollbackGeneratingState(get().displayedSessionId);
+      useChatStore.getState().showNotice('chat.sendFailed');
     }
   },
 
@@ -600,6 +616,25 @@ function appendUserBubble(sessionId: string, message: ChatMessage): void {
     ...slice,
     messages: GiftedChat.append(slice.messages, [message]),
   }));
+}
+
+/**
+ * 发送失败的现场回滚：结束生成态与顶栏时间线，乐观用户消息保留作已发凭证，与桌面端行为对齐。
+ * @param sessionId 回滚目标分片，新会话转正前后都取当时的展示身份
+ */
+function rollbackGeneratingState(sessionId: string): void {
+  if (!sessionId) {
+    return;
+  }
+  const { liveRun } = useChatStore.getState();
+  if (liveRun?.sessionId === sessionId) {
+    useChatStore.setState({ liveRun: null });
+  }
+  updateSlice(sessionId, (slice) => ({
+    ...slice,
+    status: ChatStatus.Complete,
+  }));
+  logger.info(`${TAG} generating rolled back, session=${sessionId}`);
 }
 
 /**
