@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import {
+  BookHeart,
   ChevronRight,
   MessageCircle,
   MessagesSquare,
@@ -86,24 +87,27 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<
   'Home'
 >;
 
-/** 列表头部属性：聊天入口预览文本、信号位两信号与打开回调 */
+/** 列表头部属性：聊天入口预览文本、信号位两信号、当前 agent 与打开回调 */
 interface HomeListHeaderProps {
   preview: string;
   /** 聊天会话运行中标志 */
   running: boolean;
   /** 聊天会话未读标志,前台会话的抑制由父级传入前完成 */
   unread: boolean;
+  /** 当前 agent 标识，记忆入口的压栈目标 */
+  agentId: string;
   onOpenChat: () => void;
 }
 
 /**
- * 列表头部：聊天入口卡、工具与技能入口、会话区标题。
+ * 列表头部：聊天入口卡、记忆与工具技能入口、会话区标题。
  * 经 memo 固化，会话行展开态变化不再触发这块头部重渲染，滑动动画不被 JS 线程挤帧。
  */
 const HomeListHeader = React.memo(function ({
   preview,
   running,
   unread,
+  agentId,
   onOpenChat,
 }: HomeListHeaderProps) {
   const { colors } = useTheme();
@@ -134,6 +138,19 @@ const HomeListHeader = React.memo(function ({
         />
       </PressableRow>
       <View style={styles.divider} />
+      {/* 记忆入口行，与桌面第二栏同构，位次在工具之前 */}
+      <PressableRow
+        style={styles.navEntryRow}
+        onPress={() => {
+          if (!agentId) return;
+          logger.info('[Home] open memory screen');
+          navigation.navigate('MemoryScreen', { agentId });
+        }}
+      >
+        <BookHeart size={20} color={colors.textSecondary} />
+        <Text style={styles.navEntryText}>{t('home.memory')}</Text>
+        <ChevronRight size={16} color={colors.textTertiary} />
+      </PressableRow>
       {/* 工具与技能入口行，点入 AgentNav 对应视图，与会话行同为 20px 文字与 20px 图标档 */}
       <PressableRow
         style={styles.navEntryRow}
@@ -580,6 +597,7 @@ const HomeScreen: React.FC = () => {
               preview={chatEntryPreview}
               running={chatRunning}
               unread={chatUnread}
+              agentId={currentAgentId}
               onOpenChat={openChatSession}
             />
           </>

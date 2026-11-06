@@ -359,8 +359,6 @@ export interface AgentInfo {
   avatarHash?: string;
   /** 上下文压缩阈值（百分比 1–100） */
   compressionThreshold: number;
-  /** 记忆整理（Dream）间隔（分钟） */
-  dreamIntervalMinutes: number;
   /** 语音语言（映射到 MiniMax language_boost） */
   voiceLanguage?: string;
   createdAt: number;
@@ -375,11 +373,56 @@ export interface AgentUpdateInput {
   defaultModel?: ModelConfig;
   maxSteps?: number;
   compressionThreshold?: number;
-  dreamIntervalMinutes?: number;
   voiceId?: string;
   voiceLanguage?: string;
   skillNames?: string[];
   mcpNames?: string[];
+}
+
+/**
+ * 记忆条目类型（对齐 @persona/shared 的 MemoryType）。
+ * pinned 每轮注入，triggered 触发词命中才注入。
+ */
+export type MemoryType = 'pinned' | 'triggered';
+
+/**
+ * 记忆条目（对齐 @persona/shared 的 MemoryEntry，memory.jsonl 单行的八字段）。
+ * 两个时间字段是服务端盖的 ISO 8601 UTC 时间章，界面只读。
+ */
+export interface MemoryEntry {
+  /** 编号，追加式分配，删除后不复用 */
+  uid: number;
+  /** 标题，缺省截取内容开头 */
+  title: string;
+  /** 正文，一条自含句 */
+  content: string;
+  /** 触发词，pinned 条目为空数组 */
+  keys: string[];
+  type: MemoryType;
+  /** 启停，停用条目留在文件但不注入 */
+  enabled: boolean;
+  /** 记于 */
+  createdAt: string;
+  /** 改于 */
+  updatedAt: string;
+}
+
+/** 新增记忆输入（对齐 @persona/shared 的 MemoryWriteInput 输出形态），时间章由服务端盖 */
+export interface MemoryWriteInput {
+  content: string;
+  keys: string[];
+  title?: string;
+  type: MemoryType;
+  enabled: boolean;
+}
+
+/** 更新记忆输入（对齐 @persona/shared 的 MemoryUpdateInput），全部可写字段可选 */
+export interface MemoryUpdateInput {
+  title?: string;
+  content?: string;
+  keys?: string[];
+  type?: MemoryType;
+  enabled?: boolean;
 }
 
 /** Agent App 支持的 UI 变体（与 @persona/shared 的 SupportedUI 对齐） */
@@ -648,6 +691,88 @@ export async function updateAgent(
     )}`
   );
   return data.agent;
+}
+
+/**
+ * 拉取指定 agent 的全部记忆条目（对应 GET /api/agents/:id/memory）。
+ * @param serverAddress 服务器地址
+ * @param agentId Agent ID
+ * @returns 条目数组，编号升序含停用
+ */
+export async function listAgentMemories(
+  serverAddress: string,
+  agentId: string
+): Promise<MemoryEntry[]> {
+  const url = `${serverAddress}/api/agents/${agentId}/memory`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { entries: MemoryEntry[] };
+  logger.info(
+    `${TAG} listAgentMemories → agentId=${agentId} count=${data.entries.length}`
+  );
+  return data.entries;
+}
+
+/**
+ * 新增一条记忆（对应 POST /api/agents/:id/memory）。
+ * 用户通道不查重，时间章由服务端盖。
+ * @param serverAddress 服务器地址
+ * @param agentId Agent ID
+ * @param input 新增输入
+ * @returns 创建的条目
+ */
+export async function createAgentMemory(
+  serverAddress: string,
+  agentId: string,
+  input: MemoryWriteInput
+): Promise<MemoryEntry> {
+  const url = `${serverAddress}/api/agents/${agentId}/memory`;
+  const responseText = await httpPost(
+    url,
+    input as unknown as Record<string, unknown>
+  );
+  const data = JSON.parse(responseText) as { entry: MemoryEntry };
+  logger.info(
+    `${TAG} createAgentMemory → agentId=${agentId} uid=${data.entry.uid}`
+  );
+  return data.entry;
+}
+
+/**
+ * 更新一条记忆（对应 PUT /api/agents/:id/memory/:uid）。
+ * @param serverAddress 服务器地址
+ * @param agentId Agent ID
+ * @param uid 条目编号
+ * @param patch 只传需要修改的字段
+ * @returns 更新后的条目
+ */
+export async function updateAgentMemory(
+  serverAddress: string,
+  agentId: string,
+  uid: number,
+  patch: MemoryUpdateInput
+): Promise<MemoryEntry> {
+  const url = `${serverAddress}/api/agents/${agentId}/memory/${uid}`;
+  const responseText = await httpPut(url, patch);
+  const data = JSON.parse(responseText) as { entry: MemoryEntry };
+  logger.info(
+    `${TAG} updateAgentMemory → agentId=${agentId} uid=${uid} fields=${Object.keys(
+      patch
+    ).join(',')}`
+  );
+  return data.entry;
+}
+
+/**
+ * 删除一条记忆（对应 DELETE /api/agents/:id/memory/:uid），遗忘当场生效。
+ */
+export async function deleteAgentMemory(
+  serverAddress: string,
+  agentId: string,
+  uid: number
+): Promise<void> {
+  const url = `${serverAddress}/api/agents/${agentId}/memory/${uid}`;
+  await httpDelete(url);
+  logger.info(`${TAG} deleteAgentMemory → agentId=${agentId} uid=${uid}`);
 }
 
 /**

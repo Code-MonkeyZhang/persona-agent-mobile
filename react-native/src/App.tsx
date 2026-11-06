@@ -16,6 +16,7 @@ import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
 import SkillDetailScreen from './agent-nav/SkillDetailScreen.tsx';
 import BuiltinDetailScreen from './agent-nav/BuiltinDetailScreen.tsx';
+import MemoryScreen from './agent-detail/MemoryScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
 import DeviceManageScreen from './device/DeviceManageScreen.tsx';
 import DeviceDetailScreen from './device/DeviceDetailScreen.tsx';
@@ -104,6 +105,11 @@ const AppNavigator = () => {
         name="BuiltinDetail"
         component={BuiltinDetailScreen}
         options={{ ...stackScreenOptions, title: t('detail.mcpTitle') }}
+      />
+      <Stack.Screen
+        name="MemoryScreen"
+        component={MemoryScreen}
+        options={{ ...stackScreenOptions, title: t('memory.title') }}
       />
       <Stack.Screen
         name="DeviceManage"
