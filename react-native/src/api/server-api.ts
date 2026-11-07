@@ -399,7 +399,7 @@ export type MemoryType = 'pinned' | 'triggered';
 export interface MemoryEntry {
   /** 编号，追加式分配，删除后不复用 */
   uid: number;
-  /** 标题，缺省截取内容开头 */
+  /** 标题，必填的简短话题标签 */
   title: string;
   /** 正文，一条自含句 */
   content: string;
@@ -416,9 +416,9 @@ export interface MemoryEntry {
 
 /** 新增记忆输入（对齐 @persona/shared 的 MemoryWriteInput 输出形态），时间章由服务端盖 */
 export interface MemoryWriteInput {
+  title: string;
   content: string;
   keys: string[];
-  title?: string;
   type: MemoryType;
   enabled: boolean;
 }

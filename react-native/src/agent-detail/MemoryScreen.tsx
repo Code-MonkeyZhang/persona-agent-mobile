@@ -89,11 +89,7 @@ const MemoryScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!address) return;
     try {
       if (editing === 'new') {
-        const { title, ...rest } = draft;
-        await createAgentMemory(address, agentId, {
-          ...rest,
-          ...(title ? { title } : {}),
-        });
+        await createAgentMemory(address, agentId, draft);
       } else if (typeof editing === 'number') {
         await updateAgentMemory(address, agentId, editing, draft);
       }
@@ -225,7 +221,7 @@ const MemoryScreen: React.FC<Props> = ({ navigation, route }) => {
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
-                  {entry.title || t('memory.untitled')}
+                  {entry.title}
                 </Text>
                 <Text style={styles.rowSub} numberOfLines={1}>
                   {sublineOf(entry)}
