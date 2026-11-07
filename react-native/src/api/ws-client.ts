@@ -72,6 +72,8 @@ export interface WsEventHandler {
       apiKey: string;
       model: string;
       languageBoost?: string;
+      /** 发起本次对话的设备编号，与 speak_ready 事件同源 */
+      initiatorDeviceId?: string;
     }
   ): void;
   onSpeakError(

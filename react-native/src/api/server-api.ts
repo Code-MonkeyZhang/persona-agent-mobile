@@ -8,6 +8,7 @@ import { FileType } from '../types/Chat.ts';
 import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
 import { logger } from '../lib/logger';
+import { getDeviceId } from '../utils/DeviceUtils.ts';
 import type {
   SessionChange,
   LauncherOrderDoc,
@@ -136,6 +137,8 @@ export type ServerMessage =
       apiKey: string;
       model: string;
       languageBoost?: string;
+      /** 发起本次对话的设备编号，接收端据此跳过非本机的播放，App 通知路径不携带 */
+      initiatorDeviceId?: string;
     }
   | {
       /** 服务端文本处理失败（清洗/压缩/翻译异常） */
@@ -307,6 +310,7 @@ export async function createSession(
  *
  * WebSocket 连接和消息接收由 ws-client 单例管理，
  * 调用方只需确保已通过 ws-client.subscribe 订阅了对应会话。
+ * 请求体携带本机设备编号，服务端将其写进语音事件，用于多端过滤播放。
  *
  * @param agentId Agent ID
  * @param sessionId 服务器端会话 UUID
@@ -328,15 +332,16 @@ export async function sendChatMessage(
   serverAddress: string,
   voiceEnabled: boolean
 ): Promise<SendChatResult> {
+  const deviceId = getDeviceId();
   const preview =
     typeof content === 'string'
       ? `"${content.substring(0, 80)}"`
       : `blocks:${content.length}`;
   logger.info(
-    `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content=${preview} voiceEnabled=${voiceEnabled}`
+    `${TAG} sendChatMessage agentId=${agentId} sessionId=${sessionId} content=${preview} voiceEnabled=${voiceEnabled} deviceId=${deviceId}`
   );
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/chat`;
-  const body = await httpPost(url, { content, voiceEnabled });
+  const body = await httpPost(url, { content, voiceEnabled, deviceId });
   const result = JSON.parse(body) as SendChatResult;
   logger.info(
     `${TAG} sendChatMessage ok, pendingId=${result.pendingId ?? 'none'}`

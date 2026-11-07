@@ -33,6 +33,7 @@ import { cacheDb } from '../storage/cache-db.ts';
 import { toServerChatMessages } from '../storage/sync-shapes.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
 import { toContentBlocks, fromContentBlocks } from '../api/server-api.ts';
+import { getDeviceId } from '../utils/DeviceUtils.ts';
 import {
   summarizeToolInput,
   type LiveRunState,
@@ -981,6 +982,14 @@ function registerWsHandler(): void {
       logger.info(`${TAG} turn aborted, partial kept`);
     },
     onSpeakReady: (sessionId, data) => {
+      if (sessionId !== useSessionStore.getState().activeSessionId) {
+        logger.info(`${TAG} speak_ready ignored: session not active`);
+        return;
+      }
+      if (data.initiatorDeviceId && data.initiatorDeviceId !== getDeviceId()) {
+        logger.info(`${TAG} speak_ready ignored: initiated by another device`);
+        return;
+      }
       const voice = useVoiceStore.getState();
       if (!voice.voiceEnabled) {
         logger.info(`${TAG} speak_ready ignored: voice disabled`);
