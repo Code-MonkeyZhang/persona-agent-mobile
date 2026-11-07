@@ -5,7 +5,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, AppState, StyleSheet } from 'react-native';
+import { Keyboard, AppState, StyleSheet, View, Text } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SystemBars } from 'react-native-edge-to-edge';
 import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
@@ -37,8 +38,32 @@ import i18n, { detectLanguage } from './i18n/index.ts';
 // 创建Stack导航器实例，用于全屏页面之间的跳转
 const Stack = createNativeStackNavigator<RouteParamList>();
 
+/** 语音配置类提醒的琥珀色样式，库内置只有 success error info 三色，警示色走自定义类型 */
+const toastConfig = {
+  warn: ({ text1 }: { text1?: string }) => (
+    <View style={styles.toastWarn}>
+      <Text style={styles.toastWarnText}>{text1}</Text>
+    </View>
+  ),
+};
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  toastWarn: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginHorizontal: 16,
+    alignSelf: 'center',
+  },
+  toastWarnText: {
+    color: '#92400e',
+    fontSize: 13,
+    lineHeight: 19,
+  },
 });
 
 /**
@@ -176,6 +201,8 @@ const AppWithTheme = () => {
               }}
             >
               <AppNavigator />
+              {/* 语音提醒 Toast 挂导航容器内一次，ChatScreen 与详情页共用 */}
+              <Toast config={toastConfig} />
             </NavigationContainer>
           </BottomSheetModalProvider>
         </KeyboardProvider>

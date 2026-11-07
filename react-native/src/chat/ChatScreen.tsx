@@ -123,7 +123,7 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== voiceStore ====================
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
-  const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const voiceReady = useVoiceStore((s) => s.voiceReady);
   const toggleVoice = useVoiceStore((s) => s.toggleVoice);
 
   // ==================== sessionStore ====================
@@ -185,6 +185,7 @@ function ChatScreen(): React.JSX.Element {
     return sessionTitles[activeSessionId] ?? route.params?.title ?? '';
   }, [activeSessionId, sessionTitles, route.params?.title, t]);
 
+  /** 语音开关永远可点，点击由 voiceStore 现查能力并按缺口弹一次性引导 */
   const handleToggleVoice = useCallback(() => {
     toggleVoice();
   }, [toggleVoice]);
@@ -204,7 +205,7 @@ function ChatScreen(): React.JSX.Element {
       headerLeft: () => (
         <HeaderLeftButtons
           voiceEnabled={voiceEnabled}
-          isSpeaking={isSpeaking}
+          voiceReady={voiceReady}
           onToggleVoice={handleToggleVoice}
           onBack={() => navigation.goBack()}
           colors={colors}
@@ -226,7 +227,7 @@ function ChatScreen(): React.JSX.Element {
     companion.companionOpen,
     companion.handleToggleCompanion,
     voiceEnabled,
-    isSpeaking,
+    voiceReady,
     colors,
     handleToggleVoice,
     handleOpenAgentApp,

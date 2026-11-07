@@ -250,5 +250,9 @@
     "loadFailed": "记忆加载失败",
     "saveFailed": "记忆保存失败",
     "deleteFailed": "记忆删除失败"
+  },
+  "voice": {
+    "onButNoKeyMobile": "MiniMax API Key 未配置，请在桌面端设置中配置语音 API，一次配置全端生效",
+    "onButNoVoiceMobile": "当前 Agent 未设置音色，请在桌面端 Agent 编辑器中配置音色，一次配置全端生效"
   }
 }

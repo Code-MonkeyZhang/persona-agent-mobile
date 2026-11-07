@@ -250,5 +250,9 @@
     "loadFailed": "Failed to load memories",
     "saveFailed": "Failed to save memory",
     "deleteFailed": "Failed to delete memory"
+  },
+  "voice": {
+    "onButNoKeyMobile": "The MiniMax API key is missing. Add it in the desktop app under Settings - Voice; it applies to all devices.",
+    "onButNoVoiceMobile": "This agent has no voice yet. Assign one in the desktop Agent editor; it applies to all devices."
   }
 }

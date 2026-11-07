@@ -8,19 +8,25 @@
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { logger } from './logger';
 
+/** 播放器生命周期回调，语音模块用它驱动动画段切换 */
+export interface AudioPlayerCallbacks {
+  onStart?: () => void;
+  onEnd?: () => void;
+}
+
 class AudioPlayerWrapper {
   private player: AudioPlayer | null = null;
-  private onPlaybackEnd: (() => void) | null = null;
+  private callbacks: AudioPlayerCallbacks = {};
 
   get isPlaying(): boolean {
     return this.player?.playing ?? false;
   }
 
   /**
-   * 注册播放结束回调，语音模块用它复位 isSpeaking 状态。
+   * 注册生命周期回调，整体替换。
    */
-  setOnPlaybackEnd(callback: () => void): void {
-    this.onPlaybackEnd = callback;
+  setPlaybackCallbacks(callbacks: AudioPlayerCallbacks): void {
+    this.callbacks = callbacks;
   }
 
   /**
@@ -32,7 +38,7 @@ class AudioPlayerWrapper {
       this.player.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish) {
           logger.debug('[Audio] playback finished');
-          this.onPlaybackEnd?.();
+          this.callbacks.onEnd?.();
         }
       });
       logger.debug('[Audio] player created');
@@ -52,6 +58,7 @@ class AudioPlayerWrapper {
     const player = this.ensurePlayer();
     player.replace(uri);
     player.play();
+    this.callbacks.onStart?.();
   }
 
   /** 停止当前播放 */

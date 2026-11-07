@@ -146,6 +146,8 @@ export type ServerMessage =
       sessionId: string;
       reason: SpeakErrorReason;
       message: string;
+      /** 发起本次对话的设备编号，与 speak_ready 同源，App 通知路径不携带 */
+      initiatorDeviceId?: string;
     }
   | { type: 'keepalive' }
   | { type: 'aborted'; sessionId: string; reason: string }

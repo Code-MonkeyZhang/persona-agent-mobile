@@ -79,7 +79,8 @@ export interface WsEventHandler {
   onSpeakError(
     sessionId: string,
     reason: SpeakErrorReason,
-    message: string
+    message: string,
+    initiatorDeviceId?: string
   ): void;
   /** 用户中止生成后服务端推送的确认事件 */
   onAborted(sessionId: string): void;
@@ -482,7 +483,12 @@ function handleMessage(msg: ServerMessage): void {
       logger.error(
         `${TAG} speak_error, reason=${msg.reason} message=${msg.message}`
       );
-      currentHandler?.onSpeakError(msg.sessionId, msg.reason, msg.message);
+      currentHandler?.onSpeakError(
+        msg.sessionId,
+        msg.reason,
+        msg.message,
+        msg.initiatorDeviceId
+      );
       break;
 
     case 'change':

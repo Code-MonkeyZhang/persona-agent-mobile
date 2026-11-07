@@ -230,7 +230,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         ttsApiKeyRef.current = config.apiKey;
       }
       if (!ttsApiKeyRef.current) {
-        Alert.alert(t('agent.voicePreviewFailed'));
+        // 缺 Key 指向桌面端配置入口，一次配置全端生效
+        Alert.alert(t('voice.onButNoKeyMobile'));
         return;
       }
       logger.info(
@@ -247,7 +248,11 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       await getAudioPlayer().play(filePath);
     } catch (e) {
       logger.error(`[AgentDetail] voice preview failed: ${e}`);
-      Alert.alert(t('agent.voicePreviewFailed'));
+      // 合成失败保留通用文案并附具体错误，MiniMax 返回的 status_msg 在这里可见
+      Alert.alert(
+        t('agent.voicePreviewFailed'),
+        e instanceof Error ? e.message : undefined
+      );
     } finally {
       setPreviewingVoice(false);
     }

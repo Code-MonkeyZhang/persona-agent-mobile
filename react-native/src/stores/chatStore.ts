@@ -372,12 +372,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .getState()
         .updateSessionPreview(sid, extractPreview(previewText));
       wsClient.subscribe(sid);
+      const voiceEnabled = useVoiceStore.getState().voiceEnabled;
+      useVoiceStore.getState().noteChatSent(voiceEnabled, sid);
       const result = await sendChatMessage(
         agentId,
         sid,
         payload,
         address,
-        useVoiceStore.getState().voiceEnabled
+        voiceEnabled
       );
       if (!result.success) {
         rollbackGeneratingState(get().displayedSessionId);
@@ -984,6 +986,8 @@ function registerWsHandler(): void {
     onSpeakReady: (sessionId, data) => {
       if (sessionId !== useSessionStore.getState().activeSessionId) {
         logger.info(`${TAG} speak_ready ignored: session not active`);
+        // 用户已切走会话，等待动画无处落地，收掉避免点亮后悬空
+        useVoiceStore.getState().clearSpeakStage();
         return;
       }
       if (data.initiatorDeviceId && data.initiatorDeviceId !== getDeviceId()) {
@@ -1000,8 +1004,13 @@ function registerWsHandler(): void {
       );
       voice.speak(data);
     },
-    onSpeakError: (_sessionId, _reason, message) => {
+    onSpeakError: (_sessionId, reason, message, initiatorDeviceId) => {
+      if (initiatorDeviceId && initiatorDeviceId !== getDeviceId()) {
+        logger.info(`${TAG} speak_error ignored: initiated by another device`);
+        return;
+      }
       logger.error(`${TAG} speak_error: ${message}`);
+      useVoiceStore.getState().noteSpeakError(reason);
     },
     onSubscribed: (sessionId, isGenerating, activity) => {
       if (!isGenerating) {
@@ -1062,6 +1071,7 @@ function registerWsHandler(): void {
         runningAgents: [...new Set(owners.values())],
       });
       logger.info(`${TAG} run set removed: ${sessionId}`);
+      useVoiceStore.getState().noteRoundEnded(sessionId);
     },
     onRunsSnapshot: (sessionIds, runs) => {
       // 快照整体替换，晚接入与重连端据此对齐 server 运行全量；旧服务端无归属条目时 Agent 集合置空不误转

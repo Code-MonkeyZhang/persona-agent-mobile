@@ -1,19 +1,37 @@
 /**
  * @file stores/voiceStore.ts
- * @description TTS 语音状态管理，负责语音开关、TTS 合成/播放流程控制
+ * @description 语音状态机，意图、能力、动画三样状态收口于此
+ *
+ * voiceEnabled 表达想不想听，MMKV 持久化；
+ * voiceReady 缓存能力是否齐备，由点击现查与 speak 事件回写；
+ * speakStage 驱动图标动画，回合结束点亮，出声转播报色，播完收回。
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import RNFS from 'react-native-fs';
+import Toast from 'react-native-toast-message';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
-import { logger } from '../lib/logger';
+import {
+  fetchAgentDetail,
+  fetchTtsConfig,
+} from '../api/server-api';
+import type { SpeakErrorReason } from '../api/server-api';
+import {
+  listMissing,
+  missingToI18nKey,
+  reasonToMissing,
+  shouldNotifyOnDowngrade,
+} from '../lib/voice-readiness';
 import {
   storage,
+  getServerAddress,
+  getServerAgentId,
   getTtsEnabled,
   saveTtsEnabled,
 } from '../storage/StorageUtils';
+import { logger } from '../lib/logger';
 import i18n from '../i18n/index.ts';
 
 const CACHE_DIR = `${RNFS.DocumentDirectoryPath}/tts_cache`;
@@ -27,13 +45,32 @@ export interface SpeakData {
   languageBoost?: string;
 }
 
-interface VoiceStore {
-  voiceEnabled: boolean;
-  isSpeaking: boolean;
+/** 播报动画三段，空闲无动画，点亮表语音生成中，跳动段表正在出声 */
+export type SpeakStage = 'idle' | 'pending' | 'speaking';
 
-  toggleVoice: () => void;
+interface VoiceStore {
+  /** 意图，想不想听 */
+  voiceEnabled: boolean;
+  /** 能力缓存，null 未查 true 齐备 false 缺失 */
+  voiceReady: boolean | null;
+  /** 动画段 */
+  speakStage: SpeakStage;
+
+  toggleVoice: () => Promise<void>;
+  refreshCapability: (notify: boolean) => Promise<boolean>;
+  noteChatSent: (voiceEnabled: boolean, sessionId: string) => void;
+  noteRoundEnded: (sessionId: string) => void;
+  noteSpeakError: (reason: SpeakErrorReason) => void;
+  clearSpeakStage: () => void;
   speak: (data: SpeakData) => Promise<void>;
   stopSpeaking: () => void;
+}
+
+/** 本机发起且开着语音的回合，等待动画只认这个会话 */
+let awaitVoiceSessionId: string | null = null;
+
+function showWarn(text: string) {
+  Toast.show({ type: 'warn', text1: text });
 }
 
 /**
@@ -76,28 +113,114 @@ export const useVoiceStore = create<VoiceStore>()(
   persist(
     (set, get) => ({
       voiceEnabled: false,
-      isSpeaking: false,
+      voiceReady: null,
+      speakStage: 'idle',
 
-      toggleVoice: () => {
+      /**
+       * 切换语音开关。开启前现查能力，缺口当场弹引导；关闭时停播并收动画。
+       */
+      toggleVoice: async () => {
         const next = !get().voiceEnabled;
-        logger.info(`[TTS] voice toggled: ${next ? 'enabled' : 'disabled'}`);
-        set({ voiceEnabled: next });
-        saveTtsEnabled(next);
         if (!next) {
+          logger.info('[TTS] voice toggled: disabled');
           get().stopSpeaking();
+          set({ voiceEnabled: false });
+          saveTtsEnabled(false);
+          return;
         }
+        await get().refreshCapability(true);
+        set({ voiceEnabled: true });
+        saveTtsEnabled(true);
+        logger.info('[TTS] voice toggled: enabled', {
+          ready: get().voiceReady,
+        });
       },
 
       /**
-       * 核心语音播报流程（简化版）：
-       * 文本已由服务端清洗/压缩/翻译，直接合成 → 写文件 → 播放。
+       * 现查能力并回写 voiceReady。notify 为真时按缺口逐条弹引导，供点击开启用；
+       * 静默路径供连接恢复后补查，只定图标视觉态不打扰。
+       */
+      refreshCapability: async (notify) => {
+        let hasKey = false;
+        let hasVoice = false;
+        const address = getServerAddress();
+        const agentId = getServerAgentId();
+        if (address && agentId) {
+          try {
+            hasKey = !!(await fetchTtsConfig(address)).apiKey;
+          } catch (err) {
+            logger.warn(`[TTS] key check failed: ${err}`);
+          }
+          try {
+            hasVoice = !!(await fetchAgentDetail(address, agentId)).voiceId;
+          } catch (err) {
+            logger.warn(`[TTS] agent check failed: ${err}`);
+          }
+        }
+        const missing = listMissing({ hasKey, hasVoice });
+        const next = missing.length === 0;
+        set({ voiceReady: next });
+        if (notify) {
+          missing.forEach((m) => showWarn(i18n.t(missingToI18nKey(m))));
+        }
+        logger.info('[TTS] capability checked', {
+          hasKey,
+          hasVoice,
+          ready: next,
+          notify,
+        });
+        return next;
+      },
+
+      /**
+       * 发消息时登记，只有本机发起且开着语音的回合才点亮等待动画。
+       */
+      noteChatSent: (voiceEnabled, sessionId) => {
+        awaitVoiceSessionId = voiceEnabled ? sessionId : null;
+      },
+
+      /**
+       * 回合结束，登记的会话对得上且能力未判缺失就点亮图标，覆盖整段生成等待。
+       */
+      noteRoundEnded: (sessionId) => {
+        if (sessionId !== awaitVoiceSessionId) return;
+        awaitVoiceSessionId = null;
+        if (!get().voiceEnabled || get().voiceReady === false) return;
+        set({ speakStage: 'pending' });
+        logger.info(`[TTS] round ended, pending lit, session=${sessionId}`);
+      },
+
+      /**
+       * speak_error 回写。配置类缺口转警示态，边沿触发只在就绪跌缺失那一次提醒；
+       * no_content 收掉动画静默返回。
+       */
+      noteSpeakError: (reason) => {
+        const missing = reasonToMissing(reason);
+        if (!missing) {
+          set({ speakStage: 'idle' });
+          return;
+        }
+        const prev = get().voiceReady;
+        set({ voiceReady: false, speakStage: 'idle' });
+        if (shouldNotifyOnDowngrade(prev, false)) {
+          showWarn(i18n.t(missingToI18nKey(missing)));
+        }
+        logger.info(`[TTS] speak_error handled, reason=${reason} prev=${prev}`);
+      },
+
+      clearSpeakStage: () => set({ speakStage: 'idle' }),
+
+      /**
+       * 核心语音播报流程：文本已由服务端清洗压缩，直连合成 → 写文件 → 播放。
+       * 合成期间保持点亮段，真正出声由播放器开始回调转播报段，
+       * 任何一步失败弹错误提示并收动画，图标态不动。
        */
       speak: async (data) => {
         logger.info(
           `[TTS] speak called, textLen=${data.speakText.length}, voiceId=${data.voiceId}`
         );
-
         try {
+          set({ voiceReady: true });
           const audio = await synthesize(
             data.speakText,
             data.voiceId,
@@ -106,24 +229,23 @@ export const useVoiceStore = create<VoiceStore>()(
             data.languageBoost
           );
           logger.debug(`[TTS] synthesized, audio size=${audio.byteLength}`);
-
           const filePath = await writeAudioFile(audio);
           logger.debug(`[TTS] audio written to ${filePath}`);
-
-          set({ isSpeaking: true });
-          await getAudioPlayer().play(filePath);
-          logger.debug('[TTS] playing...');
+          getAudioPlayer().play(filePath);
         } catch (err) {
           const message =
             err instanceof Error ? err.message : i18n.t('error.ttsFailed');
           logger.error(`[TTS] speak failed: ${message}`);
+          set({ speakStage: 'idle' });
+          Toast.show({ type: 'error', text1: message });
         }
       },
 
       stopSpeaking: () => {
         logger.info('[TTS] stopped');
+        awaitVoiceSessionId = null;
         getAudioPlayer().stop();
-        set({ isSpeaking: false });
+        set({ speakStage: 'idle' });
       },
     }),
     {
@@ -146,9 +268,9 @@ if (persisted) {
 }
 
 /**
- * 播放结束回调在模块加载时注册一次，语音播完时复位 isSpeaking。
+ * 播放器开始与结束回调在模块加载时挂接一次，驱动动画段在播报与空闲间切换。
  */
-getAudioPlayer().setOnPlaybackEnd(() => {
-  logger.debug('[TTS] playback ended');
-  useVoiceStore.setState({ isSpeaking: false });
+getAudioPlayer().setPlaybackCallbacks({
+  onStart: () => useVoiceStore.setState({ speakStage: 'speaking' }),
+  onEnd: () => useVoiceStore.setState({ speakStage: 'idle' }),
 });
