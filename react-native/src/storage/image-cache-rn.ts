@@ -17,6 +17,7 @@ export const imageCache = new ImageCache(
       (await RNFS.readDir(path)).map((item) => item.name),
     unlink: (path) => RNFS.unlink(path),
     moveFile: (from, to) => RNFS.moveFile(from, to),
+    copyFile: (from, to) => RNFS.copyFile(from, to),
     sha256: (path) => RNFS.hash(path, 'sha256'),
     download: (url, toFile) =>
       new Promise<{ statusCode: number; contentType?: string }>(

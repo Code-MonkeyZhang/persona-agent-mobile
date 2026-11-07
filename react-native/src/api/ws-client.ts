@@ -18,6 +18,7 @@ import type {
   CurrentActivity,
   RunningSessionEntry,
 } from './server-api.ts';
+import type { ContentBlock } from '../types/Chat.ts';
 import type { SessionChange } from '../storage/sync-shapes.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
@@ -71,12 +72,15 @@ export interface WsEventHandler {
       apiKey: string;
       model: string;
       languageBoost?: string;
+      /** 发起本次对话的设备编号，与 speak_ready 事件同源 */
+      initiatorDeviceId?: string;
     }
   ): void;
   onSpeakError(
     sessionId: string,
     reason: SpeakErrorReason,
-    message: string
+    message: string,
+    initiatorDeviceId?: string
   ): void;
   /** 用户中止生成后服务端推送的确认事件 */
   onAborted(sessionId: string): void;
@@ -95,7 +99,8 @@ export interface WsEventHandler {
   /** App 通知触发的回合开始信号，客户端据此放占位气泡并切入生成状态 */
   onAppNotification(sessionId: string, source: string, content: string): void;
   /** 普通用户消息落盘广播，空闲时据此追加用户气泡并切入生成态 */
-  onUserMessage(sessionId: string, content: string): void;
+  /** 普通用户消息落盘广播，content 为原始载荷，纯文本为字符串，带附件为块数组 */
+  onUserMessage(sessionId: string, content: string | ContentBlock[]): void;
   /** 待注入缓冲全量同步，忙时插话的灰气泡据此渲染 */
   onPendingChanged(sessionId: string, pending: PendingInput[]): void;
 }
@@ -458,7 +463,11 @@ function handleMessage(msg: ServerMessage): void {
 
     case 'user_message':
       logger.info(
-        `${TAG} user_message, sessionId=${msg.sessionId} contentLen=${msg.content.length}`
+        `${TAG} user_message, sessionId=${msg.sessionId} ${
+          typeof msg.content === 'string'
+            ? `contentLen=${msg.content.length}`
+            : `blocks=${msg.content.length}`
+        }`
       );
       currentHandler?.onUserMessage(msg.sessionId, msg.content);
       break;
@@ -474,7 +483,12 @@ function handleMessage(msg: ServerMessage): void {
       logger.error(
         `${TAG} speak_error, reason=${msg.reason} message=${msg.message}`
       );
-      currentHandler?.onSpeakError(msg.sessionId, msg.reason, msg.message);
+      currentHandler?.onSpeakError(
+        msg.sessionId,
+        msg.reason,
+        msg.message,
+        msg.initiatorDeviceId
+      );
       break;
 
     case 'change':

@@ -2,9 +2,12 @@ import 'react-native-gesture-handler';
 import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, StatusBar, AppState, StyleSheet } from 'react-native';
+import { Keyboard, AppState, StyleSheet, View, Text } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { SystemBars } from 'react-native-edge-to-edge';
 import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
@@ -14,6 +17,7 @@ import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
 import SkillDetailScreen from './agent-nav/SkillDetailScreen.tsx';
 import BuiltinDetailScreen from './agent-nav/BuiltinDetailScreen.tsx';
+import MemoryScreen from './agent-detail/MemoryScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
 import DeviceManageScreen from './device/DeviceManageScreen.tsx';
 import DeviceDetailScreen from './device/DeviceDetailScreen.tsx';
@@ -34,8 +38,32 @@ import i18n, { detectLanguage } from './i18n/index.ts';
 // 创建Stack导航器实例，用于全屏页面之间的跳转
 const Stack = createNativeStackNavigator<RouteParamList>();
 
+/** 语音配置类提醒的琥珀色样式，库内置只有 success error info 三色，警示色走自定义类型 */
+const toastConfig = {
+  warn: ({ text1 }: { text1?: string }) => (
+    <View style={styles.toastWarn}>
+      <Text style={styles.toastWarnText}>{text1}</Text>
+    </View>
+  ),
+};
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  toastWarn: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginHorizontal: 16,
+    alignSelf: 'center',
+  },
+  toastWarnText: {
+    color: '#92400e',
+    fontSize: 13,
+    lineHeight: 19,
+  },
 });
 
 /**
@@ -104,6 +132,11 @@ const AppNavigator = () => {
         options={{ ...stackScreenOptions, title: t('detail.mcpTitle') }}
       />
       <Stack.Screen
+        name="MemoryScreen"
+        component={MemoryScreen}
+        options={{ ...stackScreenOptions, title: t('memory.title') }}
+      />
+      <Stack.Screen
         name="DeviceManage"
         component={DeviceManageScreen}
         options={{ ...stackScreenOptions, title: t('device.manage') }}
@@ -142,7 +175,7 @@ const AppNavigator = () => {
 
 /**
  * 带主题的导航容器
- * - StatusBar: 显示时间/信号/电量的顶部状态栏，根据深色/浅色模式切换文字颜色
+ * - SystemBars: 系统栏图标随深浅色模式切换，安卓 edge-to-edge 下替代退役的 StatusBar API
  * - NavigationContainer: 管理所有页面的跳转和状态，包裹导航器使其具备页面跳转能力
  *   - onStateChange: 导航状态变化时触发的回调，以下操作都会触发：
  *     1. 页面跳转（如从聊天页跳转到设置页）
@@ -152,23 +185,27 @@ const AppNavigator = () => {
  *   - 此处用于每次切换页面时自动收起键盘，防止键盘遮挡其他页面内容
  */
 const AppWithTheme = () => {
-  const { colors } = useTheme();
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <SystemBars style="auto" />
       {/* 手势根视图：左滑删除等 RNGH 手势组件依赖此包装，原抽屉导航器自带的隐式包装已随抽屉移除 */}
       <GestureHandlerRootView style={styles.flex}>
-        {/* 底部弹层宿主：ActionSheet 的 BottomSheetModal 依赖此 Provider 渲染遮罩与面板 */}
-        <BottomSheetModalProvider>
-          {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
-          <NavigationContainer
-            onStateChange={(_) => {
-              Keyboard.dismiss();
-            }}
-          >
-            <AppNavigator />
-          </NavigationContainer>
-        </BottomSheetModalProvider>
+        {/* 键盘宿主：接管双端键盘事件与逐帧高度，安卓 edge-to-edge 的覆盖式键盘靠它避让 */}
+        <KeyboardProvider>
+          {/* 底部弹层宿主：ActionSheet 的 BottomSheetModal 依赖此 Provider 渲染遮罩与面板 */}
+          <BottomSheetModalProvider>
+            {/* 导航容器：管理页面跳转，页面切换时自动收起键盘 */}
+            <NavigationContainer
+              onStateChange={(_) => {
+                Keyboard.dismiss();
+              }}
+            >
+              <AppNavigator />
+              {/* 语音提醒 Toast 挂导航容器内一次，ChatScreen 与详情页共用 */}
+              <Toast config={toastConfig} />
+            </NavigationContainer>
+          </BottomSheetModalProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </>
   );

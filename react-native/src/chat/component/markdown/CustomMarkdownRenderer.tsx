@@ -1,9 +1,7 @@
 import React, { lazy, ReactElement, ReactNode, Suspense } from 'react';
 import {
-  Dimensions,
   ImageStyle,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextProps,
@@ -15,7 +13,6 @@ import {
 import type { RendererInterface } from 'react-native-marked';
 import { Renderer } from 'react-native-marked';
 import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import { Cell, Table, TableWrapper } from 'react-native-table-component';
 import RNFS from 'react-native-fs';
 import MDSvg from 'react-native-marked/src/components/MDSvg.tsx';
 import MDImage from 'react-native-marked/src/components/MDImage.tsx';
@@ -35,17 +32,11 @@ const MemoizedCodeHighlighter = React.memo(
     text,
     language,
     colors,
-    onPreviewToggle: _onPreviewToggle,
     isCompleted,
   }: {
     text: string;
     language?: string;
     colors: ColorScheme;
-    onPreviewToggle?: (
-      expanded: boolean,
-      height: number,
-      animated: boolean
-    ) => void;
     isCompleted?: boolean;
   }) => {
     const styles = createCustomStyles(colors);
@@ -104,30 +95,17 @@ export class CustomMarkdownRenderer
   extends Renderer
   implements RendererInterface
 {
-  private width = Dimensions.get('window').width;
-  private height = Dimensions.get('window').height;
   private colors: ColorScheme;
   private styles: ReturnType<typeof createCustomStyles>;
-  private onPreviewToggle?: (
-    expanded: boolean,
-    height: number,
-    animated: boolean
-  ) => void;
 
   constructor(
     private onImagePress: (pressMode: PressMode, url: string) => void,
     colors: ColorScheme,
-    _citations: never[] = [],
-    onPreviewToggle?: (
-      expanded: boolean,
-      height: number,
-      animated: boolean
-    ) => void
+    _citations: never[] = []
   ) {
     super();
     this.colors = colors;
     this.styles = createCustomStyles(colors);
-    this.onPreviewToggle = onPreviewToggle;
   }
 
   getTextView(children: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -244,7 +222,6 @@ export class CustomMarkdownRenderer
           text={text}
           language={language}
           colors={this.colors}
-          onPreviewToggle={this.onPreviewToggle}
           isCompleted={isCompleted}
         />
       );
@@ -253,72 +230,95 @@ export class CustomMarkdownRenderer
     }
   }
 
+  /**
+   * 表格自绘渲染，普通 View 行列布局替代表格库与横向滚动区。
+   *   滚动区嵌进裁剪气泡再嵌进虚拟列表行会构成测量反馈循环，
+   *   行高随兄弟行挂载持续增长，纯 View 让高度完全由内容决定。
+   */
   table(
     header: ReactNode[][],
     rows: ReactNode[][][],
     tableStyle?: ViewStyle,
-    rowStyle?: ViewStyle,
+    _rowStyle?: ViewStyle,
     cellStyle?: ViewStyle
   ): React.ReactNode {
-    const widthArr = getTableWidthArr(header.length, this.width, this.height);
     const { borderWidth, borderColor, ...tableStyleRest } = tableStyle || {};
-
-    const headerTableStyle = {
-      ...rowStyle,
-      backgroundColor: this.colors.surface,
-    };
+    const line = borderWidth ?? 1;
+    const edge = typeof borderColor === 'string' ? borderColor : '#d0d7de';
+    const columnSeparator = (index: number) =>
+      index > 0 ? { borderLeftWidth: line, borderColor: edge } : null;
 
     return (
-      <ScrollView horizontal={true} style={this.styles.tableScroll}>
-        <Table
-          borderStyle={{
-            borderWidth,
-            borderColor,
-          }}
-          style={tableStyleRest}
-        >
-          <TableWrapper style={headerTableStyle}>
-            {header.map((headerCol, index) => {
-              if (React.isValidElement(headerCol[0])) {
-                const headerCell = headerCol[0] as ReactElement<TextProps>;
-                headerCol[0] = React.cloneElement(headerCell, {
-                  style: {
-                    ...headerCell.props.style,
-                    fontWeight: '500',
-                  },
-                });
-              }
-              return (
-                <Cell
-                  width={widthArr[index]}
-                  style={this.styles.cell}
-                  key={`${index}`}
-                  data={<View style={cellStyle}>{headerCol}</View>}
-                />
-              );
-            })}
-          </TableWrapper>
-          {rows.map((rowData, index) => {
+      <View
+        style={[
+          tableStyleRest,
+          this.styles.tableShell,
+          {
+            borderWidth: line,
+            borderColor: edge,
+          },
+        ]}
+      >
+        <View style={this.styles.tableHeaderRow}>
+          {header.map((headerCol, index) => {
+            if (React.isValidElement(headerCol[0])) {
+              const headerCell = headerCol[0] as ReactElement<TextProps>;
+              headerCol[0] = React.cloneElement(headerCell, {
+                style: {
+                  ...headerCell.props.style,
+                  fontWeight: '500',
+                },
+              });
+            }
             return (
-              <TableWrapper key={`${index}`} style={rowStyle}>
-                {rowData.map((cellData, cellIndex) => {
-                  return (
-                    <Cell
-                      width={widthArr[cellIndex]}
-                      style={this.styles.cell}
-                      key={`${cellIndex}`}
-                      data={<View style={cellStyle}>{cellData}</View>}
-                    />
-                  );
-                })}
-              </TableWrapper>
+              <View
+                key={`${index}`}
+                style={[
+                  cellStyle,
+                  this.styles.cell,
+                  this.styles.tableColumn,
+                  columnSeparator(index),
+                ]}
+              >
+                {headerCol}
+              </View>
             );
           })}
-        </Table>
-      </ScrollView>
+        </View>
+        {rows.map((rowData, index) => (
+          <View
+            key={`${index}`}
+            style={[
+              this.styles.tableRow,
+              {
+                borderTopWidth: line,
+                borderColor: edge,
+              },
+            ]}
+          >
+            {rowData.map((cellData, cellIndex) => (
+              <View
+                key={`${cellIndex}`}
+                style={[
+                  cellStyle,
+                  this.styles.cell,
+                  this.styles.tableColumn,
+                  columnSeparator(cellIndex),
+                ]}
+              >
+                {cellData}
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
     );
   }
 
+  /**
+   * 列表渲染。li 数组的节点由 Parser 多个方法产出，不保证自带 key，
+   * cloneElement 统一补 key 消除列表渲染的 key 告警。
+   */
   list(
     ordered: boolean,
     li: ReactNode[],
@@ -335,31 +335,15 @@ export class CustomMarkdownRenderer
         key={this.getKey()}
         startIndex={startIndex}
       >
-        {li.map((node) => node)}
+        {li.map((node, index) =>
+          React.isValidElement(node)
+            ? React.cloneElement(node, { key: `li-${index}` })
+            : node
+        )}
       </MarkedList>
     );
   }
 }
-
-const getTableWidthArr = (
-  totalCols: number,
-  windowWidth: number,
-  windowHeight: number
-) => {
-  if (totalCols < 1) {
-    return [];
-  }
-
-  return Array(totalCols)
-    .fill(0)
-    .map(() => {
-      if (windowHeight > windowWidth) {
-        return Math.min(Math.floor((windowWidth - 64) * (1 / 2)), 170);
-      } else {
-        return Math.min(Math.floor((windowWidth - 182) * (1 / 5)), 170);
-      }
-    });
-};
 
 const createCustomStyles = (colors: ColorScheme) =>
   StyleSheet.create({
@@ -416,7 +400,22 @@ const createCustomStyles = (colors: ColorScheme) =>
     cell: {
       minHeight: 32,
     },
-    tableScroll: {
-      marginVertical: 4,
+    /** 表格外壳的圆角与裁剪，纯 View 内容在裁剪容器内高度仍由内容决定 */
+    tableShell: {
+      borderRadius: 6,
+      overflow: 'hidden',
+    },
+    /** 表头行横排加底色 */
+    tableHeaderRow: {
+      flexDirection: 'row',
+      backgroundColor: colors.surface,
+    },
+    /** 数据行横排，上边线由调用处按线宽补 */
+    tableRow: {
+      flexDirection: 'row',
+    },
+    /** 列等分气泡宽 */
+    tableColumn: {
+      flex: 1,
     },
   });

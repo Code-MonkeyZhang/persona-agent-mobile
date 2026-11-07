@@ -9,6 +9,7 @@ import {
   Terminal,
   FileText,
   Globe,
+  BookHeart,
   type LucideIcon,
 } from 'lucide-react-native';
 
@@ -23,7 +24,7 @@ export interface BuiltInTool {
   instructions: string;
 }
 
-/** 内置工具清单，终端、文件与网页各算一项 */
+/** 内置工具清单，终端、文件、网页与记忆各算一项 */
 export const BUILT_IN_TOOLS: BuiltInTool[] = [
   {
     id: 'bash',
@@ -93,5 +94,32 @@ export const BUILT_IN_TOOLS: BuiltInTool[] = [
 ## 安全边界
 
 - 内网地址与非常规协议会被 SSRF 防护拦截`,
+  },
+  {
+    id: 'memory',
+    icon: BookHeart,
+    name: '记忆',
+    desc: '读写关于用户的长期记忆',
+    tools: [
+      {
+        name: 'memory',
+        description: '写入、更新、遗忘与检索长期记忆条目',
+      },
+    ],
+    instructions: `## 能力说明
+
+维护关于用户的长期记忆，条目跨会话持久保存。常驻条目每轮注入，触发条目在话题命中时自动送入对话。
+
+## 使用方式
+
+- write 新增一条记忆，content 是一句自含的事实
+- update 按编号修改条目，只传要改的字段
+- forget 按编号删除，立即生效
+- search 按关键词检索，不知道编号时先查
+
+## 安全边界
+
+- 只记持久事实，不记一次性请求细节与本轮发生的事
+- 同文条目会被查重拦截，重复内容走 update 修改已有条目`,
   },
 ];

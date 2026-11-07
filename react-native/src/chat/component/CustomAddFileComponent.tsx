@@ -1,3 +1,9 @@
+/**
+ * @file CustomAddFileComponent.tsx
+ * @description 输入栏的加号按钮，唤起拍照、相册、文件三条选择入口。
+ * 选择器产物归一为 PickedFile 后经 onFileSelected 进入附件映射，
+ * 图片与文件的分流和体积数量的过滤由附件状态统一执行，本组件不做。
+ */
 import {
   ActionSheetIOS,
   Alert,
@@ -11,22 +17,14 @@ import {
   launchCamera,
   launchImageLibrary,
 } from 'react-native-image-picker';
-import { FileInfo, FileType } from '../../types/Chat.ts';
 import * as DocumentPicker from 'expo-document-picker';
-import { saveFile } from '../util/FileUtils.ts';
-import {
-  createVideoThumbnail,
-  getImageMetaData,
-  getVideoMetaData,
-  Image as Img,
-} from 'react-native-compressor';
-import { logger } from '../../lib/logger';
-import { getTextModel } from '../../storage/StorageUtils.ts';
-import { useTheme, ColorScheme } from '../../theme/index.ts';
 import { Plus } from 'lucide-react-native';
+import { useTheme, ColorScheme } from '../../theme/index.ts';
+import { logger } from '../../lib/logger';
+import type { PickedFile } from '../util/FileUtils.ts';
 
 interface CustomAddFileComponentProps {
-  onFileSelected: (files: FileInfo[]) => void;
+  onFileSelected: (files: PickedFile[]) => void;
 }
 
 export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
@@ -34,84 +32,6 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  /** 处理 DocumentPicker 返回的文件：校验格式、压缩、保存 */
-  const processFiles = useCallback(
-    async (
-      pickResults: DocumentPicker.DocumentPickerAsset[]
-    ): Promise<FileInfo[]> => {
-      const files: FileInfo[] = [];
-      await Promise.all(
-        pickResults.map(async (pickResult) => {
-          if (pickResult.name && pickResult.uri) {
-            const fileName = getFileNameWithoutExtension(pickResult.name);
-            const fileNameArr = pickResult.name.split('.');
-            let format = fileNameArr[fileNameArr.length - 1].toLowerCase();
-            const fileType = getFileType(format);
-            if (fileType === FileType.unSupported) {
-              return;
-            }
-            if (
-              fileType === FileType.document &&
-              (pickResult.size ?? 0) >= MAX_FILE_SIZE
-            ) {
-              return;
-            }
-            let localFileUrl: string | null;
-            let width = 0;
-            let height = 0;
-            if (fileType === FileType.image) {
-              pickResult.uri = decodeURI(pickResult.uri);
-              if (format === 'png' || format === 'jpg' || format === 'jpeg') {
-                pickResult.uri = await Img.compress(pickResult.uri);
-                const metaData = await getImageMetaData(pickResult.uri);
-                format = metaData.extension;
-                width = metaData.ImageWidth;
-                height = metaData.ImageHeight;
-              }
-              localFileUrl = await saveFile(pickResult.uri, pickResult.name);
-            } else if (fileType === FileType.video) {
-              localFileUrl = pickResult.uri;
-            } else {
-              localFileUrl = await saveFile(
-                decodeURI(pickResult.uri),
-                pickResult.name
-              );
-            }
-
-            let thumbnailUrl;
-            if (fileType === FileType.video) {
-              if (Platform.OS === 'android') {
-                localFileUrl = await saveFile(pickResult.uri, fileName);
-                pickResult.uri = localFileUrl!;
-              }
-              const thumbnail = await createVideoThumbnail(pickResult.uri);
-              thumbnailUrl =
-                (await saveFile(thumbnail.path, fileName + '.jpeg')) ?? '';
-              const metaData = await getVideoMetaData(pickResult.uri);
-              width = metaData.width;
-              height = metaData.height;
-            }
-
-            if (localFileUrl) {
-              files.push({
-                fileName: fileName,
-                url: localFileUrl,
-                videoThumbnailUrl: thumbnailUrl,
-                fileSize: pickResult.size ?? 0,
-                type: fileType,
-                format: format.toLowerCase() === 'jpg' ? 'jpeg' : format,
-                width: width,
-                height: height,
-              });
-            }
-          }
-        }) ?? []
-      );
-      return files;
-    },
-    []
-  );
 
   /**
    * 处理 image-picker 响应：权限被拒时弹提示引导，其余错误记日志。
@@ -133,7 +53,18 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
         }
         return;
       }
-      const files = await getFiles(res);
+      const files = (res.assets ?? [])
+        .filter((asset): asset is typeof asset & { uri: string } =>
+          Boolean(asset.uri)
+        )
+        .map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.fileName ?? `photo_${Date.now()}.jpeg`,
+          fileSize: asset.fileSize ?? 0,
+          mimeType: asset.type,
+          width: asset.width,
+          height: asset.height,
+        }));
       if (files.length > 0) {
         onFileSelected(files);
       }
@@ -141,13 +72,11 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
     [onFileSelected]
   );
 
-  /** 拍照选文件 */
+  /** 拍照，相册与相机都收纯图片，视频入口退役 */
   const handleCamera = () => {
     launchCamera({
       saveToPhotos: false,
-      mediaType: isVideoSupported() ? 'mixed' : 'photo',
-      videoQuality: 'high',
-      durationLimit: 30,
+      mediaType: 'photo',
       includeBase64: false,
       includeExtra: true,
       presentationStyle: 'fullScreen',
@@ -158,11 +87,11 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       });
   };
 
-  /** 从相册选文件 */
+  /** 从相册选图片 */
   const handlePhotos = () => {
     launchImageLibrary({
       selectionLimit: 0,
-      mediaType: isVideoSupported() ? 'mixed' : 'photo',
+      mediaType: 'photo',
       includeBase64: false,
       includeExtra: true,
       assetRepresentationMode: 'current',
@@ -185,7 +114,14 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       if (result.canceled) {
         return;
       }
-      const files = await processFiles(result.assets ?? []);
+      const files = (result.assets ?? [])
+        .filter((asset) => asset.uri && asset.name)
+        .map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.name!,
+          fileSize: asset.size ?? 0,
+          mimeType: asset.mimeType,
+        }));
       if (files.length > 0) {
         onFileSelected(files);
       }
@@ -239,134 +175,6 @@ export const CustomAddFileComponent: React.FC<CustomAddFileComponentProps> = ({
       <Plus size={22} color={colors.textSecondary} />
     </TouchableOpacity>
   );
-};
-
-const MAX_FILE_SIZE = 4.5 * 1024 * 1024;
-export const IMAGE_FORMATS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-export const VIDEO_FORMATS = ['mp4', 'mov', 'mkv', 'webm'];
-export const EXTRA_DOCUMENT_FORMATS = [
-  'json',
-  'py',
-  'ts',
-  'tsx',
-  'js',
-  'kt',
-  'java',
-  'swift',
-  'c',
-  'm',
-  'h',
-  'sh',
-  'cpp',
-  'rs',
-  'go',
-  'class',
-  'cs',
-  'php',
-  'rb',
-  'dart',
-  'sql',
-  'css',
-  'xml',
-  'yaml',
-  'yml',
-];
-export const DOCUMENT_FORMATS = [
-  'pdf',
-  'csv',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'html',
-  'txt',
-  'md',
-  ...EXTRA_DOCUMENT_FORMATS,
-];
-
-export const getFileType = (format: string) => {
-  if (isImageFormat(format)) {
-    return FileType.image;
-  } else if (isVideoFormat(format)) {
-    return FileType.video;
-  } else if (isDocumentFormat(format)) {
-    return FileType.document;
-  } else {
-    return FileType.unSupported;
-  }
-};
-
-export const isImageFormat = (format: string) => {
-  return IMAGE_FORMATS.includes(format);
-};
-
-export const isVideoFormat = (format: string) => {
-  return VIDEO_FORMATS.includes(format);
-};
-
-export const isDocumentFormat = (format: string) => {
-  return DOCUMENT_FORMATS.includes(format);
-};
-
-const getFileNameWithoutExtension = (fileName: string) => {
-  return fileName.substring(0, fileName.lastIndexOf('.')).trim();
-};
-
-export const isVideoSupported = (): boolean => {
-  const textModelId = getTextModel().modelId;
-  return textModelId.includes('nova');
-};
-
-const getFiles = async (res: ImagePickerResponse) => {
-  const files: FileInfo[] = [];
-  await Promise.all(
-    res.assets?.map(async (media) => {
-      if (media.fileName && media.uri) {
-        const fileName = getFileNameWithoutExtension(media.fileName);
-        const fileNameArr = media.fileName.split('.');
-        let format = fileNameArr[fileNameArr.length - 1].toLowerCase();
-        const fileType = getFileType(format);
-        if (fileType === FileType.unSupported) {
-          return;
-        }
-        let width = media.width;
-        let height = media.height;
-        if (format === 'png' || format === 'jpg' || format === 'jpeg') {
-          media.uri = await Img.compress(media.uri);
-          const metaData = await getImageMetaData(media.uri);
-          format = metaData.extension;
-          width = metaData.ImageWidth;
-          height = metaData.ImageHeight;
-        }
-        let thumbnailUrl;
-        if (fileType === FileType.video) {
-          const thumbnail = await createVideoThumbnail(media.uri);
-          thumbnailUrl =
-            (await saveFile(thumbnail.path, fileName + '.jpeg')) ?? '';
-        }
-        let localFileUrl: string | null;
-        if (fileType !== FileType.video) {
-          localFileUrl = await saveFile(media.uri, media.fileName);
-        } else {
-          localFileUrl = media.uri;
-        }
-
-        if (localFileUrl) {
-          files.push({
-            fileName: fileName,
-            url: localFileUrl,
-            videoThumbnailUrl: thumbnailUrl,
-            fileSize: media.fileSize ?? 0,
-            type: fileType,
-            format: format === 'jpg' ? 'jpeg' : format,
-            width: width,
-            height: height,
-          });
-        }
-      }
-    }) ?? []
-  );
-  return files;
 };
 
 const createStyles = (colors: ColorScheme) =>

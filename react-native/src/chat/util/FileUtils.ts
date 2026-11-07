@@ -1,222 +1,267 @@
 /**
  * @file FileUtils.ts
- * @description 聊天附件的文件处理工具集：
- * - 保存用户选中的文件到 App 存储目录（自动处理重名避免覆盖）
- * - 读取文件内容转成文本格式，用于发送给 AI 分析
- * - 统一处理 iPhone 和 Android 的文件路径差异
- * - 限制附件数量（图片 ≤20、文档 ≤5），超出自动截断
- * - 检查视频是否压缩完毕，未完成则不允许发送
- * - 用户只发文件没打字时，自动生成描述如 "Summarize these 2 images and 1 doc"
+ * @description 聊天附件的工具集：
+ * - 上限常量与图片 MIME 白名单，数量二十合计、单件二十兆，对齐服务端口径
+ * - 选择器产物到附件草稿的进入映射，声明 MIME 命中白名单按图片收留，其余按文件收留，不读字节不嗅探
+ * - 发送前的图片压缩判定，达标原样返回保 gif 动画，超限交给 compressor 按限值压回
+ * - 展示预设与体积格式化，含九档类型徽章配色，文件卡渲染共用
  */
 import RNFS from 'react-native-fs';
-import { Platform } from 'react-native';
+import { getImageMetaData, Image as Img } from 'react-native-compressor';
+import {
+  File,
+  FileArchive,
+  FileCode2,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileType2,
+  Presentation,
+} from 'lucide-react-native';
+import type { ComponentType } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { FileInfo, FileType } from '../../types/Chat.ts';
-import { getTextModel } from '../../storage/StorageUtils.ts';
+import { MIME_BY_EXT } from '../../api/server-api.ts';
 import { logger } from '../../lib/logger';
 
-/**
- * 将源文件复制到应用沙箱的 files/ 目录下。
- * 如果目标路径已存在同名文件，自动在文件名后追加 (1), (2) 等编号避免覆盖。
- * @param sourceUrl 源文件 URI（可以是 content://、file:// 等）
- * @param fileName 目标文件名（含扩展名）
- * @returns 保存后的本地路径，失败时返回 null
- */
-export const saveFile = async (sourceUrl: string, fileName: string) => {
-  try {
-    const filesDir = `${RNFS.DocumentDirectoryPath}/files`;
-    const filesDirExists = await RNFS.exists(filesDir);
-    if (!filesDirExists) {
-      await RNFS.mkdir(filesDir);
-    }
-    const uniqueFileName = await getUniqueFileName(filesDir, fileName);
-    const destinationPath = `${filesDir}/${uniqueFileName}`;
-    await RNFS.copyFile(sourceUrl, destinationPath);
-    return Platform.OS === 'android'
-      ? `file://${destinationPath}`
-      : `files/${uniqueFileName}`;
-  } catch (error) {
-    logger.warn('Error saving file:', error);
-  }
-  return null;
-};
+/** 图片附件的 MIME 白名单，命中走图片通道，其余一律视为文件 */
+export const IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+];
 
-/** 读取文件内容为 base64 编码字符串 */
-export const getFileBytes = async (fileUrl: string) => {
-  try {
-    const fullFileUrl = getFullFileUrl(fileUrl);
-    return await RNFS.readFile(fullFileUrl, 'base64');
-  } catch (error) {
-    logger.warn('Error reading image file:', fileUrl, error);
-    throw error;
-  }
-};
+/** 每条消息附件合计上限，图片与文件混算 */
+export const MAX_ATTACHMENTS = 20;
 
-/** 读取文本文件内容为 utf8 字符串 */
-export const getFileTextContent = async (fileUrl: string): Promise<string> => {
-  try {
-    const fullFileUrl = getFullFileUrl(fileUrl);
-    return await RNFS.readFile(fullFileUrl, 'utf8');
-  } catch (error) {
-    logger.warn('Error reading text file:', fileUrl, error);
-    throw error;
-  }
+/** 单个附件入口体积上限，超过不收并提示 */
+export const MAX_ATTACH_BYTES = 20 * 1024 * 1024;
+
+/** 图片压缩判定的长边像素与体积字节阈值，达标原样上传 */
+const IMAGE_MAX_EDGE = 2048;
+const IMAGE_MAX_BYTES = 4.5 * 1024 * 1024;
+
+/** 三条选择入口的产物公共形状，各选择器在调用侧归一 */
+export interface PickedFile {
+  uri: string;
+  fileName: string;
+  fileSize: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+}
+
+/** 取小写扩展名，jpg 归一为 jpeg，无扩展名返回空串 */
+export const extensionOf = (fileName: string): string => {
+  if (!fileName.includes('.')) return '';
+  const ext = fileName.split('.').pop() ?? '';
+  return (ext === 'jpg' ? 'jpeg' : ext).toLowerCase();
 };
 
 /**
- * 生成不重复的文件名。如果目标目录已存在同名文件，
- * 在文件名后追加 (1), (2) 等编号直到找到一个不存在的名称。
+ * 单个选择器产物转附件草稿。
+ * 声明 MIME 命中白名单按图片收留并保留宽高，其余按文件收留，不读字节不嗅探。
  */
-const getUniqueFileName = async (
-  basePath: string,
-  originalFileName: string
-): Promise<string> => {
-  const lastDotIndex = originalFileName.lastIndexOf('.');
-  const nameWithoutExt = originalFileName.substring(0, lastDotIndex);
-  const extension = originalFileName.substring(lastDotIndex);
+export function intakeFile(picked: PickedFile): FileInfo {
+  const isImage =
+    !!picked.mimeType && IMAGE_MIME_TYPES.includes(picked.mimeType);
+  return {
+    id: uuidv4(),
+    fileName: picked.fileName,
+    url: picked.uri,
+    fileSize: picked.fileSize,
+    format: extensionOf(picked.fileName),
+    type: isImage ? FileType.image : FileType.document,
+    width:
+      isImage && picked.width && picked.width > 0 ? picked.width : undefined,
+    height:
+      isImage && picked.height && picked.height > 0 ? picked.height : undefined,
+    status: 'ready',
+  };
+}
 
-  let counter = 0;
-  let finalFileName = originalFileName;
-  let finalPath = `${basePath}/${finalFileName}`;
-
-  while (await RNFS.exists(finalPath)) {
-    counter++;
-    finalFileName = `${nameWithoutExt}(${counter})${extension}`;
-    finalPath = `${basePath}/${finalFileName}`;
-  }
-  return finalFileName;
-};
+/** 压缩判定的产物，地址与格式与宽高与体积随产物重取 */
+export interface CompressedImage {
+  uri: string;
+  mimeType: string;
+  format: string;
+  width?: number;
+  height?: number;
+  bytes: number;
+}
 
 /**
- * 将相对文件路径转换为绝对路径。
- * - Android：直接返回原始路径（已是 file:// 绝对路径）
- * - iOS "files/" 前缀：DocumentDirectoryPath 下的相对路径，拼接完整路径
- * - iOS 其他：取文件名部分拼接到 DocumentDirectoryPath/files/ 下
+ * 发送前的图片压缩判定。
+ * - 长边不超过 2048 像素且体积不超过 4.5MB 的原样返回，一个字节不动，gif 动画因此保留
+ * - 超限图交给 compressor 按限值压回，格式与宽高与体积按压缩产物重取
  */
-export const getFullFileUrl = (url: string) => {
-  if (Platform.OS === 'android') {
-    return url;
-  } else if (url.startsWith('files/')) {
-    return `${RNFS.DocumentDirectoryPath}/${url}`;
-  } else {
-    return (
-      RNFS.DocumentDirectoryPath +
-      '/files' +
-      url.substring(url.lastIndexOf('/'))
-    );
+export async function compressImageIfNeeded(
+  item: FileInfo
+): Promise<CompressedImage> {
+  const longEdge = Math.max(item.width ?? 0, item.height ?? 0);
+  if (longEdge <= IMAGE_MAX_EDGE && item.fileSize <= IMAGE_MAX_BYTES) {
+    return {
+      uri: item.url,
+      mimeType: MIME_BY_EXT[item.format] ?? 'image/jpeg',
+      format: item.format,
+      width: item.width,
+      height: item.height,
+      bytes: item.fileSize,
+    };
   }
-};
-
-/** 图片数量上限 */
-const MAX_IMAGES = 20;
-/** 文档数量上限 */
-const MAX_DOCUMENTS = 5;
-/** Nova 模型文件总数上限 */
-const MAX_NOVA_FILES = 5;
-/** Nova 模型视频数量上限 */
-const MAX_NOVA_VIDEOS = 1;
-
-/**
- * 检查新增文件是否超过数量限制，超出的部分会被截断并弹出提示。
- * Nova 模型有独立的限制规则（总文件数 ≤ 5，视频数 ≤ 1）。
- * @param prevFiles 已选文件列表
- * @param newFiles 新增文件列表
- * @returns 合并后的文件列表（超出限制的已截断）
- */
-export const checkFileNumberLimit = (
-  prevFiles: FileInfo[],
-  newFiles: FileInfo[]
-) => {
-  const existingImages = prevFiles.filter(
-    (file) => file.type === FileType.image
+  const uri = await Img.compress(item.url, {
+    maxWidth: IMAGE_MAX_EDGE,
+    maxHeight: IMAGE_MAX_EDGE,
+  });
+  const meta = await getImageMetaData(uri);
+  const stat = await RNFS.stat(uri);
+  const format = extensionOf(`image.${meta.extension}`);
+  logger.info(
+    `[attachments] image compressed, name=${item.fileName} before=${item.fileSize} after=${stat.size} format=${format}`
   );
-  const existingDocs = prevFiles.filter(
-    (file) => file.type === FileType.document
-  );
-  const newImages = newFiles.filter((file) => file.type === FileType.image);
-  const newDocs = newFiles.filter((file) => file.type === FileType.document);
+  return {
+    uri,
+    mimeType: MIME_BY_EXT[format] ?? 'image/jpeg',
+    format,
+    width: meta.ImageWidth,
+    height: meta.ImageHeight,
+    bytes: stat.size,
+  };
+}
 
-  const totalImages = existingImages.length + newImages.length;
-  const totalDocs = existingDocs.length + newDocs.length;
+/** 文件卡的展示预设，图标与类型标签与徽章配色按扩展名命中 */
+export interface AttachmentPresentation {
+  icon: ComponentType<{
+    size?: number;
+    color?: string;
+    style?: { marginRight: number };
+  }>;
+  typeLabel: string;
+  /** 徽章底色与图标色，文件类型装饰色不进主题令牌，作为预设数据沉淀 */
+  iconBg: string;
+  iconColor: string;
+}
 
-  let processedNewImages = newImages;
-  let processedNewDocs = newDocs;
+/** 预设条目在展示形状之上携带扩展名清单，配色换算自桌面端 Tailwind 色板配对 */
+interface PresentationPreset extends AttachmentPresentation {
+  extensions: string[];
+}
 
-  if (isNova()) {
-    if (prevFiles.length >= MAX_NOVA_FILES) {
-      return prevFiles;
-    }
-    const existingVideos = prevFiles.filter(
-      (file) => file.type === FileType.video
-    ).length;
-    const newVideos = newFiles.filter((file) => file.type === FileType.video);
+const PRESENTATIONS: PresentationPreset[] = [
+  {
+    icon: FileText,
+    typeLabel: 'PDF',
+    iconBg: '#FEE2E2',
+    iconColor: '#B91C1C',
+    extensions: ['pdf'],
+  },
+  {
+    icon: FileType2,
+    typeLabel: 'WORD',
+    iconBg: '#DBEAFE',
+    iconColor: '#1D4ED8',
+    extensions: ['doc', 'docx', 'rtf'],
+  },
+  {
+    icon: FileSpreadsheet,
+    typeLabel: 'EXCEL',
+    iconBg: '#DCFCE7',
+    iconColor: '#15803D',
+    extensions: ['xls', 'xlsx', 'csv'],
+  },
+  {
+    icon: Presentation,
+    typeLabel: 'PPT',
+    iconBg: '#FFEDD5',
+    iconColor: '#C2410C',
+    extensions: ['ppt', 'pptx'],
+  },
+  {
+    icon: FileCode2,
+    typeLabel: 'CODE',
+    iconBg: '#E0E7FF',
+    iconColor: '#4338CA',
+    extensions: [
+      'ts',
+      'tsx',
+      'js',
+      'jsx',
+      'py',
+      'rs',
+      'go',
+      'java',
+      'c',
+      'cpp',
+      'h',
+      'cs',
+      'rb',
+      'sh',
+      'json',
+      'yaml',
+      'yml',
+      'toml',
+      'xml',
+      'html',
+      'css',
+      'sql',
+    ],
+  },
+  {
+    icon: FileText,
+    typeLabel: 'TEXT',
+    iconBg: '#F1F5F9',
+    iconColor: '#334155',
+    extensions: ['md', 'txt', 'log', 'ini', 'cfg'],
+  },
+  {
+    icon: FileArchive,
+    typeLabel: 'ARCHIVE',
+    iconBg: '#FEF3C7',
+    iconColor: '#B45309',
+    extensions: ['zip', 'tar', 'gz', '7z', 'rar'],
+  },
+  {
+    icon: FileImage,
+    typeLabel: 'IMAGE',
+    iconBg: '#CFFAFE',
+    iconColor: '#0E7490',
+    extensions: ['png', 'jpeg', 'webp', 'gif', 'svg', 'bmp'],
+  },
+];
 
-    const filteredNewFiles =
-      existingVideos >= MAX_NOVA_VIDEOS
-        ? newFiles.filter((file) => file.type !== FileType.video)
-        : newFiles.filter(
-            (file) =>
-              file.type !== FileType.video ||
-              newVideos.indexOf(file) < MAX_NOVA_VIDEOS - existingVideos
-          );
-
-    return [...prevFiles, ...filteredNewFiles].slice(0, MAX_NOVA_FILES);
-  }
-
-  if (totalImages > MAX_IMAGES) {
-    const remainingSlots = Math.max(0, MAX_IMAGES - existingImages.length);
-    processedNewImages = newImages.slice(0, remainingSlots);
-  }
-
-  if (totalDocs > MAX_DOCUMENTS) {
-    const remainingSlots = Math.max(0, MAX_DOCUMENTS - existingDocs.length);
-    processedNewDocs = newDocs.slice(0, remainingSlots);
-  }
-
-  return [...prevFiles, ...processedNewImages, ...processedNewDocs];
+const FALLBACK_PRESENTATION: AttachmentPresentation = {
+  icon: File,
+  typeLabel: 'FILE',
+  iconBg: '#F0F0F0',
+  iconColor: '#666666',
 };
 
-/** 判断当前模型是否为 Nova 系列（有独立的文件限制规则） */
-const isNova = (): boolean => {
-  const textModelId = getTextModel().modelId;
-  return textModelId.includes('nova-pro') || textModelId.includes('nova-lite');
-};
-
-/**
- * 检查所有视频文件是否已压缩完成。
- * 视频文件在压缩完成前 videoUrl 为 undefined，压缩后会被设置为本地路径。
- * @returns true = 所有文件就绪可以发送
- */
-export const isAllFileReady = (files: FileInfo[]) => {
-  const videos = files.filter((file) => file.type === FileType.video);
-  if (videos.length > 0) {
-    return videos.filter((video) => video.videoUrl === undefined).length === 0;
-  } else {
-    return true;
+/** 扩展名到预设的检索表，构建期一次展开 */
+const presetByExtension = new Map<string, AttachmentPresentation>();
+for (const preset of PRESENTATIONS) {
+  for (const ext of preset.extensions) {
+    presetByExtension.set(ext, preset);
   }
-};
+}
 
-/**
- * 根据附件文件列表生成摘要文本，作为用户消息的占位内容。
- * 例如："Summarize this"（单文件）或 "Summarize these image and 2 docs"（多文件）
- */
-export const getFileTypeSummary = (files: FileInfo[]) => {
-  if (files.length === 1) {
-    return 'Summarize this';
+/** 按文件名取展示预设，扩展名未命中时回退通用文件档 */
+export function getAttachmentPresentation(
+  fileName: string
+): AttachmentPresentation {
+  return presetByExtension.get(extensionOf(fileName)) ?? FALLBACK_PRESENTATION;
+}
+
+/** 人类可读的附件体积，数值小于 10 保留一位小数否则取整 */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${Math.max(bytes, 0)}B`;
+  const units = ['KB', 'MB', 'GB'];
+  let size = bytes / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
   }
-
-  const imgCount = files.filter((file) => file.type === FileType.image).length;
-  const docCount = files.filter(
-    (file) => file.type === FileType.document
-  ).length;
-  const videoCount = files.filter(
-    (file) => file.type === FileType.video
-  ).length;
-
-  const types = [
-    imgCount && `${imgCount > 1 ? 'images' : 'image'}`,
-    docCount && `${docCount > 1 ? 'docs' : 'doc'}`,
-    videoCount && `${videoCount > 1 ? 'videos' : 'video'}`,
-  ].filter(Boolean);
-
-  return `Summarize these ${types.join(' and ')}`;
-};
+  const text = size < 10 ? size.toFixed(1) : String(Math.round(size));
+  return `${text}${units[unit]}`;
+}

@@ -7,7 +7,16 @@
     "shareImageTitle": "AI Image",
     "stop": "Stop generating",
     "generating": "Generating",
-    "loadEarlier": "Load earlier messages"
+    "loadEarlier": "Load earlier messages",
+    "attachmentUploading": "Attachments are still uploading, hold on",
+    "attachmentLimit": "You can add up to {{max}} attachments",
+    "fileOversize": "Each attachment must be under {{size}}MB",
+    "sendUploadFailed": "Some attachments failed to upload. Click the red card to retry or remove it",
+    "notConnected": "Not connected to the host. Check the network and try again",
+    "sendFailed": "Send failed. Check the connection to the host",
+    "retryUpload": "Retry upload",
+    "modelNoVision": "This model cannot see images. They will be replaced with placeholder text when sent",
+    "downloadFile": "Download file"
   },
   "settings": {
     "vibration": "Vibration",
@@ -38,8 +47,7 @@
     "defaultModel": "Default Model",
     "maxSteps": "Max Steps",
     "compressionThreshold": "Compression Threshold",
-    "memoryInterval": "Memory Interval",
-    "minutesUnit": "min",
+    "memoryEntry": "Memory",
     "systemPrompt": "System Prompt",
     "voiceLanguage": "Voice Language",
     "voiceNone": "No voice selected",
@@ -151,11 +159,6 @@
     "deleteDevice": "Remove Device",
     "detailA11y": "Device details"
   },
-  "first": {
-    "title": "Connect your device",
-    "desc": "Scan the QR code shared by the desktop to get started. Addresses may change, scanning always works.",
-    "tip": "The QR code lives in the desktop local management page, behind the gear on the bottom-left card."
-  },
   "home": {
     "newChat": "New Chat",
     "newSession": "New Session",
@@ -163,6 +166,7 @@
     "connNoAddress": "No server address yet, tap to add one",
     "connected": "Connected",
     "chat": "Chat",
+    "memory": "Memory",
     "sessions": "Sessions",
     "settings": "Settings",
     "delete": "Delete",
@@ -215,5 +219,40 @@
     "docsMissing": "This tool provides no docs in handshake",
     "sectionContent": "Content",
     "instructionsMissing": "No instructions for this skill"
+  },
+  "memory": {
+    "title": "Memory",
+    "addTitle": "New Memory",
+    "editTitle": "Edit Memory",
+    "searchPlaceholder": "Search titles or keys",
+    "filterAll": "All",
+    "filterPinned": "Pinned",
+    "filterTriggered": "Triggered",
+    "countShort": "{{count}} entries",
+    "empty": "No memories yet. Durable facts from chats will settle here",
+    "emptySearch": "No matching memories",
+    "untitled": "Untitled memory",
+    "noKeys": "No keys",
+    "pinnedSubline": "Pinned memory",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Defaults to the start of content",
+    "contentLabel": "Content",
+    "contentPlaceholder": "One self-contained fact per entry",
+    "keysLabel": "Keys",
+    "keysPlaceholder": "Comma separated, e.g. Shanghai, moving",
+    "typeLabel": "Type",
+    "typePinned": "Pinned",
+    "typeTriggered": "Triggered",
+    "delete": "Delete",
+    "deleteConfirm": "Confirm delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "loadFailed": "Failed to load memories",
+    "saveFailed": "Failed to save memory",
+    "deleteFailed": "Failed to delete memory"
+  },
+  "voice": {
+    "onButNoKeyMobile": "The MiniMax API key is missing. Add it in the desktop app under Settings - Voice; it applies to all devices.",
+    "onButNoVoiceMobile": "This agent has no voice yet. Assign one in the desktop Agent editor; it applies to all devices."
   }
 }

@@ -145,7 +145,11 @@ function SettingsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <ScrollView style={styles.container}>
+      {/* 安卓端 style 上的垂直 padding 会让滚动区底部不可达，padding 挂内容容器 */}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <View style={styles.card}>
           {/* 震动开关，设备级偏好走本地 MMKV */}
           <ToggleRow
@@ -191,6 +195,8 @@ const createStyles = (colors: ColorScheme) =>
     },
     container: {
       flex: 1,
+    },
+    content: {
       padding: 16,
     },
     card: {

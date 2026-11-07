@@ -26,11 +26,13 @@ import type { RouteParamList } from '../types/RouteTypes.ts';
 import {
   type AgentInfo,
   type AgentUpdateInput,
+  type MemoryEntry,
   type ProviderStatus,
   type VoiceOption,
   fetchAgentDetail,
   fetchTtsConfig,
   getAgentAvatarUrl,
+  listAgentMemories,
   listProviders,
   listVoices,
   updateAgent,
@@ -75,7 +77,7 @@ type SheetKind = 'model' | 'voice' | 'lang' | null;
  * Agent 详情页。进页并行拉本体与两个选择器数据源，
  * 选择器改项即时乐观写回，其余字段只读展示。
  */
-const AgentDetailScreen: React.FC<Props> = ({ route }) => {
+const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { agentId } = route.params;
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -85,6 +87,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
   const [agent, setAgent] = useState<AgentInfo | null>(null);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [voices, setVoices] = useState<VoiceOption[]>([]);
+  /** 记忆条目计数，仅供入口行展示，增删在记忆页内进行 */
+  const [memoryCount, setMemoryCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [promptExpanded, setPromptExpanded] = useState(false);
@@ -112,21 +116,27 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         return;
       }
       try {
-        // 本体失败整页落空，两个选择器数据源各自兜底空数组保页面可用
-        const [agentData, providerList, voiceList] = await Promise.all([
-          fetchAgentDetail(address, agentId),
-          listProviders(address).catch((e: unknown) => {
-            logger.error(`[AgentDetail] listProviders failed: ${e}`);
-            return [] as ProviderStatus[];
-          }),
-          listVoices(address).catch((e: unknown) => {
-            logger.error(`[AgentDetail] listVoices failed: ${e}`);
-            return [] as VoiceOption[];
-          }),
-        ]);
+        // 本体失败整页落空，两个选择器数据源与记忆计数各自兜底保页面可用
+        const [agentData, providerList, voiceList, memoryList] =
+          await Promise.all([
+            fetchAgentDetail(address, agentId),
+            listProviders(address).catch((e: unknown) => {
+              logger.error(`[AgentDetail] listProviders failed: ${e}`);
+              return [] as ProviderStatus[];
+            }),
+            listVoices(address).catch((e: unknown) => {
+              logger.error(`[AgentDetail] listVoices failed: ${e}`);
+              return [] as VoiceOption[];
+            }),
+            listAgentMemories(address, agentId).catch((e: unknown) => {
+              logger.error(`[AgentDetail] listMemories failed: ${e}`);
+              return [] as MemoryEntry[];
+            }),
+          ]);
         setAgent(agentData);
         setProviders(providerList);
         setVoices(voiceList);
+        setMemoryCount(memoryList.length);
         logger.info(
           `[AgentDetail] loaded, providers=${providerList.length} voices=${voiceList.length}`
         );
@@ -220,7 +230,8 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         ttsApiKeyRef.current = config.apiKey;
       }
       if (!ttsApiKeyRef.current) {
-        Alert.alert(t('agent.voicePreviewFailed'));
+        // 缺 Key 指向桌面端配置入口，一次配置全端生效
+        Alert.alert(t('voice.onButNoKeyMobile'));
         return;
       }
       logger.info(
@@ -237,7 +248,11 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
       await getAudioPlayer().play(filePath);
     } catch (e) {
       logger.error(`[AgentDetail] voice preview failed: ${e}`);
-      Alert.alert(t('agent.voicePreviewFailed'));
+      // 合成失败保留通用文案并附具体错误，MiniMax 返回的 status_msg 在这里可见
+      Alert.alert(
+        t('agent.voicePreviewFailed'),
+        e instanceof Error ? e.message : undefined
+      );
     } finally {
       setPreviewingVoice(false);
     }
@@ -310,7 +325,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
         </GroupCard>
       </GroupSection>
 
-      {/* 聊天配置段：两个数字只读 */}
+      {/* 聊天配置段：压缩阈值只读，记忆入口带计数压栈进管理页 */}
       <GroupSection title={t('agent.sectionChat')}>
         <GroupCard>
           <View style={styles.row}>
@@ -319,13 +334,15 @@ const AgentDetailScreen: React.FC<Props> = ({ route }) => {
             </Text>
             <Text style={styles.rowValue}>{agent.compressionThreshold}%</Text>
           </View>
-          <View style={[styles.row, styles.rowBorder]}>
-            <Text style={styles.rowLabel}>{t('agent.memoryInterval')}</Text>
-            <Text style={styles.rowValue}>
-              {agent.dreamIntervalMinutes}
-              {t('agent.minutesUnit')}
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.row, styles.rowBorder]}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('MemoryScreen', { agentId })}
+          >
+            <Text style={styles.rowLabel}>{t('agent.memoryEntry')}</Text>
+            <Text style={styles.rowValue}>{memoryCount}</Text>
+            <ChevronRight size={14} color={colors.textTertiary} />
+          </TouchableOpacity>
         </GroupCard>
       </GroupSection>
 

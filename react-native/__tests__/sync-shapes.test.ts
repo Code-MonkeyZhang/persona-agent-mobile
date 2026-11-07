@@ -84,7 +84,13 @@ test('toServerChatMessages 投影 user 内容块、assistant 工具与 system �
     { role: 'app_notification', source: 'app', content: '通知' },
   ];
   const projected = toServerChatMessages(messages);
-  expect(projected[0]).toEqual({ role: 'user', content: '块一块二' });
+  expect(projected[0]).toEqual({
+    role: 'user',
+    content: [
+      { type: 'text', text: '块一' },
+      { type: 'text', text: '块二' },
+    ],
+  });
   expect(projected[1]).toEqual({
     role: 'assistant',
     content: '回答',

@@ -22,6 +22,7 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -31,7 +32,7 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { ColorScheme, useTheme } from '../theme/index.ts';
+import { ColorScheme, useTheme, typography } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
@@ -48,18 +49,15 @@ import { RouteParamList } from '../types/RouteTypes.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
 import { cacheDb } from '../storage/cache-db.ts';
 import { useMirrorStore } from '../stores/mirrorStore';
-import { viewed as wsViewed } from '../api/ws-client.ts';
+import { isConnected, viewed as wsViewed } from '../api/ws-client.ts';
 import { logger } from '../lib/logger';
-import { ChatStatus, ChatMessage, FileInfo } from '../types/Chat.ts';
+import { fetchAgentDetail, listProviders } from '../api/server-api.ts';
+import { ChatStatus, ChatMessage, FileType } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import FloatingInputBar from './component/FloatingInputBar.tsx';
 import CompanionContent from './component/CompanionContent.tsx';
-import {
-  checkFileNumberLimit,
-  getFileTypeSummary,
-  isAllFileReady,
-} from './util/FileUtils.ts';
+import { useAttachments } from './hooks/useAttachments.ts';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
@@ -108,24 +106,24 @@ function ChatScreen(): React.JSX.Element {
   // ==================== 本地状态 ====================
   /** 当前 agent，进页时从 MMKV 读一次，本页存续期间不会变化 */
   const [currentAgentId] = useState(getServerAgentId() || '');
-  const [selectedFiles, setSelectedFiles] = useState<FileInfo[]>([]);
   const [screenDimensions, setScreenDimensions] = useState(
     Dimensions.get('window')
   );
   const [inputBarHeight, setInputBarHeight] = useState(96);
   const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
+  /** 非视觉横幅的数据源，agent 默认模型与供应商视觉清单任一取不到就不出横幅 */
+  const [modelNoVision, setModelNoVision] = useState(false);
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
   const serverAddressRef = useRef(getServerAddress());
-  const selectedFilesRef = useRef(selectedFiles);
   const chatStatusRef = useRef<ChatStatus>(ChatStatus.Init);
   /** 上一帧消息数量，用于生成期间消息增长时自动滚底 */
   const prevMessageCountRef = useRef(0);
 
   // ==================== voiceStore ====================
   const voiceEnabled = useVoiceStore((s) => s.voiceEnabled);
-  const isSpeaking = useVoiceStore((s) => s.isSpeaking);
+  const voiceReady = useVoiceStore((s) => s.voiceReady);
   const toggleVoice = useVoiceStore((s) => s.toggleVoice);
 
   // ==================== sessionStore ====================
@@ -138,6 +136,8 @@ function ChatScreen(): React.JSX.Element {
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
   const agentName = useChatStore((s) => s.agentName);
+  /** 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除 */
+  const notice = useChatStore((s) => s.notice);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -153,21 +153,16 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardBottomStyle, keyboardHeight } = useKeyboardLayout(
-    textInputViewRef,
-    scroll.scrollToBottom,
-    insets.bottom
-  );
+  const { keyboardLiftStyle, keyboardPaddingStyle, keyboardHeight } =
+    useKeyboardLayout(textInputViewRef, scroll.scrollToBottom, insets.bottom);
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
+  const attachments = useAttachments();
+  const clearDraft = attachments.clear;
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
     chatStatusRef.current = chatStatus;
   }, [chatStatus]);
-
-  useEffect(() => {
-    selectedFilesRef.current = selectedFiles;
-  }, [selectedFiles]);
 
   /** AI 流式输出期间保持屏幕常亮 */
   useEffect(() => {
@@ -190,6 +185,7 @@ function ChatScreen(): React.JSX.Element {
     return sessionTitles[activeSessionId] ?? route.params?.title ?? '';
   }, [activeSessionId, sessionTitles, route.params?.title, t]);
 
+  /** 语音开关永远可点，点击由 voiceStore 现查能力并按缺口弹一次性引导 */
   const handleToggleVoice = useCallback(() => {
     toggleVoice();
   }, [toggleVoice]);
@@ -209,7 +205,7 @@ function ChatScreen(): React.JSX.Element {
       headerLeft: () => (
         <HeaderLeftButtons
           voiceEnabled={voiceEnabled}
-          isSpeaking={isSpeaking}
+          voiceReady={voiceReady}
           onToggleVoice={handleToggleVoice}
           onBack={() => navigation.goBack()}
           colors={colors}
@@ -231,7 +227,7 @@ function ChatScreen(): React.JSX.Element {
     companion.companionOpen,
     companion.handleToggleCompanion,
     voiceEnabled,
-    isSpeaking,
+    voiceReady,
     colors,
     handleToggleVoice,
     handleOpenAgentApp,
@@ -244,7 +240,7 @@ function ChatScreen(): React.JSX.Element {
     if (useChatStore.getState().displayedSessionId === activeSessionId) {
       return;
     }
-    setSelectedFiles([]);
+    clearDraft();
     setWindowCount(MESSAGE_WINDOW_BASE);
 
     // NEW_CHAT_SESSION 表示新建聊天
@@ -267,7 +263,7 @@ function ChatScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, scroll]);
+  }, [activeSessionId, scroll, clearDraft]);
 
   // ==================== 会话切换 & 消息加载 ====================
   /**
@@ -325,40 +321,77 @@ function ChatScreen(): React.JSX.Element {
   }, [messages, chatStatus, scroll]);
 
   // ==================== 消息发送 ====================
+  /** 发送流程：连接未建立当场提示保留正文，上传期间再点发送提示稍等，附件先压缩再统一起传，
+   *  落定即清空草稿并在后台发出消息，网络成败由 chatStore 回滚生成态与提示兜底，
+   *  乐观用户气泡保留在聊天记录里。消息只用 uploadAll 的返回值组装，上传落定的哈希与元数据不在旧快照里读 */
   const handleSend = useCallback(
-    (text: string) => {
-      const files = selectedFilesRef.current;
-      if (!isAllFileReady(files)) {
-        return;
+    async (text: string): Promise<boolean> => {
+      if (!isConnected()) {
+        logger.warn('[inputBox] send blocked, ws not connected');
+        useChatStore.getState().showNotice('chat.notConnected');
+        return false;
       }
-      const messageText =
-        text || (files.length > 0 ? getFileTypeSummary(files) : '');
-      if (!messageText && files.length === 0) {
-        return;
+      if (attachments.isUploading) {
+        logger.info('[inputBox] send blocked, attachments uploading');
+        useChatStore.getState().showNotice('chat.attachmentUploading');
+        return false;
       }
+      const settled = await attachments.uploadAll();
+      if (!settled) {
+        logger.warn('[inputBox] send blocked, attachment upload failed');
+        useChatStore.getState().showNotice('chat.sendUploadFailed');
+        return false;
+      }
+      logger.info(
+        `[inputBox] send delivered, textLength=${text.length} files=${settled.length}`
+      );
       scroll.setUserScrolled(false);
       setWindowCount(MESSAGE_WINDOW_BASE);
       trigger(HapticFeedbackTypes.impactMedium);
       scroll.scrollToBottom();
-      if (files.length > 0) {
-        setSelectedFiles([]);
-      }
-      useChatStore.getState().sendMessage(messageText, files);
+      attachments.clear();
+      // 清空不等网络往返，发送在后台走完，失败由 chatStore 回滚与提示兜底
+      useChatStore.getState().sendMessage(text, settled);
+      return true;
     },
-    [scroll]
+    [scroll, attachments]
   );
 
   const handleStop = useCallback(() => {
     useChatStore.getState().stopGeneration();
   }, []);
 
-  // ==================== 文件处理 ====================
-  const handleNewFileSelected = useCallback((newFiles: FileInfo[]) => {
-    setSelectedFiles((prev) => checkFileNumberLimit(prev, newFiles));
-  }, []);
-
-  const handleFileUpdated = useCallback((files: FileInfo[]) => {
-    setSelectedFiles(files);
+  // ==================== 模型视觉能力 ====================
+  /** 非视觉横幅的数据源，agent 默认模型不在供应商视觉清单时置位，任一环取不到就维持不出横幅 */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const address = getServerAddress();
+        const agentId = getServerAgentId();
+        if (!address || !agentId) {
+          return;
+        }
+        const [agent, providers] = await Promise.all([
+          fetchAgentDetail(address, agentId),
+          listProviders(address),
+        ]);
+        const provider = providers.find(
+          (p) => p.id === agent.defaultModel.provider
+        );
+        if (cancelled || !provider?.visionModelIds) {
+          return;
+        }
+        setModelNoVision(
+          !provider.visionModelIds.includes(agent.defaultModel.model)
+        );
+      } catch (e) {
+        logger.warn(`[ChatScreen] vision capability check failed: ${e}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ==================== UI 渲染 ====================
@@ -450,8 +483,9 @@ function ChatScreen(): React.JSX.Element {
     ]
   );
 
-  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位
-  const companionBubbleVisible = companion.companionOpen && !!lastAgentMessage;
+  // 陪伴气泡卸载后归零量高，避免残留值虚增浮层占位，首轮尚无 agent 消息时运行期也显气泡承载动向行
+  const companionBubbleVisible =
+    companion.companionOpen && (!!lastAgentMessage || isThinking);
   useEffect(() => {
     if (!companionBubbleVisible) {
       setCompanionBubbleHeight(0);
@@ -465,10 +499,10 @@ function ChatScreen(): React.JSX.Element {
         <View style={styles.bannerOverlay}>
           <ConnectionBanner />
         </View>
-        <LiveStrip />
         <Animated.View style={[slideStyle.row, slideAnimatedStyle]}>
-          {/* Pane 1: 聊天列表 */}
+          {/* Pane 1: 聊天列表，时间线挂进 pane 内随滑动一起退场，陪伴态顶部不再悬条 */}
           <View style={slideStyle.pane}>
+            <LiveStrip />
             <GiftedChat
               messagesContainerRef={
                 // 库声明不接纳空值引用，创建引用时初始值必为空，此处仅收窄空值差异
@@ -560,10 +594,10 @@ function ChatScreen(): React.JSX.Element {
           </Pressable>
         </Animated.View>
       </View>
-      {/* FIB 容器：绝对定位浮在内容上方 */}
-      <View style={styles.fibWrapper}>
-        {/* 陪伴回复气泡 */}
-        {companionBubbleVisible && lastAgentMessage && (
+      {/* FIB 容器：绝对定位浮在内容上方，键盘弹出时整体抬升，气泡与输入栏同步让位 */}
+      <Animated.View style={[styles.fibWrapper, keyboardLiftStyle]}>
+        {/* 陪伴回复气泡：运行期一次一条动向居中整句替换，轮末照旧落回复正文 */}
+        {companionBubbleVisible && (
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -573,17 +607,25 @@ function ChatScreen(): React.JSX.Element {
             }}
           >
             <CompanionReplyBubble
-              messageKey={lastAgentMessage._id as string}
-              text={lastAgentMessage.text}
+              messageKey={(lastAgentMessage?._id as string) ?? 'live'}
+              text={lastAgentMessage?.text ?? ''}
               isThinking={isThinking}
               thinkingText={t('chat.thinking')}
               colors={colors}
             />
           </View>
         )}
-        {/* 底部避让容器由键盘钩子驱动，模糊背景铺满含避让区在内的整个容器，安卓为半透明降级底色 */}
-        <Animated.View style={keyboardBottomStyle}>
+        {/* 底部避让容器持安全区让位动画，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
+        <Animated.View style={keyboardPaddingStyle}>
           <BackdropBlur />
+          {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
+          {notice && (
+            <View style={styles.noticeBubble}>
+              <Text style={styles.noticeText}>
+                {t(notice.key, notice.values)}
+              </Text>
+            </View>
+          )}
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -596,14 +638,19 @@ function ChatScreen(): React.JSX.Element {
               textInputRef={textInputViewRef}
               onSend={handleSend}
               onStop={handleStop}
-              selectedFiles={selectedFiles}
+              selectedFiles={attachments.items}
               chatStatus={chatStatus}
-              onFileSelected={handleNewFileSelected}
-              onFileUpdated={handleFileUpdated}
+              onFileSelected={attachments.addFiles}
+              onRemoveFile={attachments.remove}
+              onRetryFile={attachments.retry}
+              showNoVisionHint={
+                modelNoVision &&
+                attachments.items.some((f) => f.type === FileType.image)
+              }
             />
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -638,6 +685,20 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
+    },
+    /** 附件与上传类事件的提示气泡，浮在输入卡上方居中 */
+    noticeBubble: {
+      alignSelf: 'center',
+      backgroundColor: colors.overlay,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      marginBottom: 6,
+      maxWidth: '80%',
+    },
+    noticeText: {
+      ...typography.body,
+      color: colors.primaryForeground,
     },
   });
 

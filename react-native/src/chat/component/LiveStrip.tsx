@@ -56,7 +56,7 @@ import {
   getStripCollapsed,
   saveStripCollapsed,
 } from '../../storage/StorageUtils';
-import type { ChatMessage } from '../../types/Chat';
+import { FileType, type ChatMessage, type FileInfo } from '../../types/Chat';
 import type { Thought } from '../../types/Thought';
 import { useTheme, typography } from '../../theme';
 
@@ -317,6 +317,37 @@ export type TimelineRowData =
       failed?: boolean;
     };
 
+/** 状态条用户行的显示文案。正文与附件占位依次空格拼接，空段自动省略。
+ * 图片占位固定为 Image 加真实后缀，不随会话内外变化；文件占位为原始文件名带后缀。
+ * 附件载荷沿用消息 image 字段的 JSON 约定，旧载荷解析失败按无附件处理。 */
+export function userRowText(message: ChatMessage): string {
+  const parts: string[] = [];
+  if (message.text.length > 0) {
+    parts.push(message.text);
+  }
+  if (!message.image) {
+    return parts.join(' ');
+  }
+  let files: FileInfo[] = [];
+  try {
+    files = JSON.parse(message.image) as FileInfo[];
+  } catch {
+    return parts.join(' ');
+  }
+  for (const file of files) {
+    if (file.type !== FileType.image) {
+      parts.push(file.fileName);
+      continue;
+    }
+    const dot = file.fileName.lastIndexOf('.');
+    const ext =
+      (dot >= 0 ? file.fileName.slice(dot + 1).toLowerCase() : '') ||
+      file.format;
+    parts.push(`Image.${ext === 'jpeg' ? 'jpg' : ext}`);
+  }
+  return parts.join(' ');
+}
+
 /**
  * 把会话消息流摊平成时间线行，顺序即发生顺序。
  * GiftedChat 数组新在前，先倒序摊平还原时间正序。
@@ -336,7 +367,7 @@ export function buildRows(
   const rows: TimelineRowData[] = [];
   for (const m of [...messages].reverse()) {
     if (m.user._id === 1) {
-      rows.push({ kind: 'user', text: m.text });
+      rows.push({ kind: 'user', text: userRowText(m) });
       continue;
     }
     for (const th of m.steps ?? []) {
@@ -451,7 +482,7 @@ export function idleLabel(
   }
   const newest = messages[0];
   if (newest && newest.user._id === 1) {
-    return { text: trunc(newest.text, USER_LABEL_MAX), failed: false };
+    return { text: trunc(userRowText(newest), USER_LABEL_MAX), failed: false };
   }
   return { text: t('live.thinking'), failed: false };
 }
@@ -482,8 +513,8 @@ function BreathingDot({ delayMs }: { delayMs: number }) {
   return <Animated.View style={[styles.dot, dotStyle]} />;
 }
 
-/** 运行指示的三颗呼吸圆点，紧跟文字右侧对齐首行，由宿主传间距与偏移 */
-function Dots({ style }: { style?: StyleProp<ViewStyle> }) {
+/** 运行指示的三颗呼吸圆点，紧跟文字右侧对齐首行，由宿主传间距与偏移，导出供陪伴气泡动向行复用 */
+export function Dots({ style }: { style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.dots, style]} pointerEvents="none">
       <BreathingDot delayMs={0} />

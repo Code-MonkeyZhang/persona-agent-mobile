@@ -16,7 +16,6 @@ function agent(id: string): AgentInfo {
     mcpNames: [],
     skillNames: [],
     compressionThreshold: 50,
-    dreamIntervalMinutes: 120,
     createdAt: 1,
     updatedAt: 1,
   };

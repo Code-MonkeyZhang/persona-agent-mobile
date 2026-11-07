@@ -1,41 +1,43 @@
 /**
  * @file hooks/useChatScroll.ts
- * @description 聊天消息列表的滚动控制：自动滚底、Reasoning 展开时位置保持、用户滚动检测。
+ * @description 聊天消息列表的滚动控制：自动滚底、思考面板展开时的逐帧滚动补偿、用户滚动检测。
  */
-import { useState, useRef, useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import {
+  scrollTo,
+  useAnimatedReaction,
+  useAnimatedRef,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+  type ScrollEvent,
+} from 'react-native-reanimated';
 import type { AnimatedList } from 'react-native-gifted-chat/lib/MessagesContainer';
-import type { ScrollEvent } from 'react-native-reanimated';
 import type { ChatMessage } from '../../types/Chat';
 import { ChatStatus } from '../../types/Chat';
+import { logger } from '../../lib/logger';
+import { PANEL_REVEAL } from '../component/CollapsedThoughtProcess.tsx';
 
 export function useChatScroll(
   chatStatusRef: React.MutableRefObject<ChatStatus>
 ) {
-  const flatListRef = useRef<AnimatedList<ChatMessage>>(null);
+  const flatListRef = useAnimatedRef<AnimatedList<ChatMessage>>();
   const [userScrolled, setUserScrolled] = useState(false);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
+  const reduceMotion = useReducedMotion();
+
+  // 逐帧补偿三件套，progress 是面板进度动画的镜像，base 与 height 是本次补偿的锚点与行程
+  const compensateProgress = useSharedValue(0);
+  const compensateBase = useSharedValue(0);
+  const compensateHeight = useSharedValue(0);
 
   /** 将消息列表滚动到顶部（GiftedChat 是倒序的，offset=0 即最新消息） */
   const scrollToBottom = useCallback(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
-
-  /**
-   * 将消息列表向上或向下偏移指定高度，用于展开/收起 Reasoning 区块时保持视觉位置不跳动。
-   */
-  const scrollUpByHeight = useCallback(
-    (expanded: boolean, height: number, animated: boolean) => {
-      if (flatListRef.current) {
-        const newOffset =
-          currentScrollOffsetRef.current + (expanded ? height : -height);
-        flatListRef.current.scrollToOffset({ offset: newOffset, animated });
-      }
-    },
-    []
-  );
+  }, [flatListRef]);
 
   /**
    * 记录当前滚动偏移量。
@@ -69,12 +71,43 @@ export function useChatScroll(
     [chatStatusRef, userScrolled, scrollToBottom]
   );
 
-  /** Reasoning 区块展开/收起时调整滚动位置 */
-  const handleReasoningToggle = useCallback(
-    (expanded: boolean, height: number, animated: boolean) => {
-      scrollUpByHeight(expanded, height, animated);
+  // 镜像进度每帧换算成列表偏移，倒序列表里该方向滚动把内容向下拉回，与面板高度增长同帧抵消
+  useAnimatedReaction(
+    () => compensateProgress.value,
+    (progress) => {
+      scrollTo(
+        flatListRef,
+        0,
+        compensateBase.value + compensateHeight.value * progress,
+        false
+      );
     },
-    [scrollUpByHeight]
+    [compensateBase, compensateHeight]
+  );
+
+  /**
+   * 思考面板展开收起的动画起点回调。
+   * 面板侧同帧起跑同配置的高度动画，这里以镜像进度逐帧滚动，
+   * 高度增长把入口行向上顶多少，滚动就把内容向下拉回多少，入口行视觉静止。
+   * 锚点取当前偏移扣除已补偿份额，动画中途反向点按也能对齐。
+   */
+  const handleReasoningToggle = useCallback(
+    (expanded: boolean, height: number) => {
+      compensateBase.value =
+        currentScrollOffsetRef.current -
+        compensateHeight.value * compensateProgress.value;
+      compensateHeight.value = height;
+      logger.debug(
+        `[useChatScroll] reasoning compensate, expanded=${expanded}, height=${height}, base=${compensateBase.value}`
+      );
+      const target = expanded ? 1 : 0;
+      if (reduceMotion) {
+        compensateProgress.set(target);
+      } else {
+        compensateProgress.set(withTiming(target, PANEL_REVEAL));
+      }
+    },
+    [reduceMotion, compensateProgress, compensateBase, compensateHeight]
   );
 
   return {

@@ -3,6 +3,7 @@
  * @description 聊天输入区域右侧的按钮组组件。
  * 空闲时为单个发送按钮，无输入内容时灰色禁用。
  * 运行中为停止加发送双按钮并存，停止中止当前回合，发送作为插话进入待注入缓冲。
+ * 附件上传中或有失败项时禁用发送，失败项经红卡重试或删除后恢复。
  */
 import React, { useMemo } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -32,7 +33,12 @@ const CustomSendComponent: React.FC<CustomSendComponentProps> = ({
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const isRunning = chatStatus === ChatStatus.Running;
-  const canSend = text.trim().length > 0 || selectedFiles.length > 0;
+  /** 附件上传中或有失败项时不允许发送，等上传落定或红卡重试 */
+  const attachmentsBlocked = selectedFiles.some(
+    (file) => file.status === 'uploading' || file.status === 'error'
+  );
+  const canSend =
+    (text.trim().length > 0 || selectedFiles.length > 0) && !attachmentsBlocked;
 
   if (isRunning) {
     return (

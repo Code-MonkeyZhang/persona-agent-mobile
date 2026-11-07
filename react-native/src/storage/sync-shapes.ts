@@ -7,6 +7,7 @@
  *   附带镜像 Message 到本地 ServerChatMessage 的投影，镜像读路径与 HTTP 详情接口同形。
  */
 import type { AgentInfo } from '../api/server-api.ts';
+import type { ContentBlock } from '../types/Chat.ts';
 
 /** 模型配置，对齐 shared 的 ModelConfig */
 export interface ModelConfig {
@@ -14,12 +15,8 @@ export interface ModelConfig {
   model: string;
 }
 
-/** 多模态消息的内容块 */
-export interface ContentBlock {
-  type: string;
-  text?: string;
-  [key: string]: unknown;
-}
+/** 多模态消息的内容块联合，镜像服务端协议的三块形状，见 types/Chat.ts */
+export type { ContentBlock };
 
 /** 包含 system prompt 的系统消息 */
 export interface SystemMessage {
@@ -219,7 +216,7 @@ export function buildPreviewText(text: string): string {
 /**
  * 提取一条消息的纯文本，供预览使用。
  * - 仅认 user 与 assistant 角色，其余角色返回 undefined
- * - user 的 content 兼容纯字符串与内容块数组，数组取各块的 text 拼接
+ * - user 的 content 兼容纯字符串与内容块数组，数组取各块的文本与文件名拼接
  * - assistant 纯工具步无 content 返回 undefined，追加时不更新预览
  */
 export function messagePreviewText(message: Message): string | undefined {
@@ -227,7 +224,13 @@ export function messagePreviewText(message: Message): string | undefined {
     const content = message.content as UserMessage['content'];
     if (typeof content === 'string') return content;
     return content
-      .map((block) => block.text ?? '')
+      .map((block) =>
+        block.type === 'text'
+          ? block.text
+          : block.type === 'file'
+          ? block.name
+          : ''
+      )
       .join('')
       .trim();
   }
@@ -278,22 +281,14 @@ export interface MirrorSession extends SessionMeta {
 
 /**
  * 把镜像的消息投影成本地 ServerChatMessage 形状，镜像读路径与 HTTP 详情接口同形。
- * user 的内容块数组展平为拼接文本，其余角色字段直接对上。
+ * user 的块数组原样透传不再展平，附件信息由渲染层的 fromContentBlocks 解析。
  */
 export function toServerChatMessages(
   messages: Message[]
 ): import('../api/server-api.ts').ServerChatMessage[] {
   return messages.map((message) => {
     if (message.role === 'user') {
-      const content = message.content as UserMessage['content'];
-      const text =
-        typeof content === 'string'
-          ? content
-          : content
-              .map((block) => block.text ?? '')
-              .join('')
-              .trim();
-      return { role: 'user', content: text };
+      return { role: 'user', content: message.content };
     }
     if (message.role === 'assistant') {
       return {

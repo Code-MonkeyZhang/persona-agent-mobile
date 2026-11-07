@@ -55,6 +55,8 @@ function InputDialog({
       transparent
       animationType="fade"
       onRequestClose={onCancel}
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       <KeyboardAvoidingView
         style={styles.dialogAvoid}

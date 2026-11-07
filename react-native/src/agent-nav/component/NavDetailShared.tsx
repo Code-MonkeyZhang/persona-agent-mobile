@@ -13,7 +13,6 @@ import type { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
 import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 import type { McpServerInfo } from '../../api/server-api.ts';
 import type { PressMode } from '../../types/Chat.ts';
-import { ChatStatus } from '../../types/Chat.ts';
 import useMarkdown from '../../chat/component/markdown/useMarkdown.ts';
 import { CustomMarkdownRenderer } from '../../chat/component/markdown/CustomMarkdownRenderer.tsx';
 import { CustomTokenizer } from '../../chat/component/markdown/CustomTokenizer.ts';
@@ -250,7 +249,6 @@ export function DocMarkdown({ value }: { value: string }) {
     renderer,
     tokenizer,
     styles: detailMarkedStyles,
-    chatStatus: ChatStatus.Complete,
   });
   return (
     <View>
