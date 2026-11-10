@@ -1,10 +1,12 @@
 /**
  * @file MemoryScreen.tsx
  * @description 记忆管理页，从人格详情页与首页入口压栈进入的全屏页。
- *   页面壳由原生 Stack header 承担，新增按钮挂 headerRight 与返回箭头对称。
+ *   页面壳由原生 Stack header 承担，headerTitle 是 BookHeart 图标加文字的组合，
+ *   新增按钮挂 headerRight 与返回箭头对称。
  *   正文是搜索框、类型筛选与条目行流：行内放标题、类型副行与启停开关，
  *   点行弹底部编辑表单。数据走记忆四接口，进页拉取，增删改后重拉，
- *   与桌面端同款拉模式。启停开关即时落库，停用行半透明，只在全部档出现。
+ *   与桌面端同款拉模式。进页三态由 PageLoadState 整页呈现，失败不弹窗，
+ *   就绪后的重拉不再回转圈。启停开关即时落库，停用行半透明，只在全部档出现。
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -18,7 +20,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Plus, Search } from 'lucide-react-native';
+import { BookHeart, Plus, Search } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, typography } from '../theme/index.ts';
 import { logger } from '../lib/logger';
@@ -32,6 +34,8 @@ import {
   updateAgentMemory,
 } from '../api/server-api.ts';
 import { getServerAddress } from '../storage/StorageUtils.ts';
+import { IconHeaderTitle } from '../component/IconHeaderTitle.tsx';
+import { PageLoadState, type PagePhase } from '../component/PageLoadState.tsx';
 import {
   MemorySheet,
   type MemorySheetDraft,
@@ -50,6 +54,8 @@ const MemoryScreen: React.FC<Props> = ({ navigation, route }) => {
   const address = getServerAddress();
 
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
+  /** 进页数据态：首拉在途转圈，失败整页失败态，就绪后增删改的重拉不再回转圈 */
+  const [phase, setPhase] = useState<PagePhase>('loading');
   const [filter, setFilter] = useState<MemoryFilter>('all');
   const [search, setSearch] = useState('');
   /** 编辑目标：new 表示新增表单，数字为编辑中的条目编号 */
@@ -59,25 +65,30 @@ const MemoryScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!address) return;
     try {
       setEntries(await listAgentMemories(address, agentId));
+      setPhase('ready');
     } catch (e) {
       logger.error(`[Memory] list failed: ${e}`);
-      Alert.alert(t('memory.loadFailed'));
+      setPhase('error');
     }
-  }, [address, agentId, t]);
+  }, [address, agentId]);
 
   useEffect(() => {
     refresh().catch(() => undefined);
   }, [refresh]);
 
-  /** headerRight 的新增按钮，与返回箭头对称的裸图标形态 */
+  /** headerTitle 的图标标题与 headerRight 的新增按钮，新增按钮与返回箭头对称 */
   useEffect(() => {
     navigation.setOptions({
+      // eslint-disable-next-line react/no-unstable-nested-components
+      headerTitle: () => (
+        <IconHeaderTitle icon={BookHeart} title={t('memory.title')} />
+      ),
       // eslint-disable-next-line react/no-unstable-nested-components
       headerRight: () => (
         <AddButton color={colors.primary} onPress={() => setEditing('new')} />
       ),
     });
-  }, [navigation, colors.primary]);
+  }, [navigation, colors.primary, t]);
 
   const editingEntry =
     typeof editing === 'number'
@@ -169,84 +180,88 @@ const MemoryScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.listContent}>
-        {/* 搜索框 */}
-        <View style={styles.searchBox}>
-          <Search size={15} color={colors.textTertiary} />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t('memory.searchPlaceholder')}
-            placeholderTextColor={colors.placeholder}
-            returnKeyType="search"
-          />
-        </View>
+      {phase !== 'ready' ? (
+        <PageLoadState phase={phase} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.listContent}>
+          {/* 搜索框 */}
+          <View style={styles.searchBox}>
+            <Search size={15} color={colors.textTertiary} />
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('memory.searchPlaceholder')}
+              placeholderTextColor={colors.placeholder}
+              returnKeyType="search"
+            />
+          </View>
 
-        {/* 类型筛选 chips */}
-        <View style={styles.filterRow}>
-          {filters.map(({ value, label }) => (
-            <TouchableOpacity
-              key={value}
-              activeOpacity={0.7}
-              onPress={() => setFilter(value)}
-              style={[
-                styles.chip,
-                filter === value ? styles.chipActive : undefined,
-              ]}
-            >
-              <Text
-                style={
-                  filter === value ? styles.chipTextActive : styles.chipText
-                }
+          {/* 类型筛选 chips */}
+          <View style={styles.filterRow}>
+            {filters.map(({ value, label }) => (
+              <TouchableOpacity
+                key={value}
+                activeOpacity={0.7}
+                onPress={() => setFilter(value)}
+                style={[
+                  styles.chip,
+                  filter === value ? styles.chipActive : undefined,
+                ]}
               >
-                {label}
+                <Text
+                  style={
+                    filter === value ? styles.chipTextActive : styles.chipText
+                  }
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 条目行流 */}
+          <GroupCard>
+            {filtered.map((entry, index) => (
+              <TouchableOpacity
+                key={entry.uid}
+                activeOpacity={0.7}
+                style={[
+                  index > 0 ? styles.rowDivided : undefined,
+                  !entry.enabled ? styles.rowDisabled : undefined,
+                  styles.row,
+                ]}
+                onPress={() => setEditing(entry.uid)}
+              >
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {entry.title}
+                  </Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>
+                    {sublineOf(entry)}
+                  </Text>
+                </View>
+                <Switch
+                  value={entry.enabled}
+                  onValueChange={(v) => handleRowToggle(entry, v)}
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  thumbColor={colors.card}
+                />
+              </TouchableOpacity>
+            ))}
+            {filtered.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {search.trim() ? t('memory.emptySearch') : t('memory.empty')}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            ) : null}
+          </GroupCard>
 
-        {/* 条目行流 */}
-        <GroupCard>
-          {filtered.map((entry, index) => (
-            <TouchableOpacity
-              key={entry.uid}
-              activeOpacity={0.7}
-              style={[
-                index > 0 ? styles.rowDivided : undefined,
-                !entry.enabled ? styles.rowDisabled : undefined,
-                styles.row,
-              ]}
-              onPress={() => setEditing(entry.uid)}
-            >
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {entry.title}
-                </Text>
-                <Text style={styles.rowSub} numberOfLines={1}>
-                  {sublineOf(entry)}
-                </Text>
-              </View>
-              <Switch
-                value={entry.enabled}
-                onValueChange={(v) => handleRowToggle(entry, v)}
-                trackColor={{ true: colors.primary, false: colors.border }}
-                thumbColor={colors.card}
-              />
-            </TouchableOpacity>
-          ))}
-          {filtered.length === 0 ? (
-            <Text style={styles.emptyText}>
-              {search.trim() ? t('memory.emptySearch') : t('memory.empty')}
-            </Text>
-          ) : null}
-        </GroupCard>
-
-        {/* 计数脚注 */}
-        <Text style={styles.countText}>
-          {t('memory.countShort', { count: entries.length })}
-        </Text>
-      </ScrollView>
+          {/* 计数脚注 */}
+          <Text style={styles.countText}>
+            {t('memory.countShort', { count: entries.length })}
+          </Text>
+        </ScrollView>
+      )}
 
       {editing !== null ? (
         <MemorySheet

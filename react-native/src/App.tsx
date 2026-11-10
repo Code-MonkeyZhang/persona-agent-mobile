@@ -12,6 +12,7 @@ import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import SettingsScreen from './settings/SettingsScreen.tsx';
+import AboutScreen from './settings/AboutScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
@@ -157,6 +158,11 @@ const AppNavigator = () => {
         name="Settings"
         component={SettingsScreen}
         options={{ ...stackScreenOptions, title: t('home.settings') }}
+      />
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ ...stackScreenOptions, title: t('about.title') }}
       />
       {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠；两屏都无 header，顶栏由 PhoneAppBar 自绘 */}
       <Stack.Screen

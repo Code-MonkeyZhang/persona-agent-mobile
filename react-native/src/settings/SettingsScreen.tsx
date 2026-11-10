@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
 import {
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,35 +9,33 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Share from 'react-native-share';
-import {
-  ChevronRight,
-  Lightbulb,
-  ScrollText,
-  Vibrate,
-  VibrateOff,
-} from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Info, Lightbulb, Vibrate, VibrateOff } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
 import { useSettingsStore } from '../stores/settingsStore.ts';
-import { logger } from '../lib/logger';
+import type { RouteParamList } from '../types/RouteTypes.ts';
 
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 
-/** 设置页通用行骨架，图标与标题说明拼装，行尾控件由调用方注入，带 onPress 时整行可点 */
+type SettingsNavigationProp = NativeStackNavigationProp<
+  RouteParamList,
+  'Settings'
+>;
+
+/** 设置页通用行骨架，图标与标题拼装，行尾控件与整行按压由调用方注入 */
 function Row({
   icon,
   label,
-  description,
   trailing,
   onPress,
 }: {
   icon: React.ReactNode;
   label: string;
-  description: string;
-  trailing: React.ReactNode;
+  trailing?: React.ReactNode;
   onPress?: () => void;
 }): React.JSX.Element {
   const { colors } = useTheme();
@@ -49,7 +46,6 @@ function Row({
       {icon}
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowDesc}>{description}</Text>
       </View>
       {trailing}
     </>
@@ -65,43 +61,10 @@ function Row({
   );
 }
 
-/** 开关行，Row 骨架加行尾拨动开关，开关状态和切换逻辑由调用方注入 */
-function ToggleRow({
-  icon,
-  label,
-  description,
-  value,
-  onToggle,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  value: boolean;
-  onToggle: () => void;
-}): React.JSX.Element {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
-
-  return (
-    <Row
-      icon={icon}
-      label={label}
-      description={description}
-      trailing={
-        <TouchableOpacity
-          onPress={onToggle}
-          style={[styles.toggle, value && styles.toggleOn]}
-        >
-          <View style={[styles.toggleKnob, value && styles.toggleKnobOn]} />
-        </TouchableOpacity>
-      }
-    />
-  );
-}
-
 function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation<SettingsNavigationProp>();
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
   const thoughtProcessVisible = useSettingsStore(
     (s) => s.thoughtProcessVisible
@@ -119,28 +82,6 @@ function SettingsScreen(): React.JSX.Element {
     }
   };
 
-  /** 导出运行日志：先落盘缓冲，再取文件清单走系统分享面板 */
-  const handleExportLogs = async () => {
-    logger.info('[Settings] export logs requested');
-    await logger.flush();
-    const files = await logger.listFiles();
-    if (files.length === 0) {
-      logger.warn('[Settings] no log files to export');
-      Alert.alert(t('settings.exportLogs'), t('settings.noLogs'));
-      return;
-    }
-    try {
-      await Share.open({
-        urls: files.map((path) => `file://${path}`),
-        failOnCancel: false,
-      });
-      logger.info(`[Settings] logs shared, count=${files.length}`);
-    } catch (e) {
-      logger.error('[Settings] log export failed:', e);
-      Alert.alert(t('settings.exportLogs'), t('settings.exportFailed'));
-    }
-  };
-
   const styles = createStyles(colors);
 
   return (
@@ -152,7 +93,7 @@ function SettingsScreen(): React.JSX.Element {
       >
         <View style={styles.card}>
           {/* 震动开关，设备级偏好走本地 MMKV */}
-          <ToggleRow
+          <Row
             icon={
               hapticEnabled ? (
                 <Vibrate size={19} color={colors.text} />
@@ -161,25 +102,48 @@ function SettingsScreen(): React.JSX.Element {
               )
             }
             label={t('settings.vibration')}
-            description={t('settings.vibrationDesc')}
-            value={hapticEnabled}
-            onToggle={toggleHapticFeedback}
+            trailing={
+              <TouchableOpacity
+                onPress={toggleHapticFeedback}
+                style={[styles.toggle, hapticEnabled && styles.toggleOn]}
+              >
+                <View
+                  style={[
+                    styles.toggleKnob,
+                    hapticEnabled && styles.toggleKnobOn,
+                  ]}
+                />
+              </TouchableOpacity>
+            }
           />
           {/* 思考过程开关，写显示偏好 store 并持久化到 MMKV */}
-          <ToggleRow
+          <Row
             icon={<Lightbulb size={19} color={colors.text} />}
             label={t('settings.thoughtProcess')}
-            description={t('settings.thoughtProcessDesc')}
-            value={thoughtProcessVisible}
-            onToggle={() => setThoughtProcessVisible(!thoughtProcessVisible)}
+            trailing={
+              <TouchableOpacity
+                onPress={() => setThoughtProcessVisible(!thoughtProcessVisible)}
+                style={[
+                  styles.toggle,
+                  thoughtProcessVisible && styles.toggleOn,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleKnob,
+                    thoughtProcessVisible && styles.toggleKnobOn,
+                  ]}
+                />
+              </TouchableOpacity>
+            }
           />
-          {/* 日志导出，落盘缓冲后把日志文件交系统分享面板 */}
+        </View>
+        {/* 关于入口，导出日志与版本信息收在关于页 */}
+        <View style={styles.card}>
           <Row
-            icon={<ScrollText size={19} color={colors.text} />}
-            label={t('settings.exportLogs')}
-            description={t('settings.exportLogsDesc')}
-            onPress={handleExportLogs}
-            trailing={<ChevronRight size={20} color={colors.textTertiary} />}
+            icon={<Info size={19} color={colors.text} />}
+            label={t('about.title')}
+            onPress={() => navigation.navigate('About')}
           />
         </View>
       </ScrollView>
@@ -205,6 +169,7 @@ const createStyles = (colors: ColorScheme) =>
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.borderLight,
+      marginBottom: 16,
     },
     row: {
       flexDirection: 'row',
@@ -220,11 +185,6 @@ const createStyles = (colors: ColorScheme) =>
       ...typography.titleSection,
       fontWeight: '500',
       color: colors.text,
-    },
-    rowDesc: {
-      ...typography.body,
-      color: colors.textSecondary,
-      marginTop: 2,
     },
     toggle: {
       width: 40,

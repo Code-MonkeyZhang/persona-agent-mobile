@@ -8,6 +8,7 @@ export type RouteParamList = {
   Home: undefined;
   Chat: { title?: string } | undefined;
   Settings: undefined;
+  About: undefined;
   AgentDetail: { agentId: string };
   AgentNav: { view: 'tools' | 'skills' };
   McpDetail: { name: string };
