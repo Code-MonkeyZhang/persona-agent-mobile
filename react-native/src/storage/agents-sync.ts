@@ -2,12 +2,14 @@
  * @file storage/agents-sync.ts
  * @description agent 清单的统一网络刷新器。
  *   连接触发、焦点刷新与 agents_invalidated 事件都走 refresh，
- *   拉取成功落镜像，镜像写后通知驱动界面重读，界面层不直接持有网络结果。
+ *   拉取成功落镜像，镜像写后通知驱动界面重读，界面层不直接持有网络结果，
+ *   refresh 带响应次序护栏，先出发的旧清单晚到不落镜像。
  *   consumeInvalidation 用序号护栏拦掉 WS 推送与变更拉取
  *   双路交付的同一条失效事件，避免重复刷新。
  *   本文件只含纯逻辑，真实依赖的单例装配在 sync-setup。
  */
 import type { AgentInfo } from '../api/server-api';
+import { LoadGuard } from '../lib/loadGuard';
 
 /** 刷新链路的可注入依赖，测试用手写假实现替换 */
 export interface AgentsSyncDeps {
@@ -19,10 +21,12 @@ export interface AgentsSyncDeps {
   log: (message: string) => void;
 }
 
-/** agent 清单刷新器，序号护栏与网络刷新封装在一起 */
+/** agent 清单刷新器，事件序号护栏与载入次序护栏封装在一起 */
 export class AgentsSync {
   /** 最近一次已消费的失效事件序号 */
   private lastInvalidatedSeq = 0;
+  /** refresh 的响应次序护栏，过期清单不落镜像 */
+  private readonly loadGuard = new LoadGuard();
 
   constructor(private readonly deps: AgentsSyncDeps) {}
 
@@ -44,8 +48,13 @@ export class AgentsSync {
     if (!address) {
       return;
     }
+    const ticket = this.loadGuard.begin();
     try {
       const agents = await this.deps.fetchAgents(address);
+      if (!this.loadGuard.isCurrent(ticket)) {
+        this.deps.log('refresh dropped a stale response');
+        return;
+      }
       if (agents.length === 0) {
         return;
       }

@@ -1,7 +1,8 @@
 /**
  * @file __tests__/agents-sync.test.ts
  * @description agent 清单刷新器的单测，依赖全注入替身，覆盖
- *   序号护栏去重、落镜像路径、空清单跳过与失败不落脏数据四条主路径。
+ *   序号护栏去重、落镜像路径、空清单跳过、失败不落脏数据、
+ *   过期清单不落镜像五条主路径。
  */
 import { AgentsSync, type AgentsSyncDeps } from '../src/storage/agents-sync';
 import type { AgentInfo } from '../src/api/server-api';
@@ -83,6 +84,25 @@ describe('AgentsSync', () => {
     await expect(sync.refresh()).resolves.toBeUndefined();
     expect(h.puts).toHaveLength(0);
     expect(h.logs.some((l) => l.includes('failed'))).toBe(true);
+  });
+
+  it('drops a stale refresh so a late old list never lands', async () => {
+    const h = makeDeps();
+    const resolvers: Array<(list: AgentInfo[]) => void> = [];
+    h.deps.fetchAgents = () =>
+      new Promise<AgentInfo[]>((resolve) => {
+        resolvers.push(resolve);
+      });
+    const sync = new AgentsSync(h.deps);
+    const stale = sync.refresh();
+    const fresh = sync.refresh();
+    resolvers[1]([agent('a2')]);
+    await fresh;
+    resolvers[0]([agent('a1')]);
+    await stale;
+    expect(h.puts).toHaveLength(1);
+    expect(h.puts[0].map((a) => a.id)).toEqual(['a2']);
+    expect(h.logs.some((l) => l.includes('dropped'))).toBe(true);
   });
 
   it('consumes invalidation seqs monotonically', () => {

@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { logger } from '../lib/logger';
+import { LoadGuard } from '../lib/loadGuard';
 import { fetchAgentApps, type AppInfo } from '../api/server-api';
 import { launcherPrefs } from '../storage/sync-setup.ts';
 import type { WallpaperDoc } from '../storage/sync-shapes.ts';
@@ -37,6 +38,9 @@ interface AppPanelStore {
 }
 
 const TAG = '[AppPanelStore]';
+
+/** loadApps 的响应次序护栏，过期响应整段丢弃，留在模块层 */
+const loadGuard = new LoadGuard();
 
 export const useAppPanelStore = create<AppPanelStore>((set, get) => {
   /**
@@ -76,13 +80,21 @@ export const useAppPanelStore = create<AppPanelStore>((set, get) => {
 
     loadApps: async (serverAddress) => {
       logger.info(`${TAG} loadApps start`);
+      const ticket = loadGuard.begin();
       set({ status: 'loading' });
       try {
         const apps = await fetchAgentApps(serverAddress);
+        if (!loadGuard.isCurrent(ticket)) {
+          logger.info(`${TAG} loadApps dropped a stale response`);
+          return;
+        }
         logger.info(`${TAG} loadApps ready, ${apps.length} apps`);
         set({ apps, status: 'ready' });
         refresh();
       } catch (e) {
+        if (!loadGuard.isCurrent(ticket)) {
+          return;
+        }
         logger.error(`${TAG} loadApps failed: ${e}`);
         set({ status: 'error' });
       }
