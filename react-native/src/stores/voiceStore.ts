@@ -13,10 +13,7 @@ import RNFS from 'react-native-fs';
 import Toast from 'react-native-toast-message';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
-import {
-  fetchAgentDetail,
-  fetchTtsConfig,
-} from '../api/server-api';
+import { fetchAgentDetail, fetchTtsConfig } from '../api/server-api';
 import type { SpeakErrorReason } from '../api/server-api';
 import {
   listMissing,
