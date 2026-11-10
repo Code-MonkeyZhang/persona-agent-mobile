@@ -30,6 +30,8 @@ export interface ToolCall {
   /** 模型自写的工具叙述，随 toolCalls 项透传，供显示层取值优先读 */
   toolTitle?: string;
   toolIntent?: string;
+  /** MCP 工具所属服务的 logo 图址，随 toolCalls 项透传，历史行复用 */
+  iconUrl?: string;
 }
 
 /** step_complete 消息中的工具执行结果项 */
@@ -819,6 +821,20 @@ function withAbsoluteLogoUrl<T extends { logoUrl?: string }>(
 }
 
 /**
+ * 解析时间线工具行图址为可直接显示的地址。
+ * 相对路由地址补主机地址，CachedImage 按内容哈希参数走本地缓存，远程回退网址原样返回。
+ * @param iconUrl 事件或落盘步骤携带的图址
+ * @param serverAddress 当前连接的服务端地址
+ */
+export function resolveTimelineIconUrl(
+  iconUrl: string | undefined,
+  serverAddress: string
+): string | undefined {
+  if (!iconUrl) return undefined;
+  return withAbsoluteLogoUrl({ logoUrl: iconUrl }, serverAddress).logoUrl;
+}
+
+/**
  * 获取服务器上所有 MCP 服务器列表（含连接状态和工具信息）。
  */
 export async function fetchMcpServers(
@@ -1237,6 +1253,8 @@ interface ServerToolCall {
   /** 模型自写的工具叙述，随消息落盘，回看读它保真 */
   toolTitle?: string;
   toolIntent?: string;
+  /** MCP 工具所属服务的 logo 图址，随消息落盘，历史行复用 */
+  iconUrl?: string;
   toolResult?: {
     content: string;
     isError: boolean;
@@ -1395,6 +1413,7 @@ export function convertToChatMessages(
           toolInput: tc.function.arguments,
           toolTitle: tc.toolTitle,
           toolIntent: tc.toolIntent,
+          iconUrl: resolveTimelineIconUrl(tc.iconUrl, serverAddress),
           toolResult: tc.toolResult
             ? { output: tc.toolResult.content, isError: tc.toolResult.isError }
             : undefined,

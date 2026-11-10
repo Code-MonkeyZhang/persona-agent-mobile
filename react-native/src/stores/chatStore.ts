@@ -32,13 +32,14 @@ import {
 import { cacheDb } from '../storage/cache-db.ts';
 import { toServerChatMessages } from '../storage/sync-shapes.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
-import { toContentBlocks, fromContentBlocks } from '../api/server-api.ts';
-import { getDeviceId } from '../utils/DeviceUtils.ts';
 import {
-  summarizeToolInput,
-  type LiveRunState,
-  type LiveStep,
-} from '../chat/component/LiveStrip';
+  toContentBlocks,
+  fromContentBlocks,
+  resolveTimelineIconUrl,
+} from '../api/server-api.ts';
+import { getDeviceId } from '../utils/DeviceUtils.ts';
+import { summarizeToolInput } from '../lib/tool-summary.ts';
+import { type LiveRunState, type LiveStep } from '../chat/component/LiveStrip';
 import {
   useSessionStore,
   extractPreview,
@@ -123,6 +124,7 @@ function cycleToThoughts(
       toolInput: tc.arguments,
       toolTitle: tc.toolTitle,
       toolIntent: tc.toolIntent,
+      iconUrl: resolveTimelineIconUrl(tc.iconUrl, getServerAddress()),
       toolResult: result
         ? { output: result.result, isError: !result.success }
         : undefined,
@@ -548,8 +550,8 @@ function mergeStepIntoLiveRun(
       failed: th.isError || th.toolResult?.isError || undefined,
       // 闭合时以落盘侧的存档文案为准，tool_started 漏收的步从这里补上取值链第一档
       toolTitle: th.toolTitle ?? openSteps[i]?.toolTitle,
-      // logo 图址只在 tool_started 事件携带，闭合步沿用活动步的图址
-      iconUrl: openSteps[i]?.iconUrl,
+      // 图址已随步骤落盘，闭合步优先读落盘侧，活动步的图址兜底
+      iconUrl: th.iconUrl ?? openSteps[i]?.iconUrl,
     };
     if (i < openSteps.length) closed.push(step);
     else missed.push(step);
@@ -799,7 +801,7 @@ function registerWsHandler(): void {
               tool: toolName,
               detail: paramSummary,
               toolTitle,
-              iconUrl,
+              iconUrl: resolveTimelineIconUrl(iconUrl, getServerAddress()),
               startedAt: Date.now(),
             },
           ],
@@ -808,7 +810,9 @@ function registerWsHandler(): void {
         },
       });
       logger.info(
-        `[live-strip] tool started, session=${sessionId} tool=${toolName}`
+        `[live-strip] tool started, session=${sessionId} tool=${toolName} icon=${
+          iconUrl ?? 'none'
+        }`
       );
     },
     onContentStarted: (sessionId, stepIndex) => {

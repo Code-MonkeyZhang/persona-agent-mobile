@@ -2,9 +2,8 @@
  * @file LiveStrip.tsx
  * @description 会话时间线的行语言底座与顶栏时间线组件。
  *   - 行语言在手机端只此一处定义，消息内思考过程与顶栏时间线都从这里取口径
- *   - summarize 系纯函数从 persona-agent dev 的 packages/shared/src/tool-summary.ts
- *     复制维护，掩码先于截断执行的顺序不能反，两处改动需同步，这是跨仓纪律
- *   - 本体无 Grep 与 WebSearch，映射键按工具实名登记，未登记工具回退文档图标
+ *   - 摘要与动向句纯函数在 src/lib/tool-summary.ts，那是共享包的整块镜像，
+ *     本体无 Grep 与 WebSearch，映射键按工具短名登记，未登记工具回退扳手
  *   - 时间线三档浮在消息区上方不占布局，消息区高度恒定，行数据从消息流加运行态推导不新增存储
  *   - 行纯展示不可点，详情弹层只在桌面端
  *   - 档位偏好经本地存储跨启动记忆，只记 line 与 hair 两态，中止的轮次不落盘，时间线上它没有发生过
@@ -22,7 +21,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import {
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -31,6 +29,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import BackdropBlur from '../../component/BackdropBlur.tsx';
+import CachedImage from '../../component/CachedImage';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   CheckCircle,
@@ -50,6 +49,12 @@ import {
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  shortToolName,
+  stepPhrase,
+  summarizeToolInput,
+  trunc,
+} from '../../lib/tool-summary.ts';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../../stores/chatStore';
 import { BANNER_HEIGHT, useBannerPresence } from '../../home/ConnectionBanner';
 import {
@@ -97,7 +102,7 @@ type IconComponent = ComponentType<{
   color?: string;
 }>;
 
-/** 工具名到行前置位身份图标的映射，内置工具全量登记，未登记的第三方工具回退扳手 */
+/** 工具短名到行前置位身份图标的映射，内置工具全量登记，未登记的第三方工具回退扳手 */
 const TOOL_ICONS: Record<string, IconComponent> = {
   read_file: FileText,
   write_file: FilePlus,
@@ -112,151 +117,11 @@ const TOOL_ICONS: Record<string, IconComponent> = {
 
 /**
  * 取工具步的身份图标，行前置位任何时候都是身份图标，成功失败不抢图标位
- * MCP 工具的身份由 iconUrl 图址承担，这里只兜无图址的展示位
- * @param tool 工具实名
+ * 全名先剥条目前缀再查表，MCP 工具的身份由 iconUrl 图址承担，这里只兜无图址的展示位
+ * @param tool 工具全名或短名
  */
 export function toolIcon(tool: string): IconComponent {
-  return TOOL_ICONS[tool] ?? Wrench;
-}
-
-/** 掩码替换用的固定星串，定长不泄露原始凭据长度 */
-const MASK = '********';
-
-/** 值形态的凭据正则清单，整段替换为固定星串 */
-const SENSITIVE_VALUE_RES: RegExp[] = [
-  /\bsk-[A-Za-z0-9_-]{8,}/g,
-  /\bghp_[A-Za-z0-9]{20,}/g,
-  /\bgho_[A-Za-z0-9]{20,}/g,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/g,
-];
-
-/** 键值对形态的凭据正则，键保留值替换 */
-const SENSITIVE_PAIR_RE =
-  /(\b(?:token|password|api_key)\b["']?\s*[:=]\s*)(["']?)[^\s"',}]+\2/gi;
-
-/**
- * 对文本里的凭据形态打码，值形态整段替换，键值对形态保留键只换值
- * @param text 待打码的原文
- */
-function maskSensitive(text: string): string {
-  let out = text;
-  for (const re of SENSITIVE_VALUE_RES) {
-    out = out.replace(re, MASK);
-  }
-  return out.replace(SENSITIVE_PAIR_RE, `$1$2${MASK}$2`);
-}
-
-/**
- * 文案截断，超上限裁到 max 减一并补省略号
- * @param text 原文
- * @param max 上限字符数
- */
-function trunc(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max - 1) + '…' : text;
-}
-
-/**
- * 路径取 basename，结尾斜杠剥掉后取最后一段
- * @param path 原始路径
- */
-function baseName(path: string): string {
-  return path.replace(/\/+$/, '').split('/').pop() || path;
-}
-
-/**
- * 取网址的主机名并去掉开头的 www，解析失败回退原文
- * RN 的类型环境不带 WHATWG URL 全局，用正则承担同一职责
- * @param url 原始网址
- */
-function hostnameFromUrl(url: string): string {
-  const matched = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/?#]+@)?([^/?#:]+)/i.exec(url);
-  return matched ? matched[1].replace(/^www\./, '') : url;
-}
-
-/**
- * 把工具入参对象压成一句参数摘要，供时间线行动向句复用
- * 摘要只取关键参数字段，缺参返回空串由调用方走文案回退，掩码先于截断执行
- * @param toolName 工具实名
- * @param toolInput 解析后的入参对象
- */
-export function summarizeToolInput(
-  toolName: string,
-  toolInput?: Record<string, unknown>
-): string {
-  if (!toolInput) return '';
-  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-  let summary: string;
-  switch (toolName) {
-    case 'read_file':
-    case 'write_file':
-    case 'edit_file':
-      summary = str(toolInput.path);
-      break;
-    case 'bash':
-      summary = str(toolInput.command);
-      break;
-    case 'bash_output':
-    case 'bash_kill':
-      summary = str(toolInput.bash_id);
-      break;
-    case 'web_fetch':
-      summary = hostnameFromUrl(str(toolInput.url));
-      break;
-    case 'show_pose':
-      summary = str(toolInput.pose);
-      break;
-    case 'get_current_pose':
-      summary = '';
-      break;
-    default:
-      summary = trunc(maskSensitive(JSON.stringify(toolInput)), 40);
-      break;
-  }
-  return maskSensitive(summary);
-}
-
-/**
- * 单个步骤的自然语言动向句，三级取值链，模型自写短标题优先，
- * 查表翻译次之，未登记的第三方工具回退正在执行加工具名，截断口径只剩 Bash 24
- * @param t 文案函数
- * @param step 待叙述的步骤
- */
-export function stepPhrase(t: Translate, step: LiveStep): string {
-  if (step.toolTitle) return step.toolTitle;
-  switch (step.tool) {
-    case '':
-      return t('live.thinking');
-    case 'read_file':
-      return step.detail
-        ? `${t('live.read')} ${baseName(step.detail)}`
-        : t('live.readFallback');
-    case 'write_file':
-      return step.detail
-        ? `${t('live.write')} ${baseName(step.detail)}`
-        : t('live.writeFallback');
-    case 'edit_file':
-      return step.detail
-        ? `${t('live.edit')} ${baseName(step.detail)}`
-        : t('live.editFallback');
-    case 'bash':
-      return step.detail
-        ? `${t('live.bash')} ${trunc(step.detail, 24)}`
-        : t('live.bashFallback');
-    case 'bash_output':
-      return t('live.bashOutput');
-    case 'bash_kill':
-      return t('live.bashKill');
-    case 'web_fetch':
-      return step.detail
-        ? `${t('live.webfetch')} ${step.detail}`
-        : t('live.webfetchFallback');
-    case 'show_pose':
-      return t('live.showPose');
-    case 'get_current_pose':
-      return t('live.getPose');
-    default:
-      return `${t('live.executing')} ${step.tool}`;
-  }
+  return TOOL_ICONS[shortToolName(tool)] ?? Wrench;
 }
 
 /**
@@ -377,6 +242,7 @@ export function buildRows(
           tool: th.toolName ?? '',
           detail: summarizeToolInput(th.toolName ?? '', th.toolInput),
           toolTitle: th.toolTitle,
+          iconUrl: th.iconUrl,
           failed: th.isError || th.toolResult?.isError || undefined,
         });
       } else if (th.type === 'thinking' && th.content) {
@@ -826,13 +692,13 @@ function HairSeam({
 /** 工具行的行数据形状，供前置位组件收窄消费 */
 type ToolRow = Extract<TimelineRowData, { kind: 'tool' }>;
 
-/** 工具行前置位，MCP 工具显所属服务 logo，图址缺失或加载失败回退身份图标 */
+/** 工具行前置位，MCP 工具显所属服务 logo，经 CachedImage 走内容哈希缓存，图址缺失或加载失败回退身份图标 */
 function ToolLeadingIcon({ row }: { row: ToolRow }) {
   const [logoFailed, setLogoFailed] = useState(false);
   if (row.iconUrl && !logoFailed) {
     return (
-      <Image
-        source={{ uri: row.iconUrl }}
+      <CachedImage
+        source={row.iconUrl}
         style={styles.toolLogo}
         resizeMode="contain"
         onError={() => setLogoFailed(true)}
