@@ -11,38 +11,30 @@ import { Minus, Plus, type LucideIcon } from 'lucide-react-native';
 import CachedImage from '../../component/CachedImage';
 import type { MarkedStyles } from 'react-native-marked/src/theme/types.ts';
 import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
-import type { McpServerInfo } from '../../api/server-api.ts';
+import type { McpServerStatus } from '../../api/server-api.ts';
 import type { PressMode } from '../../types/Chat.ts';
 import useMarkdown from '../../chat/component/markdown/useMarkdown.ts';
 import { CustomMarkdownRenderer } from '../../chat/component/markdown/CustomMarkdownRenderer.tsx';
 import { CustomTokenizer } from '../../chat/component/markdown/CustomTokenizer.ts';
 
 /**
- * MCP 状态四态直映，未连接且带 error 覆盖为红点配连接失败文案。
- * @param server 只取 status 与 error 的服务投影
+ * 工具条目状态四态直映，connecting、connected、needs_auth、failed 各配点色与文案键。
+ * 输入收窄为状态字符串，注册表条目与 /api/mcp 投影同用一张表，无兜底分支。
+ * @param status 条目连接状态
  * @param colors 主题色
  * @returns 状态点颜色与文案键
  */
 export function mcpStatusMeta(
-  server: Pick<McpServerInfo, 'status' | 'error'>,
+  status: McpServerStatus,
   colors: ColorScheme
 ): { color: string; labelKey: string } {
-  if (server.status === 'disconnected' && server.error) {
-    return { color: colors.error, labelKey: 'detail.statusError' };
-  }
-  const meta: Record<
-    McpServerInfo['status'],
-    { color: string; labelKey: string }
-  > = {
+  const meta: Record<McpServerStatus, { color: string; labelKey: string }> = {
     connected: { color: colors.success, labelKey: 'detail.statusConnected' },
     connecting: { color: colors.info, labelKey: 'detail.statusConnecting' },
-    needs_auth: { color: colors.warning, labelKey: 'agent.needsAuth' },
-    disconnected: {
-      color: colors.textTertiary,
-      labelKey: 'detail.statusDisconnected',
-    },
+    needs_auth: { color: colors.warning, labelKey: 'detail.statusNeedsAuth' },
+    failed: { color: colors.error, labelKey: 'detail.statusError' },
   };
-  return meta[server.status];
+  return meta[status];
 }
 
 /**

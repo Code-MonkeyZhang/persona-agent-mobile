@@ -441,6 +441,10 @@ export class CacheDb {
         // 表层无需改动，配置重拉由装配层在回放后触发
         return;
       }
+      case 'tools_invalidated': {
+        // 注册表无表层镜像，清单重拉由装配层在回放后触发
+        return;
+      }
       case 'launcher_prefs_updated': {
         // 偏好文档由 launcher-prefs 层处理，表层只推进游标
         return;

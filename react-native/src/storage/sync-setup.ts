@@ -38,6 +38,7 @@ import * as wsClient from '../api/ws-client.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { useMirrorStore } from '../stores/mirrorStore.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
+import { useToolsStore } from '../stores/toolsStore.ts';
 import {
   getServerAddress,
   loadDeviceRegistry,
@@ -175,6 +176,9 @@ export function setupSync(): void {
         ) {
           logger.info(`${TAG} agents invalidated, seq=${change.seq}`);
           agentsSync.refresh();
+        }
+        if (change.kind === 'tools_invalidated') {
+          useToolsStore.getState().consumeInvalidation(change.seq);
         }
       }
       // 小手机偏好事件整份携带文档，LWW 落地后通知界面重读

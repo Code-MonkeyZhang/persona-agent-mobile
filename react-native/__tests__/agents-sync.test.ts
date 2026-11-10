@@ -14,7 +14,6 @@ function agent(id: string): AgentInfo {
     defaultModel: { provider: 'p', model: 'm' },
     systemPrompt: 'prompt',
     maxSteps: 10,
-    mcpNames: [],
     skillNames: [],
     compressionThreshold: 50,
     createdAt: 1,

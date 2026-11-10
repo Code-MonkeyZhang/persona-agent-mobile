@@ -358,7 +358,6 @@ export interface AgentInfo {
   defaultModel: ModelConfig;
   systemPrompt: string;
   maxSteps: number;
-  mcpNames: string[];
   skillNames: string[];
   defaultWorkspacePath?: string;
   voiceId?: string;
@@ -383,7 +382,6 @@ export interface AgentUpdateInput {
   voiceId?: string;
   voiceLanguage?: string;
   skillNames?: string[];
-  mcpNames?: string[];
 }
 
 /**
@@ -435,12 +433,12 @@ export interface MemoryUpdateInput {
 /** Agent App 支持的 UI 变体（与 @persona/shared 的 SupportedUI 对齐） */
 export type SupportedUI = 'desktop' | 'mobile';
 
-/** MCP 服务器连接状态（对齐 @persona/shared 的 McpServerStatus） */
+/** MCP 服务器连接状态（对齐 @persona/shared 的 McpServerStatus），四态收敛，无未连接值 */
 export type McpServerStatus =
-  | 'disconnected'
   | 'connecting'
   | 'connected'
-  | 'needs_auth';
+  | 'needs_auth'
+  | 'failed';
 
 /** MCP 工具元数据（对齐 @persona/shared 的 McpToolInfo） */
 export interface McpToolInfo {
@@ -480,10 +478,34 @@ export interface McpServerInfo {
   oauthUrl?: string;
 }
 
-/** MCP 服务器详情（对应 GET /api/mcp/:name 的返回），tools 与 connectionType 必返 */
-export interface McpServerDetail extends McpServerInfo {
-  tools: McpToolInfo[];
-  connectionType: McpConnectionType;
+/** 工具注册表条目的来源标记（对齐 @persona/shared 的 ToolEntryKind） */
+export type ToolEntryKind = 'builtin' | 'mcp' | 'app';
+
+/** 注册表功能清单项（对齐 @persona/shared 的 ToolFunctionInfo），模型侧用全名界面显示短名 */
+export interface ToolFunctionInfo {
+  name: string;
+  shortName: string;
+  description?: string;
+}
+
+/**
+ * 工具注册表条目（对应 GET /api/tools 投影，内置、MCP 与 App 三类来源统一形状）。
+ * assigned 只在带 agentId 查询时存在，默认规则只在服务端算，客户端不派生。
+ */
+export interface ToolEntryInfo {
+  id: string;
+  kind: ToolEntryKind;
+  name: string;
+  description?: string;
+  status: McpServerStatus;
+  functions: ToolFunctionInfo[];
+  url?: string;
+  logoUrl?: string;
+  instructions?: string;
+  author?: string;
+  error?: string;
+  oauthUrl?: string;
+  assigned?: boolean;
 }
 
 /** Agent App 信息，界面走 /apps/:name 反代路径，图标走 logoUrl 哈希地址，displayName 为显示名 */
@@ -811,21 +833,41 @@ export async function fetchMcpServers(
 }
 
 /**
- * 获取单个 MCP 服务器的详情（对应 GET /api/mcp/:name）。
- * 含逐 tool 名称与描述、instructions 与 connectionType，
- * instructions 只有连接成功才有，needsAuth 状态拿不到。
+ * 拉取工具注册表清单（对应 GET /api/tools）。
+ * 带 agentId 时每条附 assigned 标记，lang 传 en 时服务端取英文文案，
+ * 相对 logo 地址补全为绝对地址。
  */
-export async function getMcpServer(
+export async function listTools(
   serverAddress: string,
-  name: string
-): Promise<McpServerDetail> {
-  const url = `${serverAddress}/api/mcp/${encodeURIComponent(name)}`;
+  agentId: string,
+  lang: 'zh' | 'en'
+): Promise<ToolEntryInfo[]> {
+  const url = `${serverAddress}/api/tools?agentId=${encodeURIComponent(
+    agentId
+  )}&lang=${lang}`;
   const responseText = await httpGet(url);
-  const data = JSON.parse(responseText) as { server: McpServerDetail };
+  const data = JSON.parse(responseText) as { tools: ToolEntryInfo[] };
   logger.info(
-    `${TAG} getMcpServer → ${name} status=${data.server.status} tools=${data.server.toolCount}`
+    `${TAG} listTools → ${data.tools.length} entries, assigned=${
+      data.tools.filter((e) => e.assigned === true).length
+    }`
   );
-  return withAbsoluteLogoUrl(data.server, serverAddress);
+  return data.tools.map((entry) => withAbsoluteLogoUrl(entry, serverAddress));
+}
+
+/**
+ * 写一条工具分配记录（对应 POST /api/tools/assignment）。
+ * 内置开关与外部加减号同走此端点，服务端算 effective 增删后落盘并广播失效事件。
+ */
+export async function assignTool(
+  serverAddress: string,
+  agentId: string,
+  entryId: string,
+  assigned: boolean
+): Promise<void> {
+  const url = `${serverAddress}/api/tools/assignment`;
+  await httpPost(url, { agentId, entryId, assigned });
+  logger.info(`${TAG} assignTool → ${entryId} ${assigned ? 'on' : 'off'}`);
 }
 
 /**

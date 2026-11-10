@@ -1,17 +1,20 @@
 /**
  * @file AgentNavPage.tsx
  * @description 工具与技能的管理页，单页双视图由入口行携带的 view 参数决定。
- *   数据取当前 agent 的 mcpNames 与 skillNames，工具与技能视图都分已分配与库两组，
- *   内置三项常驻已分配组，不可移除也不参与写回，
- *   AssignButton 是分配的唯一入口，本地先切换分组，写回失败回滚并提示。
+ *   headerTitle 按视图配图标加文字的组合，图标与首页入口行同源。
+ *   工具视图读注册表清单分三组，内置组独立置顶，行尾开关写分配端点，
+ *   已分配与未分配两组住 mcp 与 app 条目，加减号同写分配端点，
+ *   assigned 直读服务端标记，客户端不派生默认值。
+ *   技能视图取 agent 的 skillNames 与 /api/skills 清单分两组，行为不变。
+ *   进页数据态由 PageLoadState 整页呈现，工具看 store 缓存与错误，技能看本页拉数状态。
  *   长相基准是 demo 的 AgentNavPage，行为基准是桌面端。
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -28,16 +31,18 @@ import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
 import {
   type AgentInfo,
-  type McpServerInfo,
   type SkillInfo,
+  type ToolEntryInfo,
   fetchAgentDetail,
-  fetchMcpServers,
   fetchSkills,
   updateAgent,
 } from '../api/server-api.ts';
 import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
+import { IconHeaderTitle } from '../component/IconHeaderTitle.tsx';
+import { PageLoadState, type PagePhase } from '../component/PageLoadState.tsx';
+import { useToolsStore } from '../stores/toolsStore.ts';
 import { logger } from '../lib/logger';
-import { BUILT_IN_TOOLS, type BuiltInTool } from './builtInTools.ts';
+import { BUILTIN_ICONS, BUILTIN_ICON_FALLBACK } from './builtInTools.ts';
 import {
   AssignButton,
   EntityLogo,
@@ -60,15 +65,77 @@ function EmptyState({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
   );
 }
 
-/** 工具行：logo 磁贴加状态点与显示名，副行是连接状态，行尾加减号 */
+/**
+ * 内置工具行：图标加名称，副行开时显示功能数关时显示已关闭，
+ * 行尾开关写分配端点，写径在途时锁定防重复点击，关掉的行置灰但留在组内。
+ */
+function BuiltinToolRow({
+  entry,
+  disabled,
+  locked,
+  first,
+  onOpen,
+  onToggle,
+}: {
+  entry: ToolEntryInfo;
+  disabled: boolean;
+  /** 写分配在途，开关暂锁 */
+  locked: boolean;
+  first?: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+}) {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const styles = createStyles(colors);
+  const Icon = BUILTIN_ICONS[entry.id] ?? BUILTIN_ICON_FALLBACK;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.row,
+        !first && styles.rowBorder,
+        disabled && styles.rowDimmed,
+      ]}
+      activeOpacity={0.7}
+      onPress={onOpen}
+    >
+      <View style={styles.builtinIconBox}>
+        <Icon size={16} color={colors.primary} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {entry.name}
+        </Text>
+        <View style={styles.subLine}>
+          <StatusBadge
+            color={disabled ? colors.textTertiary : colors.success}
+            label={
+              disabled
+                ? t('nav.builtinOff')
+                : t('nav.funcCount', { count: entry.functions.length })
+            }
+          />
+        </View>
+      </View>
+      <Switch
+        value={!disabled}
+        onValueChange={onToggle}
+        disabled={locked}
+        trackColor={{ false: colors.border, true: colors.primary }}
+      />
+    </TouchableOpacity>
+  );
+}
+
+/** 外部工具行：logo 磁贴加显示名，副行四态状态标，行尾加减号写分配端点 */
 function ToolRow({
-  server,
+  entry,
   assigned,
   first,
   onOpen,
   onToggleAssign,
 }: {
-  server: McpServerInfo;
+  entry: ToolEntryInfo;
   assigned: boolean;
   first?: boolean;
   onOpen: () => void;
@@ -77,7 +144,7 @@ function ToolRow({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const styles = createStyles(colors);
-  const meta = mcpStatusMeta(server, colors);
+  const meta = mcpStatusMeta(entry.status, colors);
   return (
     <TouchableOpacity
       style={[styles.row, !first && styles.rowBorder]}
@@ -85,56 +152,19 @@ function ToolRow({
       onPress={onOpen}
     >
       <EntityLogo
-        src={server.logoUrl}
-        fallback={server.agentApp ? AppWindow : Wrench}
+        src={entry.logoUrl}
+        fallback={entry.kind === 'app' ? AppWindow : Wrench}
         size="sm"
       />
       <View style={styles.rowContent}>
         <Text style={styles.rowTitle} numberOfLines={1}>
-          {server.displayName}
+          {entry.name}
         </Text>
         <View style={styles.subLine}>
           <StatusBadge color={meta.color} label={t(meta.labelKey)} />
         </View>
       </View>
       <AssignButton assigned={assigned} onPress={onToggleAssign} />
-    </TouchableOpacity>
-  );
-}
-
-/** 内置工具行：图标加名称，副行是常绿状态标，常驻已分配组，不带加减号 */
-function BuiltinToolRow({
-  tool,
-  first,
-  onOpen,
-}: {
-  tool: BuiltInTool;
-  first?: boolean;
-  onOpen: () => void;
-}) {
-  const { colors } = useTheme();
-  const { t } = useTranslation();
-  const styles = createStyles(colors);
-  return (
-    <TouchableOpacity
-      style={[styles.row, !first && styles.rowBorder]}
-      activeOpacity={0.7}
-      onPress={onOpen}
-    >
-      <View style={styles.builtinIconBox}>
-        <tool.icon size={16} color={colors.primary} />
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {tool.name}
-        </Text>
-        <View style={styles.subLine}>
-          <StatusBadge
-            color={colors.success}
-            label={t('detail.statusConnected')}
-          />
-        </View>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -174,30 +204,43 @@ function SkillRow({
   );
 }
 
-/** 按绑定名称表从清单里挑出已分配条目，保持 mcpNames 的既有顺序 */
-function pickAssigned<T extends { name: string }>(
-  names: string[],
-  entries: T[]
-): T[] {
-  return names
-    .map((n) => entries.find((e) => e.name === n))
-    .filter((e): e is T => Boolean(e));
-}
-
 const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
   const { view } = route.params;
   const { colors } = useTheme();
   const { t } = useTranslation();
   const styles = createStyles(colors);
 
+  const toolsEntries = useToolsStore((s) => s.entries);
+  const toolsError = useToolsStore((s) => s.entriesError);
+  const loadTools = useToolsStore((s) => s.loadTools);
+  const toggleAssignment = useToolsStore((s) => s.toggleAssignment);
+  const assigning = useToolsStore((s) => s.assigning);
+
   const [agent, setAgent] = useState<AgentInfo | null>(null);
-  const [servers, setServers] = useState<McpServerInfo[]>([]);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  /** 进页并行拉当前 agent 详情与工具技能两份清单，按名称对齐分配态 */
-  const load = useCallback(async () => {
+  /** headerTitle 按视图配图标，工具扳手技能闪光，与首页入口行同源 */
+  useEffect(() => {
+    navigation.setOptions({
+      // eslint-disable-next-line react/no-unstable-nested-components
+      headerTitle: () =>
+        view === 'tools' ? (
+          <IconHeaderTitle icon={Wrench} title={t('nav.titleTools')} />
+        ) : (
+          <IconHeaderTitle icon={Sparkles} title={t('nav.titleSkills')} />
+        ),
+    });
+  }, [navigation, view, t]);
+
+  /** 进页按视图拉数，工具视图走 store 拉注册表，技能视图并行拉 agent 与技能清单 */
+  useEffect(() => {
+    logger.info(`[AgentNav] mounted, view=${view}`);
+    if (view === 'tools') {
+      loadTools(getServerAgentId() || undefined);
+      return;
+    }
     const address = getServerAddress();
     const agentId = getServerAgentId();
     if (!address || !agentId) {
@@ -205,125 +248,101 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
       setLoading(false);
       return;
     }
-    try {
-      const [agentData, allServers, allSkills] = await Promise.all([
-        fetchAgentDetail(address, agentId),
-        fetchMcpServers(address),
-        fetchSkills(address),
-      ]);
-      setAgent(agentData);
-      setServers(allServers);
-      setSkills(allSkills);
-      setLoadFailed(false);
-      logger.info(
-        `[AgentNav] loaded, servers=${allServers.length} skills=${allSkills.length}` +
-          ` mcpAssigned=${agentData.mcpNames.length} skillAssigned=${agentData.skillNames.length}`
-      );
-    } catch (e) {
-      logger.error(`[AgentNav] load failed: ${e}`);
-      setLoadFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    logger.info(`[AgentNav] mounted, view=${view}`);
-    load();
-  }, [load, view]);
-
-  /** 把目标名称数组合回本地 agent 状态，只动对应的一组字段 */
-  const applyNames = (kind: 'mcp' | 'skill', names: string[]) => {
-    setAgent((cur) => {
-      if (!cur) {
-        return cur;
-      }
-      return kind === 'mcp'
-        ? { ...cur, mcpNames: names }
-        : { ...cur, skillNames: names };
-    });
-  };
+    Promise.all([fetchAgentDetail(address, agentId), fetchSkills(address)])
+      .then(([agentData, allSkills]) => {
+        setAgent(agentData);
+        setSkills(allSkills);
+        setLoadFailed(false);
+        logger.info(
+          `[AgentNav] loaded, skills=${allSkills.length}` +
+            ` skillAssigned=${agentData.skillNames.length}`
+        );
+      })
+      .catch((e) => {
+        logger.error(`[AgentNav] load failed: ${e}`);
+        setLoadFailed(true);
+      })
+      .finally(() => setLoading(false));
+  }, [loadTools, view]);
 
   /**
-   * 切换分配态。本地先切换分组，再走 updateAgent 写回全量名称数组，
+   * 切换技能分配态。本地先切换分组，再走 updateAgent 写回全量名称数组，
    * 失败时回滚本地分组并弹窗提示，成功时本地已是目标态无需覆盖。
-   * @param kind 名称数组归属，mcp 写回 mcpNames，skill 写回 skillNames
-   * @param name 条目机器名
+   * @param skill 技能条目
    */
-  const toggleAssign = (kind: 'mcp' | 'skill', name: string) => {
+  const toggleSkillAssign = (skill: SkillInfo) => {
     if (!agent) {
       return;
     }
-    const prev = kind === 'mcp' ? agent.mcpNames : agent.skillNames;
-    const next = prev.includes(name)
-      ? prev.filter((n) => n !== name)
-      : [...prev, name];
-    applyNames(kind, next);
+    const prev = agent.skillNames;
+    const next = prev.includes(skill.name)
+      ? prev.filter((n) => n !== skill.name)
+      : [...prev, skill.name];
+    setAgent({ ...agent, skillNames: next });
     const address = getServerAddress();
     if (!address) {
       return;
     }
-    const target = next.includes(name) ? 'assigned' : 'unassigned';
-    logger.info(`[AgentNav] toggle ${kind} assign: ${name} → ${target}`);
-    updateAgent(
-      address,
-      agent.id,
-      kind === 'mcp' ? { mcpNames: next } : { skillNames: next }
-    ).catch((e) => {
-      logger.warn(`[AgentNav] assign write failed, rollback: ${name} ${e}`);
-      applyNames(kind, prev);
+    const target = next.includes(skill.name) ? 'assigned' : 'unassigned';
+    logger.info(`[AgentNav] toggle skill assign: ${skill.name} → ${target}`);
+    updateAgent(address, agent.id, { skillNames: next }).catch((e) => {
+      logger.warn(
+        `[AgentNav] skill assign write failed, rollback: ${skill.name} ${e}`
+      );
+      setAgent((cur) => (cur ? { ...cur, skillNames: prev } : cur));
       Alert.alert(t('nav.assignFailedTitle'), t('nav.assignFailedMsg'));
     });
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (loadFailed || !agent) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.emptyStateText}>{t('nav.loadFailed')}</Text>
-      </View>
-    );
-  }
+  const openToolDetail = (entry: ToolEntryInfo) => {
+    if (entry.kind === 'builtin') {
+      navigation.navigate('BuiltinDetail', { id: entry.id });
+    } else {
+      navigation.navigate('McpDetail', { id: entry.id });
+    }
+  };
 
   const toolsView = () => {
-    if (servers.length === 0) {
+    if (!toolsEntries) return null;
+    if (toolsEntries.length === 0) {
       return <EmptyState icon={Wrench} text={t('nav.emptyTools')} />;
     }
-    const assigned = pickAssigned(agent.mcpNames, servers);
-    const pool = servers.filter((s) => !agent.mcpNames.includes(s.name));
+    const builtin = toolsEntries.filter((e) => e.kind === 'builtin');
+    const external = toolsEntries.filter((e) => e.kind !== 'builtin');
+    const assigned = external.filter((e) => e.assigned === true);
+    const pool = external.filter((e) => e.assigned !== true);
     return (
       <>
         <GroupBlock
-          label={t('nav.groupAssignedTools')}
-          count={BUILT_IN_TOOLS.length + assigned.length}
-          emptyHint={t('nav.emptyAssignedTools')}
+          label={t('nav.groupBuiltin')}
+          count={builtin.length}
+          emptyHint={t('nav.emptyTools')}
         >
-          {BUILT_IN_TOOLS.map((tool, i) => (
+          {builtin.map((entry, i) => (
             <BuiltinToolRow
-              key={tool.id}
-              tool={tool}
+              key={entry.id}
+              entry={entry}
+              disabled={entry.assigned === false}
+              locked={assigning.has(entry.id)}
               first={i === 0}
-              onOpen={() =>
-                navigation.navigate('BuiltinDetail', { id: tool.id })
-              }
+              onOpen={() => openToolDetail(entry)}
+              onToggle={() => toggleAssignment(entry.id)}
             />
           ))}
-          {assigned.map((server) => (
+        </GroupBlock>
+        <GroupBlock
+          label={t('nav.groupAssignedTools')}
+          count={assigned.length}
+          emptyHint={t('nav.emptyAssignedTools')}
+        >
+          {assigned.map((entry, i) => (
             <ToolRow
-              key={server.name}
-              server={server}
+              key={entry.id}
+              entry={entry}
               assigned
-              onOpen={() =>
-                navigation.navigate('McpDetail', { name: server.name })
-              }
-              onToggleAssign={() => toggleAssign('mcp', server.name)}
+              first={i === 0}
+              onOpen={() => openToolDetail(entry)}
+              onToggleAssign={() => toggleAssignment(entry.id)}
             />
           ))}
         </GroupBlock>
@@ -332,16 +351,14 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
           count={pool.length}
           emptyHint={t('nav.allToolsAssigned')}
         >
-          {pool.map((server, i) => (
+          {pool.map((entry, i) => (
             <ToolRow
-              key={server.name}
-              server={server}
+              key={entry.id}
+              entry={entry}
               assigned={false}
               first={i === 0}
-              onOpen={() =>
-                navigation.navigate('McpDetail', { name: server.name })
-              }
-              onToggleAssign={() => toggleAssign('mcp', server.name)}
+              onOpen={() => openToolDetail(entry)}
+              onToggleAssign={() => toggleAssignment(entry.id)}
             />
           ))}
         </GroupBlock>
@@ -350,11 +367,15 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
   };
 
   const skillsView = () => {
+    if (!agent) {
+      return null;
+    }
     if (skills.length === 0) {
       return <EmptyState icon={Sparkles} text={t('nav.emptySkills')} />;
     }
-    const assigned = pickAssigned(agent.skillNames, skills);
-    const pool = skills.filter((s) => !agent.skillNames.includes(s.name));
+    const assignedNames = agent.skillNames;
+    const assigned = skills.filter((s) => assignedNames.includes(s.name));
+    const pool = skills.filter((s) => !assignedNames.includes(s.name));
     return (
       <>
         <GroupBlock
@@ -371,7 +392,7 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
               onOpen={() =>
                 navigation.navigate('SkillDetail', { name: skill.name })
               }
-              onToggleAssign={() => toggleAssign('skill', skill.name)}
+              onToggleAssign={() => toggleSkillAssign(skill)}
             />
           ))}
         </GroupBlock>
@@ -389,13 +410,35 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
               onOpen={() =>
                 navigation.navigate('SkillDetail', { name: skill.name })
               }
-              onToggleAssign={() => toggleAssign('skill', skill.name)}
+              onToggleAssign={() => toggleSkillAssign(skill)}
             />
           ))}
         </GroupBlock>
       </>
     );
   };
+
+  /** 工具视图数据态：store 有缓存即就绪，首拉在途转圈，首拉失败整页失败态 */
+  const toolsPhase: PagePhase = toolsEntries
+    ? 'ready'
+    : toolsError
+    ? 'error'
+    : 'loading';
+  /** 技能视图数据态：拉数在途转圈，失败或无 agent 整页失败态 */
+  const skillsPhase: PagePhase = loading
+    ? 'loading'
+    : loadFailed || !agent
+    ? 'error'
+    : 'ready';
+  const phase = view === 'tools' ? toolsPhase : skillsPhase;
+
+  if (phase !== 'ready') {
+    return (
+      <View style={styles.scrollView}>
+        <PageLoadState phase={phase} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -410,12 +453,6 @@ const AgentNavPage: React.FC<Props> = ({ route, navigation }) => {
 /** 管理页样式工厂 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
-    center: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-    },
     scrollView: {
       flex: 1,
       backgroundColor: colors.surface,
@@ -451,6 +488,10 @@ const createStyles = (colors: ColorScheme) =>
     rowBorder: {
       borderTopWidth: 1,
       borderTopColor: colors.borderLight,
+    },
+    /** 关掉的内置行整行置灰，留在组内不失位 */
+    rowDimmed: {
+      opacity: 0.5,
     },
     rowContent: {
       flex: 1,

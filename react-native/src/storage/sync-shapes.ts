@@ -134,7 +134,8 @@ export type ChangeKind =
   | 'session_deleted'
   | 'turn_end'
   | 'agents_invalidated'
-  | 'launcher_prefs_updated';
+  | 'launcher_prefs_updated'
+  | 'tools_invalidated';
 
 /**
  * 单条变更事件。
@@ -143,6 +144,7 @@ export type ChangeKind =
  * - session_deleted 的 data 为空对象，id 由 sessionId 字段承载
  * - turn_end 的 data 为 { turnEnds }，是边界的完整快照
  * - agents_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉角色列表
+ * - tools_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉工具注册表
  * - launcher_prefs_updated 的 data 为 LauncherPrefsChangeData，携带整份偏好文档
  */
 export interface SessionChange {

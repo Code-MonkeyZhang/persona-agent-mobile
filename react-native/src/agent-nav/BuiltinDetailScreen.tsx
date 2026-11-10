@@ -1,17 +1,19 @@
 /**
  * @file BuiltinDetailScreen.tsx
- * @description 内置工具详情页，从工具列表的内置行推入，数据源是本地常量不请求服务端。
- *   头部卡放图标与名称，基本信息卡收类型、简介与常绿的连接状态，
- *   功能卡只列等宽名，文档卡渲染内置 markdown 文档。
+ * @description 内置工具详情页，从工具列表的内置行推入，数据读注册表清单。
+ *   头部卡放图标与名称，行尾开关写分配端点与列表行联动，
+ *   基本信息卡收简介与常绿的连接状态，
+ *   功能卡只列等宽短名，文档卡渲染条目自带的 markdown 说明。
  */
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
+import { useToolsStore } from '../stores/toolsStore.ts';
 import { logger } from '../lib/logger';
-import { BUILT_IN_TOOLS } from './builtInTools.ts';
+import { BUILTIN_ICONS, BUILTIN_ICON_FALLBACK } from './builtInTools.ts';
 import {
   DetailInfoRow,
   DocMarkdown,
@@ -29,10 +31,14 @@ const BuiltinDetailScreen: React.FC<Props> = ({ route }) => {
   const { t } = useTranslation();
   const styles = createStyles(colors);
 
-  const tool = BUILT_IN_TOOLS.find((x) => x.id === id);
+  const entries = useToolsStore((s) => s.entries);
+  const toggleAssignment = useToolsStore((s) => s.toggleAssignment);
+  const assigning = useToolsStore((s) => s.assigning);
 
-  if (!tool) {
-    logger.warn(`[BuiltinDetail] unknown builtin id: ${id}`);
+  const entry = entries?.find((e) => e.id === id);
+
+  if (!entry) {
+    logger.warn(`[BuiltinDetail] entry not in registry: ${id}`);
     return (
       <View style={styles.center}>
         <Text style={styles.emptyText}>{t('detail.notFound')}</Text>
@@ -40,33 +46,49 @@ const BuiltinDetailScreen: React.FC<Props> = ({ route }) => {
     );
   }
 
+  const Icon = BUILTIN_ICONS[id] ?? BUILTIN_ICON_FALLBACK;
+  const disabled = entry.assigned === false;
+
+  /** 行尾开关切换分配记录，目标态由 store 读最新清单态取反，本页不再计算 */
+  const toggle = () => {
+    toggleAssignment(id);
+  };
+
   return (
     <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.content}
     >
-      {/* 头部卡：图标盒加名称 */}
+      {/* 头部卡：图标盒加名称，行尾开关写分配记录 */}
       <View style={styles.headerCard}>
         <View style={styles.headerIconBox}>
-          <tool.icon size={20} color={colors.primary} />
+          <Icon size={20} color={colors.primary} />
         </View>
         <View style={styles.headerText}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {tool.name}
+            {entry.name}
           </Text>
         </View>
+        <Switch
+          value={!disabled}
+          onValueChange={toggle}
+          disabled={assigning.has(id)}
+          trackColor={{ false: colors.border, true: colors.primary }}
+        />
       </View>
 
-      {/* 基本信息段：类型、简介与常绿的连接状态 */}
+      {/* 基本信息段：简介与常绿的连接状态 */}
       <GroupSection title={t('detail.sectionBasic')}>
         <GroupCard>
-          <DetailInfoRow label={t('detail.fieldType')} first>
-            <Text style={styles.infoText}>{t('detail.typeBuiltin')}</Text>
-          </DetailInfoRow>
-          <DetailInfoRow label={t('detail.fieldIntro')}>
-            <Text style={styles.infoIntro}>{tool.desc}</Text>
-          </DetailInfoRow>
-          <DetailInfoRow label={t('detail.fieldStatus')}>
+          {entry.description ? (
+            <DetailInfoRow label={t('detail.fieldIntro')} first>
+              <Text style={styles.infoIntro}>{entry.description}</Text>
+            </DetailInfoRow>
+          ) : null}
+          <DetailInfoRow
+            label={t('detail.fieldStatus')}
+            first={!entry.description}
+          >
             <StatusBadge
               size="md"
               color={colors.success}
@@ -76,30 +98,32 @@ const BuiltinDetailScreen: React.FC<Props> = ({ route }) => {
         </GroupCard>
       </GroupSection>
 
-      {/* 功能段：只列等宽名 */}
+      {/* 功能段：只列等宽短名 */}
       <GroupSection
-        title={`${t('detail.sectionTools')} · ${tool.tools.length}`}
+        title={`${t('detail.sectionTools')} · ${entry.functions.length}`}
       >
         <GroupCard>
-          {tool.tools.map((item, i) => (
+          {entry.functions.map((fn, i) => (
             <View
-              key={item.name}
+              key={fn.name}
               style={[styles.toolRow, i > 0 && styles.toolRowBorder]}
             >
-              <Text style={styles.toolName}>{item.name}</Text>
+              <Text style={styles.toolName}>{fn.shortName}</Text>
             </View>
           ))}
         </GroupCard>
       </GroupSection>
 
-      {/* 文档段：内置文档按 markdown 渲染 */}
-      <GroupSection title={t('detail.sectionDocs')}>
-        <GroupCard>
-          <View style={styles.docContainer}>
-            <DocMarkdown value={tool.instructions} />
-          </View>
-        </GroupCard>
-      </GroupSection>
+      {/* 文档段：条目自带说明按 markdown 渲染 */}
+      {entry.instructions ? (
+        <GroupSection title={t('detail.sectionDocs')}>
+          <GroupCard>
+            <View style={styles.docContainer}>
+              <DocMarkdown value={entry.instructions} />
+            </View>
+          </GroupCard>
+        </GroupSection>
+      ) : null}
     </ScrollView>
   );
 };
@@ -152,10 +176,6 @@ const createStyles = (colors: ColorScheme) =>
       ...typography.titleBar,
       fontWeight: '600',
       color: colors.text,
-    },
-    infoText: {
-      ...typography.content,
-      color: colors.textDarkGray,
     },
     infoIntro: {
       ...typography.meta,
