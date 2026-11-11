@@ -169,7 +169,7 @@ function ToolRow({
   );
 }
 
-/** 技能行：名称加描述两行，行尾加减号 */
+/** 技能行：卡片图标加名称描述两行，图标缺失兜底技能图标，行尾加减号 */
 function SkillRow({
   skill,
   assigned,
@@ -191,6 +191,7 @@ function SkillRow({
       activeOpacity={0.7}
       onPress={onOpen}
     >
+      <EntityLogo src={skill.logoUrl} fallback={Sparkles} size="sm" />
       <View style={styles.rowContent}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {skill.displayName ?? skill.name}
