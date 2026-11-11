@@ -122,7 +122,6 @@
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "连接",
     "connecting": "连接中...",
-    "scanToConnect": "扫码连接",
     "scanning": "将二维码放入框内即可自动扫描",
     "cameraPermissionDenied": "需要相机权限才能扫码"
   },
@@ -152,6 +151,7 @@
     "statusAvailable": "可连接",
     "statusChecking": "检测中",
     "statusUnreachable": "连不上",
+    "pairRetry": "连接失败，点按重试",
     "nameRow": "名称",
     "deviceIdRow": "设备号",
     "addressRow": "地址",

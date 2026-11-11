@@ -122,7 +122,6 @@
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "Connect",
     "connecting": "Connecting...",
-    "scanToConnect": "Scan to Connect",
     "scanning": "Align the QR code within the frame",
     "cameraPermissionDenied": "Camera permission is required to scan QR codes"
   },
@@ -152,6 +151,7 @@
     "statusAvailable": "Available",
     "statusChecking": "Checking",
     "statusUnreachable": "Unreachable",
+    "pairRetry": "Connection failed, tap to retry",
     "nameRow": "Name",
     "deviceIdRow": "Device ID",
     "addressRow": "Address",

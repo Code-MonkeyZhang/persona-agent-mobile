@@ -2,7 +2,7 @@
  * @file connectChain.test.ts
  * @description 连接链的直测，ws-client、连接服务、握手、镜像库全部 mock，
  *   覆盖新主机落位、握手失败置红条、身份不符落位不回滚、切换先落位后建链、
- *   settle 幂等、删除当前主机接替切换、点当前主机刷新重建与在途忽略。
+ *   settle 幂等、删除当前主机接替切换、点当前主机刷新重建与后到意图顶掉在途链。
  */
 import { useConnectionStore } from '../src/stores/connectionStore';
 import { useDeviceStore } from '../src/stores/deviceStore';
@@ -84,7 +84,7 @@ beforeEach(() => {
     error: '',
     hostVersion: 0,
     probes: {},
-    pendingHostId: '',
+    pendingTarget: null,
     settledHostId: '',
   });
   useDeviceStore.setState({ devices: [], currentHostId: '' });
@@ -113,6 +113,11 @@ function seedTwoHosts(): void {
   });
 }
 
+/** 排空微任务与零毫秒定时器，让挂起的连接链推进到下一个断点 */
+function flushChain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('连接链四阶段', () => {
   it('新地址握手成功后落位建条目并接管连接', async () => {
     handshake.mockResolvedValue({
@@ -133,9 +138,10 @@ describe('连接链四阶段', () => {
     expect(switchHost).toHaveBeenCalledWith('host-a');
     expect(wsConnect).toHaveBeenCalledWith('https://a');
     expect(useConnectionStore.getState().hostVersion).toBe(1);
+    expect(useConnectionStore.getState().pendingTarget).toBeNull();
   });
 
-  it('握手失败停在地址无效，不建条目不建链', async () => {
+  it('握手失败停在地址无效，不建条目并保留在途目标供占位行重试', async () => {
     handshake.mockRejectedValue(new Error('Network error'));
 
     const ok = await useConnectionStore
@@ -146,6 +152,10 @@ describe('连接链四阶段', () => {
     expect(useConnectionStore.getState().status).toBe('address_invalid');
     expect(useDeviceStore.getState().devices).toHaveLength(0);
     expect(wsConnect).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState().pendingTarget).toEqual({
+      kind: 'address',
+      address: 'https://a',
+    });
   });
 
   it('切换时身份不符落位目标镜像并置红条', async () => {
@@ -189,7 +199,7 @@ describe('连接链四阶段', () => {
     expect(seen).toEqual(['connected', 'connecting', 'address_invalid']);
     expect(useDeviceStore.getState().currentHostId).toBe('host-b');
     expect(switchHost).toHaveBeenCalledWith('host-b');
-    expect(useConnectionStore.getState().pendingHostId).toBe('');
+    expect(useConnectionStore.getState().pendingTarget).toBeNull();
     expect(useConnectionStore.getState().probes['host-b']).toBe(false);
     expect(wsConnect).not.toHaveBeenCalled();
     // 核身一次失败补查一次
@@ -240,60 +250,92 @@ describe('连接链四阶段', () => {
     expect(switchHost).toHaveBeenCalledWith('host-a');
     expect(wsConnect).toHaveBeenCalledWith('https://a');
     expect(useConnectionStore.getState().status).toBe('connecting');
-    expect(useConnectionStore.getState().pendingHostId).toBe('');
+    expect(useConnectionStore.getState().pendingTarget).toBeNull();
     expect(useDeviceStore.getState().currentHostId).toBe('host-a');
     // 刷新失败不补查，探测结论表保持原样
     expect(useConnectionStore.getState().probes['host-a']).toBeUndefined();
   });
 
-  it('刷新在途时忽略新的点击', async () => {
+  it('刷新在途时新切换顶掉刷新链，旧链恢复后作废', async () => {
     seedTwoHosts();
     useConnectionStore.setState({ status: 'connected' });
-    let release: (info: unknown) => void = () => undefined;
+    /** 挂起的握手断点按创建序收集，释放不依赖微任务交错 */
+    const gates: Array<(info: unknown) => void> = [];
     handshake.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        })
+      () => new Promise((resolve) => gates.push(resolve))
     );
 
     const refresh = useConnectionStore.getState().switchDevice('host-a');
-    expect(useConnectionStore.getState().pendingHostId).toBe('host-a');
+    expect(useConnectionStore.getState().pendingTarget).toEqual({
+      kind: 'host',
+      hostId: 'host-a',
+    });
 
-    await useConnectionStore.getState().switchDevice('host-b');
-    expect(handshake).toHaveBeenCalledTimes(1);
+    // 后到的切换顶掉刷新链，在途目标换人，刷新链的握手结果不再生效
+    const switchover = useConnectionStore.getState().switchDevice('host-b');
+    expect(useConnectionStore.getState().pendingTarget).toEqual({
+      kind: 'host',
+      hostId: 'host-b',
+    });
 
-    release({ hostId: 'host-a', hostName: 'Host A', version: '1.13.0' });
+    gates[0]({ hostId: 'host-a', hostName: 'Host A', version: '1.13.0' });
     await refresh;
-    expect(useDeviceStore.getState().currentHostId).toBe('host-a');
-    expect(useConnectionStore.getState().pendingHostId).toBe('');
+    // 刷新链作废，host-a 没有落位建链
+    expect(wsConnect).not.toHaveBeenCalled();
+
+    // 先等切换链推进到它自己的握手断点，再放行
+    await flushChain();
+    gates[1]({ hostId: 'host-b', hostName: 'Host B', version: '1.13.0' });
+    await switchover;
+    expect(useDeviceStore.getState().currentHostId).toBe('host-b');
+    expect(wsConnect).toHaveBeenCalledWith('https://b');
+    expect(useConnectionStore.getState().pendingTarget).toBeNull();
   });
 
-  it('切换在途时忽略新的切换目标', async () => {
+  it('切换在途时扫码顶掉切换，旧链落定作废不建链', async () => {
     seedTwoHosts();
+    useConnectionStore.setState({ status: 'connected' });
     handshake.mockResolvedValue({
-      hostId: 'host-b',
-      hostName: 'Host B',
+      hostId: 'host-c',
+      hostName: 'Host C',
       version: '1.13.0',
     });
-    // 落位先于握手，阻塞点挂在镜像切换上，只挡第一次调用避免实现跨用例残留
-    let release: () => void = () => undefined;
+    pair.mockResolvedValue({ success: true });
+    // 阻塞点挂在切换链的镜像切换上，只挡第一次调用避免实现跨用例残留
+    let releaseSettle: () => void = () => undefined;
     switchHost.mockImplementationOnce(
-      () => new Promise<void>((resolve) => {
-        release = resolve;
-      })
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSettle = resolve;
+        })
     );
 
-    const first = useConnectionStore.getState().switchDevice('host-b');
-    expect(useConnectionStore.getState().pendingHostId).toBe('host-b');
+    const switchover = useConnectionStore.getState().switchDevice('host-b');
+    expect(useConnectionStore.getState().pendingTarget).toEqual({
+      kind: 'host',
+      hostId: 'host-b',
+    });
 
-    await useConnectionStore.getState().switchDevice('host-c');
-    expect(switchHost).toHaveBeenCalledTimes(1);
+    // 扫码新地址顶掉切换链，占位行接管进度
+    const scan = useConnectionStore.getState().connectByAddress('https://c');
+    expect(useConnectionStore.getState().pendingTarget).toEqual({
+      kind: 'address',
+      address: 'https://c',
+    });
 
-    release();
-    await first;
-    expect(useDeviceStore.getState().currentHostId).toBe('host-b');
-    expect(useConnectionStore.getState().pendingHostId).toBe('');
+    // 先等切换链推进到镜像切换的阻塞点，再放行
+    await flushChain();
+    releaseSettle();
+    await switchover;
+    await scan;
+
+    // 切换链放行后世代已过期，不再核身不建链，扫码链落位建链接管
+    expect(handshake).toHaveBeenCalledTimes(1);
+    const state = useDeviceStore.getState();
+    expect(state.devices).toHaveLength(3);
+    expect(state.currentHostId).toBe('host-c');
+    expect(wsConnect).toHaveBeenCalledWith('https://c');
+    expect(useConnectionStore.getState().pendingTarget).toBeNull();
   });
 
   it('删除当前主机时自动接替余下第一台', async () => {

@@ -2,7 +2,7 @@
  * @file device/DeviceDetailScreen.tsx
  * @description 设备详情页，iOS 设置形态。
  *   名称行原地弹改名对话框；设备号、地址、版本与上次连接只读供核对；
- *   红色删除行走系统确认，删的是最后一台时回根栈露首启页。
+ *   红色删除行走系统确认，删的是最后一台时回根栈，主页蓝条引导重新添加。
  */
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -91,7 +91,7 @@ const DeviceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     setRenameOpen(false);
   };
 
-  /** 删除确认用系统 Alert，确认后条目与镜像库一起清，删空回根栈露首启页 */
+  /** 删除确认用系统 Alert，确认后条目与镜像库一起清，删空回根栈由主页蓝条接管引导 */
   const handleDeletePress = () => {
     Alert.alert(
       t('device.deleteConfirmTitle', { name: deviceDisplayName(device) }),

@@ -26,7 +26,7 @@ type ScanQRScreenNavigationProp = NativeStackNavigationProp<
 /**
  * @file ScanQRScreen.tsx
  * @description 纯扫码页面。扫到 URL 后立即按地址发起连接并 goBack 返回，
- *              连接进度由连接横幅统一反馈。用 scannedRef 防止 onReadCode 连续触发。
+ *              连接进度由设备管理页的在途目标行播完。用 scannedRef 防止 onReadCode 连续触发。
  */
 const ScanQRScreen: React.FC = () => {
   const { colors } = useTheme();
