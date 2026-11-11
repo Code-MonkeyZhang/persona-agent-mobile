@@ -72,7 +72,7 @@ export interface TextBlock {
   text: string;
 }
 
-/** 图片内容块，宽高由客户端草稿期读取随块携带 */
+/** 图片内容块，宽高由客户端草稿期读取随块携带，name 是原始文件名，历史块可能缺失 */
 export interface ImageBlock {
   type: 'image';
   hash: string;
@@ -80,6 +80,7 @@ export interface ImageBlock {
   width: number;
   height: number;
   bytes: number;
+  name?: string;
 }
 
 /** 文件内容块，只携带定位与展示所需的最小字段 */

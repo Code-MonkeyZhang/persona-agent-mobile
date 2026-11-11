@@ -59,14 +59,11 @@ async function settleUpload(
       format = compressed.format;
     }
     const uploaded = await uploadAttachment(address, part);
-    if (item.type === FileType.image) {
-      const seeded = await imageCache.seed(uploaded.hash, part.uri, part.type);
-      logger.info(
-        `[attachments] seeded cache, name=${item.fileName} path=${
-          seeded ?? 'none'
-        }`
-      );
-    }
+    // 附件不分图片与文件，上传落定一律种进当前设备的缓存，发过的重启后离线可开
+    const seeded = await imageCache.seed(uploaded.hash, part.uri, part.type);
+    logger.info(
+      `[attachments] seeded cache, name=${item.fileName} path=${seeded ?? 'none'}`
+    );
     return {
       status: 'uploaded',
       hash: uploaded.hash,

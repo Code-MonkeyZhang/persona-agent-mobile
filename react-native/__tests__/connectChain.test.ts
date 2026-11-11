@@ -13,6 +13,8 @@ import * as wsClient from '../src/api/ws-client';
 
 jest.mock('uuid', () => ({ v4: () => 'test-device-id' }));
 
+jest.mock('@op-engineering/op-sqlite', () => ({ open: jest.fn() }));
+
 jest.mock('react-native-mmkv', () => {
   const store = new Map<string, string>();
   return {

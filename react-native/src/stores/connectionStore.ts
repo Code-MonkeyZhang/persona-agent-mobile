@@ -22,6 +22,8 @@ import { connectToServer } from '../api/connection-service.ts';
 import { fetchHandshakeInfo, type HandshakeInfo } from '../api/sync-api.ts';
 import * as wsClient from '../api/ws-client.ts';
 import { cacheDb } from '../storage/cache-db.ts';
+import { removeDeviceDir } from '../storage/cache-layout.ts';
+import { imageCache } from '../storage/image-cache-rn.ts';
 import { useDeviceStore } from './deviceStore.ts';
 import { useSessionStore } from './sessionStore.ts';
 import { useChatStore } from './chatStore.ts';
@@ -123,6 +125,8 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
     if (stale(epoch, `settle ${hostId}`)) {
       return;
     }
+    // 附件缓存预热扫设备目录，让落位后首帧 peek 直接命中本地路径
+    imageCache.warmup().catch(() => undefined);
     clearLastConversation();
     useSessionStore.getState().resetForHostSwitch();
     useChatStore.getState().resetForHostSwitch();
@@ -341,6 +345,8 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
       const wasCurrent = hostId === currentHostId;
       useDeviceStore.getState().removeDevice(hostId);
       await cacheDb.deleteHostDb(hostId);
+      imageCache.forget(hostId);
+      await removeDeviceDir(hostId);
       logger.info(`[ConnectionStore] device forgotten: ${hostId}`);
       if (!wasCurrent) {
         return;

@@ -14,6 +14,10 @@
  *   App 启动时调用一次 setupSync 与 initDeviceLayer，界面层只消费 mirrorStore 与镜像读接口。
  */
 import { cacheDb } from './cache-db.ts';
+import {
+  migrateLegacyMirror,
+  removeLegacyImageCacheDir,
+} from './cache-layout.ts';
 import { SyncEngine } from './sync-engine.ts';
 import {
   fetchHandshakeInfo,
@@ -129,6 +133,13 @@ export async function initDeviceLayer(): Promise<void> {
       saveDeviceRegistry(registry);
     }
   }
+  // 旧布局一次性迁移，镜像库文件族进设备目录，无法归属的旧图片缓存整目录废弃
+  for (const device of registry.devices) {
+    await migrateLegacyMirror(device.hostId, (message) =>
+      logger.info(`[CacheLayout] ${message}`)
+    );
+  }
+  await removeLegacyImageCacheDir();
   useDeviceStore.getState().hydrate(registry);
   if (registry.currentHostId) {
     await useConnectionStore.getState().settleHost(registry.currentHostId);

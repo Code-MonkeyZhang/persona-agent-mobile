@@ -1077,6 +1077,7 @@ export function toContentBlocks(
         width: file.width ?? 0,
         height: file.height ?? 0,
         bytes: file.fileSize,
+        name: file.fileName,
       });
     } else {
       blocks.push({
@@ -1108,7 +1109,7 @@ export function fromContentBlocks(
       const ext = EXT_BY_MIME[block.mimeType] ?? 'png';
       files.push({
         id: `blk-${block.hash}-${files.length}`,
-        fileName: `image.${ext}`,
+        fileName: block.name ?? `image.${ext}`,
         url: getAttachmentUrl(block.hash, serverAddress),
         fileSize: block.bytes,
         format: ext,

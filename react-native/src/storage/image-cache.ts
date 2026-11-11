@@ -107,6 +107,26 @@ export class ImageCache {
     if (!key) {
       return Promise.resolve(null);
     }
+    return this.resolveKeyed(key, source);
+  }
+
+  /**
+   * 按内容哈希解析任意附件到本地路径。
+   * 文件附件的地址不带 h 查询参数，键由调用方直接给出，
+   * 命中与校验路径与图片完全一致。
+   */
+  resolveByHash(hash: string, source: string): Promise<string | null> {
+    if (!HASH_PATTERN.test(hash)) {
+      return Promise.resolve(null);
+    }
+    return this.resolveKeyed(hash, source);
+  }
+
+  /** 键已确定后的解析主体，记忆命中、并发合并与未命中下载共用 */
+  private resolveKeyed(
+    key: string,
+    source: string
+  ): Promise<string | null> {
     const known = this.memo.get(key);
     if (known !== undefined) {
       return Promise.resolve(known === FAILED ? null : known);
@@ -123,7 +143,7 @@ export class ImageCache {
   }
 
   /**
-   * 种入一张上传落定的图片，发送设备发过的图不再回下载。
+   * 种入一张上传落定的附件，发送设备发过的不再回下载。
    * 复制本地压缩件到临时路径后走 settle 校验落盘，必须复制不能移动，
    * 乐观气泡的本地 uri 还指着原压缩件。任何失败静默返回 null 不影响发送，
    * 成功落盘顺带解除该键的失败哨兵。

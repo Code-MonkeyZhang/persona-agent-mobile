@@ -70,6 +70,23 @@ test('resolve 无 h 参数时直接返回 null 不触任何文件操作', async 
   expect(stats.download.length).toBe(0);
 });
 
+test('resolveByHash 按给定哈希走同一条命中与校验路径', async () => {
+  const stats: CallStats = {
+    download: [],
+    moveFile: [],
+    copyFile: [],
+    unlink: [],
+  };
+  const deps = makeDeps(stats, {
+    readDir: async () => [`${KEY}.bin`],
+  });
+  const cache = new ImageCache(DIR, deps);
+  const fileUrl = `http://x/api/attachments/${KEY}`;
+  expect(await cache.resolveByHash(KEY, fileUrl)).toBe(`${DIR}/${KEY}.bin`);
+  expect(stats.download.length).toBe(0);
+  expect(await cache.resolveByHash('not-a-hash', fileUrl)).toBeNull();
+});
+
 test('目录扫描命中已有文件时不发起下载', async () => {
   const stats: CallStats = {
     download: [],

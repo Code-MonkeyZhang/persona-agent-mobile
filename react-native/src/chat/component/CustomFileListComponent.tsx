@@ -3,7 +3,7 @@
  * @description 聊天附件的文件列表组件，有编辑与展示两种模式。
  *              编辑态是输入栏的横向草稿条，带删除按钮与发送期状态蒙层，上传中转圈、失败红卡点击重试。
  *              展示态是消息气泡内的附件区，单图原比例高度封顶、多图两列网格、文件卡白底彩徽章，
- *              图片经 CachedImage 走哈希缓存，大图查看先过同一缓存管线，文件卡点击下载后打开。
+ *              图片经 CachedImage 走哈希缓存，大图查看先过同一缓存管线，文件卡点击经附件缓存打开。
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -59,24 +59,35 @@ const openInFileViewer = (url: string) => {
 
 /**
  * 展示态文件卡的打开动作。
- * 本地地址直开，远端地址先下载进缓存目录再交给系统查看器。
+ * 本地地址直开，远端附件先经附件缓存解析，命中或下载校验落盘后，
+ * 按原文件名带扩展复制进系统缓存目录交给查看器。
  */
 const openRemoteFile = async (file: FileInfo) => {
   if (!file.url.startsWith('http')) {
     openInFileViewer(file.url);
     return;
   }
+  if (!file.hash) {
+    return;
+  }
   try {
+    const cached = await imageCache.resolveByHash(file.hash, file.url);
+    if (!cached) {
+      logger.warn(
+        `[FileList] attachment resolve failed, name=${file.fileName}`
+      );
+      return;
+    }
     const dot = file.fileName.lastIndexOf('.');
     const ext = dot >= 0 ? file.fileName.substring(dot) : '';
-    const target = `${RNFS.CachesDirectoryPath}/${file.hash ?? 'file'}${ext}`;
-    await RNFS.downloadFile({ fromUrl: file.url, toFile: target }).promise;
+    const target = `${RNFS.CachesDirectoryPath}/${file.hash}${ext}`;
+    await RNFS.copyFile(cached, target);
     logger.info(
-      `[messageList] attachment downloaded, name=${file.fileName} bytes=${file.fileSize}`
+      `[FileList] attachment opened from cache, name=${file.fileName} bytes=${file.fileSize}`
     );
     openInFileViewer(target);
   } catch (error) {
-    logger.warn('[messageList] attachment download failed:', error);
+    logger.warn('[FileList] open attachment failed:', error);
   }
 };
 

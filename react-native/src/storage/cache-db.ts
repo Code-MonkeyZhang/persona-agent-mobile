@@ -13,6 +13,12 @@ import RNFS from 'react-native-fs';
 import type { AgentInfo } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
 import {
+  MIRROR_SIDECARS,
+  deviceDirFor,
+  mirrorOpenParams,
+  mirrorPathFor,
+} from './cache-layout.ts';
+import {
   deriveSessionPreview,
   mixTurnEnds,
   type Message,
@@ -23,9 +29,6 @@ import {
 } from './sync-shapes.ts';
 
 const TAG = '[CacheDb]';
-
-/** 分区库文件名前缀，后接 hostId */
-const DB_NAME_PREFIX = 'persona-cache-';
 
 /** 分区前的旧单库文件名，仅存量迁移时使用 */
 const LEGACY_DB_NAME = 'persona-cache';
@@ -94,17 +97,13 @@ export class CacheDb {
   /** 写操作完成后的通知回调，界面层订阅后重读镜像 */
   private readonly listeners = new Set<() => void>();
 
-  /** 按主机身份算分区库文件名 */
-  private dbNameFor(hostId: string): string {
-    return DB_NAME_PREFIX + hostId;
-  }
-
   /**
    * 开库并建表，WAL 模式让读写互不阻塞。
+   * 库文件开在设备目录 cache/主机ID/mirror.db，目录由原生层逐级创建。
    * PRAGMA 与建表走 executeSync，仅首个调用承担，保证排队的异步查询执行前表已就绪。
    */
-  private openDb(name: string): DB {
-    const db = open({ name });
+  private openDb(hostId: string): DB {
+    const db = open(mirrorOpenParams(hostId));
     db.executeSync('PRAGMA journal_mode = WAL');
     for (const sql of DDL) {
       db.executeSync(sql);
@@ -118,7 +117,7 @@ export class CacheDb {
       if (!this.hostId) {
         throw new Error('mirror db has no host assigned');
       }
-      this.db = this.openDb(this.dbNameFor(this.hostId));
+      this.db = this.openDb(this.hostId);
       logger.info(`${TAG} opened mirror for ${this.hostId}`);
     }
     return this.db;
@@ -133,7 +132,7 @@ export class CacheDb {
       if (this.hostId === hostId && this.db) {
         return;
       }
-      const next = this.openDb(this.dbNameFor(hostId));
+      const next = this.openDb(hostId);
       if (this.db) {
         this.db.close();
       }
@@ -159,14 +158,14 @@ export class CacheDb {
     if (this.hostId === hostId) {
       await this.switchIdle();
     }
-    const db = this.openDb(this.dbNameFor(hostId));
+    const db = this.openDb(hostId);
     const path = db.getDbPath();
     db.close();
     try {
       db.delete();
     } catch (e) {
       // 原生删除接口不可用时退回文件系统按路径清理
-      for (const suffix of ['', '-wal', '-shm']) {
+      for (const suffix of MIRROR_SIDECARS) {
         await RNFS.unlink(path + suffix).catch(() => undefined);
       }
       logger.warn(`${TAG} db.delete failed, removed by path: ${e}`);
@@ -175,12 +174,12 @@ export class CacheDb {
   }
 
   /**
-   * 存量单库一次性迁移到按主机分区。
-   * 读旧库的身份章，有章把库文件连同 wal 与 shm 改名到该主机的分区名并返回 hostId，
+   * 存量单库一次性迁移到设备目录。
+   * 读旧库的身份章，有章把库文件连同 wal 与 shm 迁进该主机的设备目录并返回 hostId，
    * 无章说明镜像无从归属，删除旧文件返回 null。
    */
   async migrateLegacy(): Promise<string | null> {
-    const legacy = this.openDb(LEGACY_DB_NAME);
+    const legacy = open({ name: LEGACY_DB_NAME });
     let hostId: string | null = null;
     try {
       const result = await legacy.execute(
@@ -202,11 +201,9 @@ export class CacheDb {
       logger.info(`${TAG} legacy mirror unstamped, dropped`);
       return null;
     }
-    const to = from.replace(
-      new RegExp(`${LEGACY_DB_NAME}(\\.db)?$`),
-      `${this.dbNameFor(hostId)}$1`
-    );
-    for (const suffix of ['', '-wal', '-shm']) {
+    const to = mirrorPathFor(hostId);
+    await RNFS.mkdir(deviceDirFor(hostId)).catch(() => undefined);
+    for (const suffix of MIRROR_SIDECARS) {
       if (await RNFS.exists(from + suffix)) {
         await RNFS.moveFile(from + suffix, to + suffix);
       }
