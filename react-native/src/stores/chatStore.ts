@@ -586,6 +586,20 @@ function clearLiveRunIfOwned(sessionId: string): void {
   }
 }
 
+/** 时间线归属校验后换空时间线，步骤迁入消息流后蓝条跨轮次间隙不停，回合结束仍走清空 */
+function rearmLiveRunIfOwned(sessionId: string): void {
+  const { liveRun } = useChatStore.getState();
+  if (liveRun?.sessionId === sessionId) {
+    useChatStore.setState({
+      liveRun: {
+        sessionId,
+        steps: [],
+        replying: liveRun.replying || undefined,
+      },
+    });
+  }
+}
+
 /**
  * 切入生成状态并清空轮次缓冲。
  * 发送、订阅恢复与 App 通知触发回合时的公共准备步骤，
@@ -919,7 +933,7 @@ function registerWsHandler(): void {
           ...prev,
           armedDiskRefresh: true,
         }));
-        clearLiveRunIfOwned(sessionId);
+        rearmLiveRunIfOwned(sessionId);
         logger.info(`${TAG} turn end with empty buffer, disk refresh armed`);
         return;
       }
@@ -932,8 +946,8 @@ function registerWsHandler(): void {
       useSessionStore
         .getState()
         .updateSessionPreview(sessionId, extractPreview(bubble[0].text));
-      // 时间线步骤随组装迁入消息流，liveRun 立即清空避免同批步骤在消息流与活动尾巴各显一遍
-      clearLiveRunIfOwned(sessionId);
+      // 时间线步骤随组装迁入消息流，liveRun 换空时间线保持运动态跨过轮次间隙
+      rearmLiveRunIfOwned(sessionId);
       logger.info(
         `${TAG} turn bubble assembled, session=${sessionId} contentLen=${bubble[0].text.length}`
       );
