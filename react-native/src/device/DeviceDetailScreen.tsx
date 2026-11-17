@@ -2,13 +2,12 @@
  * @file device/DeviceDetailScreen.tsx
  * @description 设备详情页，iOS 设置形态。
  *   名称行原地弹改名对话框；设备号、地址、版本与上次连接只读供核对；
- *   红色删除行走系统确认，删的是最后一台时回根栈露首启页。
+ *   红色删除行走系统确认，删的是最后一台时回根栈，主页蓝条引导重新添加。
  */
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,13 +23,12 @@ import { ColorScheme, typography, useTheme } from '../theme/index.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import type { RouteParamList } from '../types/RouteTypes.ts';
+import { InfoRow } from '../component/InfoRow.tsx';
 import { deviceDisplayName } from './device-ui.ts';
 import InputDialog from './InputDialog.tsx';
 import { logger } from '../lib/logger';
 
 type Props = NativeStackScreenProps<RouteParamList, 'DeviceDetail'>;
-
-const MONO_FONT = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 /** 上次连接时间的口语化格式：从未连接、今天、昨天与更早日，时间与日期拼接走文案表 */
 function formatLastConnected(ts: number, t: TFunction): string {
@@ -93,7 +91,7 @@ const DeviceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     setRenameOpen(false);
   };
 
-  /** 删除确认用系统 Alert，确认后条目与镜像库一起清，删空回根栈露首启页 */
+  /** 删除确认用系统 Alert，确认后条目与镜像库一起清，删空回根栈由主页蓝条接管引导 */
   const handleDeletePress = () => {
     Alert.alert(
       t('device.deleteConfirmTitle', { name: deviceDisplayName(device) }),
@@ -196,33 +194,6 @@ const DeviceDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-/** 只读信息行：标签在左，值右对齐超长省略，技术标识走等宽字形 */
-function InfoRow({
-  label,
-  value,
-  mono,
-  divided,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  divided?: boolean;
-}) {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
-  return (
-    <View style={[styles.row, divided && styles.rowDivider]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text
-        style={mono ? styles.rowValueMono : styles.rowValue}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     safeArea: {
@@ -251,10 +222,6 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 11,
       minHeight: 50,
     },
-    rowDivider: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderLight,
-    },
     rowLabel: {
       ...typography.content,
       color: colors.text,
@@ -262,13 +229,6 @@ const createStyles = (colors: ColorScheme) =>
     rowValue: {
       flex: 1,
       ...typography.content,
-      color: colors.textSecondary,
-      textAlign: 'right',
-    },
-    rowValueMono: {
-      flex: 1,
-      fontSize: 12.5,
-      fontFamily: MONO_FONT,
       color: colors.textSecondary,
       textAlign: 'right',
     },

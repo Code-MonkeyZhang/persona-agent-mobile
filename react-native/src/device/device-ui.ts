@@ -2,11 +2,14 @@
  * @file device/device-ui.ts
  * @description 设备界面的共享裁决逻辑。
  *   状态点回答这台设备现在能不能连上，当前设备直映连接状态机，
- *   切换目标显连接中，其余设备吃探测结论，没查过算不知道。
- *   显示名兜底也在此共用。
+ *   在途目标命中行显连接中，其余设备吃探测结论，没查过算不知道。
+ *   在途目标的主机号解析与显示名兜底也在此共用。
  */
 import type { ColorScheme } from '../theme/index.ts';
-import type { ConnectionStatus } from '../stores/connectionStore.ts';
+import type {
+  ConnectionStatus,
+  PendingTarget,
+} from '../stores/connectionStore.ts';
 import type { DeviceEntry } from '../storage/StorageUtils.ts';
 
 /** 状态点四态，绿检查过能连上、红检查过连不上、蓝连接进行中、灰还不知道 */
@@ -22,7 +25,7 @@ export interface DeviceRowStatus {
   pulse: boolean;
 }
 
-/** 行状态裁决的上下文，谁是当前、谁在被切换、当前链路态与探测结论表 */
+/** 行状态裁决的上下文，谁是当前、谁是在途目标、当前链路态与探测结论表 */
 export interface DeviceRowContext {
   currentHostId: string;
   pendingHostId: string;
@@ -31,8 +34,25 @@ export interface DeviceRowContext {
 }
 
 /**
+ * 在途目标解析到的主机号，主机目标直取，地址目标按登记表地址精确匹配。
+ * 解析为空串说明目标身份未知，界面播占位行，身份等握手揭晓。
+ */
+export function pendingHostIdOf(
+  target: PendingTarget | null,
+  devices: DeviceEntry[]
+): string {
+  if (!target) {
+    return '';
+  }
+  if (target.kind === 'host') {
+    return target.hostId;
+  }
+  return devices.find((d) => d.address === target.address)?.hostId ?? '';
+}
+
+/**
  * 单台设备的状态点裁决。
- * 切换目标一律连接中；当前设备直映连接状态机，切换期间旧链路未动冻结为在线；
+ * 在途目标命中行一律连接中；当前设备直映连接状态机，切换期间旧链路未动冻结为在线；
  * 其余设备吃探测结论，缺项还不知道。
  */
 export function deviceDotStatus(

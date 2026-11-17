@@ -1,7 +1,7 @@
 {
   "name": "persona-mobile",
   "description": "Persona Mobile - React Native client for Persona Agent Server",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -30,6 +30,7 @@
     "expo-asset": "^55.0.20",
     "expo-audio": "^55.0.18",
     "expo-document-picker": "^55.0.17",
+    "expo-file-system": "^55.0.26",
     "expo-modules-core": "^55.0.26",
     "i18next": "^26.3.6",
     "jsonrepair": "^3.13.1",

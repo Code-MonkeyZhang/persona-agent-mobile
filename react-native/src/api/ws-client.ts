@@ -14,6 +14,7 @@ import type {
   ToolCall,
   WsToolResult,
   SpeakErrorReason,
+  CompressionFailReason,
   PendingInput,
   CurrentActivity,
   RunningSessionEntry,
@@ -103,6 +104,32 @@ export interface WsEventHandler {
   onUserMessage(sessionId: string, content: string | ContentBlock[]): void;
   /** 待注入缓冲全量同步，忙时插话的灰气泡据此渲染 */
   onPendingChanged(sessionId: string, pending: PendingInput[]): void;
+  /** 占用快照推送，小壳据此更新数字 */
+  onContextUsage(
+    sessionId: string,
+    snapshot: { used: number; window: number }
+  ): void;
+  /** 压缩开始事件，attempt 大于一表示重试相位 */
+  onCompressionStarted(
+    sessionId: string,
+    recordId: string,
+    attempt: number,
+    before: number | null
+  ): void;
+  /** 压缩落定事件，携带压缩前后的占用分子 */
+  onCompressionComplete(
+    sessionId: string,
+    recordId: string,
+    before: number | null,
+    after: number | null,
+    trigger: 'auto' | 'manual'
+  ): void;
+  /** 压缩终态失败事件 */
+  onCompressionFailed(
+    sessionId: string,
+    recordId: string,
+    reason: CompressionFailReason
+  ): void;
 }
 
 let ws: WebSocket | null = null;
@@ -238,7 +265,8 @@ export function registerSyncHandler(
  * 将 http(s) 地址转换为 ws(s) + /ws 路径，15 秒未握手完成经 close 走统一重连路径。
  */
 function doConnect(): void {
-  const wsUrl = serverAddress.replace(/^https?/, 'wss') + '/ws';
+  // 明文主机走 ws，加密主机走 wss，http 与 https 前缀各自对应转换
+  const wsUrl = serverAddress.replace(/^http/, 'ws') + '/ws';
   logger.info(`${TAG} connecting to ${wsUrl}`);
   const socket = new WebSocket(wsUrl);
   ws = socket;
@@ -496,6 +524,58 @@ function handleMessage(msg: ServerMessage): void {
         `${TAG} change, seq=${msg.change.seq} kind=${msg.change.kind}`
       );
       currentSyncHandler?.(msg.change);
+      break;
+
+    case 'context_usage':
+      logger.info(
+        `${TAG} context_usage, session=${msg.sessionId} used=${msg.used} window=${msg.window} source=${msg.source}`
+      );
+      currentHandler?.onContextUsage(msg.sessionId, {
+        used: msg.used,
+        window: msg.window,
+      });
+      break;
+
+    case 'compression_started':
+      logger.info(
+        `${TAG} compression_started, session=${msg.sessionId} record=${
+          msg.recordId
+        } attempt=${msg.attempt} before=${msg.before ?? 'none'}`
+      );
+      currentHandler?.onCompressionStarted(
+        msg.sessionId,
+        msg.recordId,
+        msg.attempt,
+        msg.before
+      );
+      break;
+
+    case 'compression_complete':
+      logger.info(
+        `${TAG} compression_complete, session=${msg.sessionId} record=${
+          msg.recordId
+        } before=${msg.before ?? 'none'} after=${msg.after ?? 'none'} trigger=${
+          msg.trigger
+        }`
+      );
+      currentHandler?.onCompressionComplete(
+        msg.sessionId,
+        msg.recordId,
+        msg.before,
+        msg.after,
+        msg.trigger
+      );
+      break;
+
+    case 'compression_failed':
+      logger.warn(
+        `${TAG} compression_failed, session=${msg.sessionId} record=${msg.recordId} reason=${msg.reason}`
+      );
+      currentHandler?.onCompressionFailed(
+        msg.sessionId,
+        msg.recordId,
+        msg.reason
+      );
       break;
   }
 }

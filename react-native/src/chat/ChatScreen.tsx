@@ -62,10 +62,7 @@ import { useVoiceStore } from '../stores/voiceStore';
 import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
-import {
-  keyboardAvoidanceOf,
-  useKeyboardLayout,
-} from './hooks/useKeyboardLayout.ts';
+import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
 import Animated, {
   useAnimatedStyle,
@@ -153,8 +150,18 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardLiftStyle, keyboardPaddingStyle, keyboardHeight } =
-    useKeyboardLayout(textInputViewRef, scroll.scrollToBottom, insets.bottom);
+  const {
+    keyboardLiftStyle,
+    overlaySpacerStyle,
+    fibInsetStyle,
+    overlayHeight,
+  } = useKeyboardLayout(
+    textInputViewRef,
+    scroll.scrollToBottom,
+    insets.bottom,
+    inputBarHeight,
+    companionBubbleHeight
+  );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const attachments = useAttachments();
   const clearDraft = attachments.clear;
@@ -409,37 +416,37 @@ function ChatScreen(): React.JSX.Element {
     transform: [{ translateX: slideTranslateX.value }],
   }));
 
-  const styles = createStyles(colors);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // 底部浮层总高度，输入栏本体加避让量加陪伴气泡，供列表占位与回底按钮定位，事件时刻一次跳变
-  const overlayHeight =
-    inputBarHeight +
-    companionBubbleHeight +
-    keyboardAvoidanceOf(keyboardHeight, insets.bottom);
+  // 回底按钮定位跟随浮层占位终态，事件时刻一次跳变
+  const scrollStyle = useMemo(
+    () =>
+      StyleSheet.create({
+        scrollToBottomContainerStyle: {
+          width: 30,
+          height: 30,
+          right: 16,
+          bottom: overlayHeight + 44,
+        },
+      }),
+    [overlayHeight]
+  );
 
-  const scrollStyle = StyleSheet.create({
-    scrollToBottomContainerStyle: {
-      width: 30,
-      height: 30,
-      right: 16,
-      bottom: overlayHeight + 44,
-    },
-  });
-
-  const slideStyle = StyleSheet.create({
-    row: {
-      width: screenWidth * 2,
-      height: '100%',
-      flexDirection: 'row',
-    },
-    pane: {
-      width: screenWidth,
-      height: '100%',
-    },
-    chatFooterSpacer: {
-      height: overlayHeight,
-    },
-  });
+  const slideStyle = useMemo(
+    () =>
+      StyleSheet.create({
+        row: {
+          width: screenWidth * 2,
+          height: '100%',
+          flexDirection: 'row',
+        },
+        pane: {
+          width: screenWidth,
+          height: '100%',
+        },
+      }),
+    [screenWidth]
+  );
 
   // 最新 AI 消息用于陪伴气泡与操作按钮判定，生成期间无占位气泡，运行态直接由 chatStatus 表达
   const lastAgentMessage = messages.find((m) => m.user._id === BOT_ID) ?? null;
@@ -450,10 +457,10 @@ function ChatScreen(): React.JSX.Element {
     () => <EmptyChatComponent isLoadingMessages={isLoadingMessages} />,
     [isLoadingMessages]
   );
-  const chatFooterSpacerStyle = slideStyle.chatFooterSpacer;
+  // 列表底部占位走动画侧逐帧联动，渲染函数引用保持稳定
   const renderChatFooter = useCallback(
-    () => <View style={chatFooterSpacerStyle} />,
-    [chatFooterSpacerStyle]
+    () => <Animated.View style={overlaySpacerStyle} />,
+    [overlaySpacerStyle]
   );
   const renderInputToolbar = useCallback(() => null, []);
   const renderMessage = useCallback(
@@ -615,8 +622,8 @@ function ChatScreen(): React.JSX.Element {
             />
           </View>
         )}
-        {/* 底部避让容器持安全区让位动画，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
-        <Animated.View style={keyboardPaddingStyle}>
+        {/* 底部避让容器持静态安全区垫底，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
+        <View style={fibInsetStyle}>
           <BackdropBlur />
           {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
           {notice && (
@@ -649,7 +656,7 @@ function ChatScreen(): React.JSX.Element {
               }
             />
           </View>
-        </Animated.View>
+        </View>
       </Animated.View>
     </View>
   );

@@ -1,125 +1,26 @@
 /**
- * @file builtInTools.ts
- * @description 内置工具清单，对齐桌面端 components/tools/builtInTools.ts 与 demo 同名文件。
- *   内置工具在类型上是一个常驻的内部工具源，每项自带功能集合与文档，
- *   常驻工具列表的已分配组，不可移除也不带加减号。
- *   文案与桌面端一致硬编码中文，不走 i18n。
+ * @file builtInTools.ts — 内置条目的图标映射，条目与功能数据本体来自 /api/tools 注册表
+ * 移动端仓不依赖 @persona/shared，built_in 前缀 id 以字面量对齐服务端清单，
+ * 图标是纯展示层，记忆统一书本带心，未登记 id 走扳手兜底
  */
 import {
   Terminal,
   FileText,
   Globe,
   BookHeart,
+  Smile,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 
-export interface BuiltInTool {
-  id: string;
-  icon: LucideIcon;
-  name: string;
-  desc: string;
-  /** 该内置项暴露的功能集合，展示形态与 MCP 的 tools 一致 */
-  tools: { name: string; description?: string }[];
-  /** 内置文档，详情页文档段按 markdown 渲染 */
-  instructions: string;
-}
+/** 内置条目 id 到图标的映射，id 与服务端 BUILTIN_TOOLSET_IDS 同值 */
+export const BUILTIN_ICONS: Record<string, LucideIcon> = {
+  built_in_terminal: Terminal,
+  built_in_files: FileText,
+  built_in_web: Globe,
+  built_in_pose: Smile,
+  built_in_memory: BookHeart,
+};
 
-/** 内置工具清单，终端、文件、网页与记忆各算一项 */
-export const BUILT_IN_TOOLS: BuiltInTool[] = [
-  {
-    id: 'bash',
-    icon: Terminal,
-    name: '终端操作',
-    desc: '执行命令，支持前台与后台',
-    tools: [
-      { name: 'bash', description: '在 shell 里执行命令并取回输出' },
-      { name: 'bash_output', description: '取回后台命令的增量输出' },
-      { name: 'bash_kill', description: '终止指定的后台命令' },
-    ],
-    instructions: `## 能力说明
-
-在独立的 shell 进程里执行命令并取回输出，适合构建、脚本执行与系统排查。
-
-## 执行方式
-
-- 前台执行会在命令结束后一次性返回全部输出
-- 后台执行立即返回任务号，长时命令不阻塞会话
-- 输出包含标准流与错误流，超长时自动截断并保留首尾
-
-## 安全边界
-
-- 每条命令有独立的超时，超时自动终止进程
-- 涉及删除或系统修改的命令会在会话内先请求确认`,
-  },
-  {
-    id: 'file',
-    icon: FileText,
-    name: '文件操作',
-    desc: '读取、写入与局部编辑文件',
-    tools: [
-      { name: 'read_file', description: '读取指定路径的文件内容' },
-      { name: 'write_file', description: '将内容写入指定路径的文件' },
-      { name: 'edit_file', description: '对文件做精确的局部修改' },
-    ],
-    instructions: `## 能力说明
-
-覆盖读取、写入与精确局部修改，是所有文件类任务的基础设施。
-
-## 使用方式
-
-- 读取按路径返回文本内容，超长文件自动分段
-- 写入整份覆盖目标文件，编辑只替换匹配到的片段
-- 编辑要求给出唯一的锚文本，多处匹配时拒绝执行
-
-## 安全边界
-
-- 路径限制在工作区内，越界访问会被拒绝
-- 二进制文件不做内容编辑，只返回占位信息`,
-  },
-  {
-    id: 'web-fetch',
-    icon: Globe,
-    name: '网页',
-    desc: '抓取网页并转为可读文本',
-    tools: [{ name: 'web_fetch', description: '抓取指定 URL 的网页内容' }],
-    instructions: `## 能力说明
-
-抓取网页并把正文转为文本，适合查资料、读文档与提取链接。
-
-## 使用方式
-
-- 给出完整 URL，返回去噪后的正文文本
-- 重定向自动跟随，超时与体积有上限保护
-
-## 安全边界
-
-- 内网地址与非常规协议会被 SSRF 防护拦截`,
-  },
-  {
-    id: 'memory',
-    icon: BookHeart,
-    name: '记忆',
-    desc: '读写关于用户的长期记忆',
-    tools: [
-      {
-        name: 'memory',
-        description: '写入、更新、遗忘与检索长期记忆条目',
-      },
-    ],
-    instructions: `## 能力说明
-
-维护关于用户的长期记忆，条目跨会话持久保存。常驻条目每轮注入，触发条目在话题命中时自动送入对话。
-
-## 使用方式
-
-- write 新增一条记忆，content 是一句自含的事实
-- update 按编号修改条目，只传要改的字段
-- forget 按编号删除，立即生效
-- search 按关键词检索，不知道编号时先查
-
-## 安全边界
-
-- 只记持久事实，不记一次性请求细节与本轮发生的事
-- 同文条目会被查重拦截，重复内容走 update 修改已有条目`,
-  },
-];
+/** 未登记内置 id 的兜底图标 */
+export const BUILTIN_ICON_FALLBACK: LucideIcon = Wrench;

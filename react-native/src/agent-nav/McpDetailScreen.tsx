@@ -1,11 +1,12 @@
 /**
  * @file McpDetailScreen.tsx
- * @description 工具详情页，从工具列表行推入，消费 getMcpServer 的投影。
- *   头部卡放 logo 磁贴、名称与作者，基本信息卡收类型、简介与状态，
- *   状态四态直映并附错误红字，功能段只列 tool 等宽名不带描述，
- *   文档段按 markdown 渲染握手说明，未连接与待授权给占位文案。
+ * @description 外部工具详情页，从工具列表行推入，数据读注册表清单，mcp 与 app 同构。
+ *   手机端对连接动作只读，授权与重连都在桌面端完成，这里不放任何动作按钮。
+ *   头部卡放 logo 磁贴、名称与作者，基本信息卡收简介与四态状态并附错误红字，
+ *   功能段只列等宽短名不带描述，文档段按 markdown 渲染条目说明，
+ *   未就绪的段按状态给占位文案。
  */
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -18,13 +19,8 @@ import { AppWindow, Wrench } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme, ColorScheme } from '../theme/index.ts';
 import { RouteParamList } from '../types/RouteTypes.ts';
-import {
-  type McpServerDetail,
-  type McpServerStatus,
-  getMcpServer,
-} from '../api/server-api.ts';
-import { getServerAddress } from '../storage/StorageUtils.ts';
-import { logger } from '../lib/logger';
+import type { McpServerStatus } from '../api/server-api.ts';
+import { useToolsStore } from '../stores/toolsStore.ts';
 import {
   DetailInfoRow,
   DocMarkdown,
@@ -40,7 +36,7 @@ type Props = NativeStackScreenProps<RouteParamList, 'McpDetail'>;
 
 /**
  * 按展示状态取区块占位文案的类别。
- * 连接成功返回 null 由调用方渲染真实内容，待授权与未连接各给一类占位。
+ * 连接成功返回 null 由调用方渲染真实内容，待授权与未就绪各给一类占位。
  */
 function sectionHintKind(
   status: McpServerStatus
@@ -52,36 +48,16 @@ function sectionHintKind(
 }
 
 const McpDetailScreen: React.FC<Props> = ({ route }) => {
-  const { name } = route.params;
+  const { id } = route.params;
   const { colors } = useTheme();
   const { t } = useTranslation();
   const styles = createStyles(colors);
 
-  const [server, setServer] = useState<McpServerDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const entries = useToolsStore((s) => s.entries);
 
-  useEffect(() => {
-    const address = getServerAddress();
-    if (!address) {
-      setLoadFailed(true);
-      setLoading(false);
-      return;
-    }
-    logger.info(`[McpDetail] load: ${name}`);
-    getMcpServer(address, name)
-      .then((detail) => {
-        setServer(detail);
-        setLoadFailed(false);
-      })
-      .catch((e) => {
-        logger.error(`[McpDetail] load failed: ${name} ${e}`);
-        setLoadFailed(true);
-      })
-      .finally(() => setLoading(false));
-  }, [name]);
+  const entry = entries?.find((e) => e.id === id);
 
-  if (loading) {
+  if (!entries) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -89,7 +65,7 @@ const McpDetailScreen: React.FC<Props> = ({ route }) => {
     );
   }
 
-  if (loadFailed || !server) {
+  if (!entry) {
     return (
       <View style={styles.center}>
         <Text style={styles.emptyText}>{t('detail.notFound')}</Text>
@@ -97,10 +73,8 @@ const McpDetailScreen: React.FC<Props> = ({ route }) => {
     );
   }
 
-  const isApp = Boolean(server.agentApp);
-  const meta = mcpStatusMeta(server, colors);
-  const toolsHint = sectionHintKind(server.status);
-  const docsHint = sectionHintKind(server.status);
+  const meta = mcpStatusMeta(entry.status, colors);
+  const hint = sectionHintKind(entry.status);
 
   return (
     <ScrollView
@@ -110,79 +84,79 @@ const McpDetailScreen: React.FC<Props> = ({ route }) => {
       {/* 头部卡：logo 磁贴加名称加作者，简介整段收进基本信息卡 */}
       <View style={styles.headerCard}>
         <EntityLogo
-          src={server.logoUrl}
-          fallback={isApp ? AppWindow : Wrench}
+          src={entry.logoUrl}
+          fallback={entry.kind === 'app' ? AppWindow : Wrench}
         />
         <View style={styles.headerText}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {server.displayName}
+            {entry.name}
           </Text>
-          {server.author ? (
-            <Text style={styles.headerAuthor}>@{server.author}</Text>
+          {entry.author ? (
+            <Text style={styles.headerAuthor}>@{entry.author}</Text>
           ) : null}
         </View>
       </View>
 
-      {/* 基本信息段：类型、简介与状态，状态四态直映，错误红字并入状态行下方 */}
+      {/* 基本信息段：简介与状态，状态四态直映，错误红字并入状态行下方 */}
       <GroupSection title={t('detail.sectionBasic')}>
         <GroupCard>
-          <DetailInfoRow label={t('detail.fieldType')} first>
-            <Text style={styles.infoText}>
-              {isApp ? t('detail.typeAgentApp') : t('detail.typeMcp')}
-            </Text>
-          </DetailInfoRow>
-          {server.description ? (
-            <DetailInfoRow label={t('detail.fieldIntro')}>
-              <Text style={styles.infoIntro}>{server.description}</Text>
+          {entry.description ? (
+            <DetailInfoRow label={t('detail.fieldIntro')} first>
+              <Text style={styles.infoIntro}>{entry.description}</Text>
             </DetailInfoRow>
           ) : null}
-          <DetailInfoRow label={t('detail.fieldStatus')}>
+          <DetailInfoRow
+            label={t('detail.fieldStatus')}
+            first={!entry.description}
+          >
             <View style={styles.statusLine}>
               <StatusBadge
                 size="md"
                 color={meta.color}
                 label={t(meta.labelKey)}
               />
-              {server.error ? (
-                <Text style={styles.errorText}>{server.error}</Text>
+              {entry.error ? (
+                <Text style={styles.errorText}>{entry.error}</Text>
               ) : null}
             </View>
           </DetailInfoRow>
         </GroupCard>
       </GroupSection>
 
-      {/* 功能段：只列等宽名，待授权、未连接与空清单给占位文案 */}
-      <GroupSection title={`${t('detail.sectionTools')} · ${server.toolCount}`}>
+      {/* 功能段：只列等宽短名，待授权、未就绪与空清单给占位文案 */}
+      <GroupSection
+        title={`${t('detail.sectionTools')} · ${entry.functions.length}`}
+      >
         <GroupCard>
-          {toolsHint === 'needsAuth' ? (
+          {hint === 'needsAuth' ? (
             <Text style={styles.hintText}>{t('detail.toolsNeedsAuth')}</Text>
-          ) : toolsHint === 'unavailable' ? (
+          ) : hint === 'unavailable' ? (
             <Text style={styles.hintText}>{t('detail.toolsUnavailable')}</Text>
-          ) : !server.tools || server.tools.length === 0 ? (
+          ) : entry.functions.length === 0 ? (
             <Text style={styles.hintText}>{t('detail.toolsEmpty')}</Text>
           ) : (
-            server.tools.map((tool, i) => (
+            entry.functions.map((fn, i) => (
               <View
-                key={tool.name}
+                key={fn.name}
                 style={[styles.toolRow, i > 0 && styles.toolRowBorder]}
               >
-                <Text style={styles.toolName}>{tool.name}</Text>
+                <Text style={styles.toolName}>{fn.shortName}</Text>
               </View>
             ))
           )}
         </GroupCard>
       </GroupSection>
 
-      {/* 文档段：握手说明按 markdown 渲染 */}
+      {/* 文档段：条目说明按 markdown 渲染，未就绪按状态给占位文案 */}
       <GroupSection title={t('detail.sectionDocs')}>
         <GroupCard>
-          {docsHint === 'needsAuth' ? (
+          {hint === 'needsAuth' ? (
             <Text style={styles.hintText}>{t('detail.docsNeedsAuth')}</Text>
-          ) : docsHint === 'unavailable' ? (
+          ) : hint === 'unavailable' ? (
             <Text style={styles.hintText}>{t('detail.docsUnavailable')}</Text>
-          ) : server.instructions ? (
+          ) : entry.instructions ? (
             <View style={styles.docContainer}>
-              <DocMarkdown value={server.instructions} />
+              <DocMarkdown value={entry.instructions} />
             </View>
           ) : (
             <Text style={styles.hintText}>{t('detail.docsMissing')}</Text>
@@ -193,7 +167,7 @@ const McpDetailScreen: React.FC<Props> = ({ route }) => {
   );
 };
 
-/** 工具详情页样式工厂 */
+/** 外部工具详情页样式工厂 */
 const createStyles = (colors: ColorScheme) =>
   StyleSheet.create({
     center: {
@@ -237,10 +211,6 @@ const createStyles = (colors: ColorScheme) =>
       marginTop: 2,
       ...typography.tertiary,
       color: colors.textTertiary,
-    },
-    infoText: {
-      ...typography.content,
-      color: colors.textDarkGray,
     },
     infoIntro: {
       ...typography.meta,

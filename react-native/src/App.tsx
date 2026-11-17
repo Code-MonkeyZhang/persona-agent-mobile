@@ -12,6 +12,7 @@ import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
 import { RouteParamList } from './types/RouteTypes.ts';
 import SettingsScreen from './settings/SettingsScreen.tsx';
+import AboutScreen from './settings/AboutScreen.tsx';
 import AgentDetailScreen from './agent-detail/AgentDetailScreen.tsx';
 import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
@@ -28,7 +29,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { refreshDeviceName } from './utils/DeviceUtils.ts';
 import { useConnectionStore } from './stores/connectionStore.ts';
 import { initDeviceLayer, setupSync } from './storage/sync-setup.ts';
-import { imageCache } from './storage/image-cache-rn.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import { logger } from './lib/logger';
@@ -158,6 +158,11 @@ const AppNavigator = () => {
         component={SettingsScreen}
         options={{ ...stackScreenOptions, title: t('home.settings') }}
       />
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ ...stackScreenOptions, title: t('about.title') }}
+      />
       {/* Agent App 工作区：网格与全屏 App 之间 replace 互跳，不堆叠；两屏都无 header，顶栏由 PhoneAppBar 自绘 */}
       <Stack.Screen
         name="AppLauncher"
@@ -223,8 +228,6 @@ const App = () => {
 
     /** 刷新设备名缓存并装配镜像链路，设备层引导完成后才发起冷连接 */
     setupSync();
-    // 图片缓存预热扫目录，首帧头像与壁纸的本地判定不等首访
-    imageCache.warmup();
     refreshDeviceName();
     initDeviceLayer().then(() => {
       useConnectionStore.getState().coldStart();

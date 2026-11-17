@@ -14,6 +14,9 @@ import type {
   LauncherOrderDoc,
   LauncherPrefEntry,
   WallpaperDoc,
+  BreakdownShares,
+  UsageState,
+  CompressionRecord,
 } from '../storage/sync-shapes.ts';
 
 /** 日志标签前缀 */
@@ -30,6 +33,8 @@ export interface ToolCall {
   /** 模型自写的工具叙述，随 toolCalls 项透传，供显示层取值优先读 */
   toolTitle?: string;
   toolIntent?: string;
+  /** MCP 工具所属服务的 logo 图址，随 toolCalls 项透传，历史行复用 */
+  iconUrl?: string;
 }
 
 /** step_complete 消息中的工具执行结果项 */
@@ -46,6 +51,13 @@ export type SpeakErrorReason =
   | 'no_voice_id'
   | 'no_content'
   | 'voice_not_found';
+
+/** compression_failed 事件的原因枚举，区分无料、服务商、摘要不合格与中断 */
+export type CompressionFailReason =
+  | 'no_material'
+  | 'provider'
+  | 'bad_summary'
+  | 'interrupted';
 
 /** 模型配置（对齐 @persona/shared 的 ModelConfig） */
 export interface ModelConfig {
@@ -197,6 +209,42 @@ export type ServerMessage =
       sessionIds: string[];
       /** 带归属的同一份全量，旧服务端缺失时头像圈不转不误转 */
       runs?: RunningSessionEntry[];
+    }
+  | {
+      /**
+       * 占用快照推送。模型报数落账后、压缩落定后、配置变化的刷新与报数缺席的
+       * 补位各推一次，订阅回执后补推一次当前值，source 区分快照跟着哪类事件到达
+       */
+      type: 'context_usage';
+      sessionId: string;
+      used: number;
+      window: number;
+      shares: BreakdownShares | null;
+      source: 'model' | 'compression' | 'estimate';
+    }
+  | {
+      /** 压缩开始事件，attempt 递增重试时重发喂重试序号 */
+      type: 'compression_started';
+      sessionId: string;
+      recordId: string;
+      attempt: number;
+      before: number | null;
+    }
+  | {
+      /** 压缩落定事件，携带压缩前后的占用分子 */
+      type: 'compression_complete';
+      sessionId: string;
+      recordId: string;
+      before: number | null;
+      after: number | null;
+      trigger: 'auto' | 'manual';
+    }
+  | {
+      /** 压缩终态失败事件，原因码区分无料、服务商、摘要不合格与中断 */
+      type: 'compression_failed';
+      sessionId: string;
+      recordId: string;
+      reason: CompressionFailReason;
     };
 
 /**
@@ -358,14 +406,11 @@ export interface AgentInfo {
   defaultModel: ModelConfig;
   systemPrompt: string;
   maxSteps: number;
-  mcpNames: string[];
   skillNames: string[];
   defaultWorkspacePath?: string;
   voiceId?: string;
   /** 头像内容哈希，路由层按文件现算，URL 构造器据此拼 h 查询串 */
   avatarHash?: string;
-  /** 上下文压缩阈值（百分比 1–100） */
-  compressionThreshold: number;
   /** 语音语言（映射到 MiniMax language_boost） */
   voiceLanguage?: string;
   createdAt: number;
@@ -379,11 +424,9 @@ export interface AgentUpdateInput {
   systemPrompt?: string;
   defaultModel?: ModelConfig;
   maxSteps?: number;
-  compressionThreshold?: number;
   voiceId?: string;
   voiceLanguage?: string;
   skillNames?: string[];
-  mcpNames?: string[];
 }
 
 /**
@@ -399,7 +442,7 @@ export type MemoryType = 'pinned' | 'triggered';
 export interface MemoryEntry {
   /** 编号，追加式分配，删除后不复用 */
   uid: number;
-  /** 标题，缺省截取内容开头 */
+  /** 标题，必填的简短话题标签 */
   title: string;
   /** 正文，一条自含句 */
   content: string;
@@ -416,9 +459,9 @@ export interface MemoryEntry {
 
 /** 新增记忆输入（对齐 @persona/shared 的 MemoryWriteInput 输出形态），时间章由服务端盖 */
 export interface MemoryWriteInput {
+  title: string;
   content: string;
   keys: string[];
-  title?: string;
   type: MemoryType;
   enabled: boolean;
 }
@@ -435,12 +478,12 @@ export interface MemoryUpdateInput {
 /** Agent App 支持的 UI 变体（与 @persona/shared 的 SupportedUI 对齐） */
 export type SupportedUI = 'desktop' | 'mobile';
 
-/** MCP 服务器连接状态（对齐 @persona/shared 的 McpServerStatus） */
+/** MCP 服务器连接状态（对齐 @persona/shared 的 McpServerStatus），四态收敛，无未连接值 */
 export type McpServerStatus =
-  | 'disconnected'
   | 'connecting'
   | 'connected'
-  | 'needs_auth';
+  | 'needs_auth'
+  | 'failed';
 
 /** MCP 工具元数据（对齐 @persona/shared 的 McpToolInfo） */
 export interface McpToolInfo {
@@ -480,10 +523,34 @@ export interface McpServerInfo {
   oauthUrl?: string;
 }
 
-/** MCP 服务器详情（对应 GET /api/mcp/:name 的返回），tools 与 connectionType 必返 */
-export interface McpServerDetail extends McpServerInfo {
-  tools: McpToolInfo[];
-  connectionType: McpConnectionType;
+/** 工具注册表条目的来源标记（对齐 @persona/shared 的 ToolEntryKind） */
+export type ToolEntryKind = 'builtin' | 'mcp' | 'app';
+
+/** 注册表功能清单项（对齐 @persona/shared 的 ToolFunctionInfo），模型侧用全名界面显示短名 */
+export interface ToolFunctionInfo {
+  name: string;
+  shortName: string;
+  description?: string;
+}
+
+/**
+ * 工具注册表条目（对应 GET /api/tools 投影，内置、MCP 与 App 三类来源统一形状）。
+ * assigned 只在带 agentId 查询时存在，默认规则只在服务端算，客户端不派生。
+ */
+export interface ToolEntryInfo {
+  id: string;
+  kind: ToolEntryKind;
+  name: string;
+  description?: string;
+  status: McpServerStatus;
+  functions: ToolFunctionInfo[];
+  url?: string;
+  logoUrl?: string;
+  instructions?: string;
+  author?: string;
+  error?: string;
+  oauthUrl?: string;
+  assigned?: boolean;
 }
 
 /** Agent App 信息，界面走 /apps/:name 反代路径，图标走 logoUrl 哈希地址，displayName 为显示名 */
@@ -797,6 +864,20 @@ function withAbsoluteLogoUrl<T extends { logoUrl?: string }>(
 }
 
 /**
+ * 解析时间线工具行图址为可直接显示的地址。
+ * 相对路由地址补主机地址，CachedImage 按内容哈希参数走本地缓存，远程回退网址原样返回。
+ * @param iconUrl 事件或落盘步骤携带的图址
+ * @param serverAddress 当前连接的服务端地址
+ */
+export function resolveTimelineIconUrl(
+  iconUrl: string | undefined,
+  serverAddress: string
+): string | undefined {
+  if (!iconUrl) return undefined;
+  return withAbsoluteLogoUrl({ logoUrl: iconUrl }, serverAddress).logoUrl;
+}
+
+/**
  * 获取服务器上所有 MCP 服务器列表（含连接状态和工具信息）。
  */
 export async function fetchMcpServers(
@@ -811,21 +892,41 @@ export async function fetchMcpServers(
 }
 
 /**
- * 获取单个 MCP 服务器的详情（对应 GET /api/mcp/:name）。
- * 含逐 tool 名称与描述、instructions 与 connectionType，
- * instructions 只有连接成功才有，needsAuth 状态拿不到。
+ * 拉取工具注册表清单（对应 GET /api/tools）。
+ * 带 agentId 时每条附 assigned 标记，lang 传 en 时服务端取英文文案，
+ * 相对 logo 地址补全为绝对地址。
  */
-export async function getMcpServer(
+export async function listTools(
   serverAddress: string,
-  name: string
-): Promise<McpServerDetail> {
-  const url = `${serverAddress}/api/mcp/${encodeURIComponent(name)}`;
+  agentId: string,
+  lang: 'zh' | 'en'
+): Promise<ToolEntryInfo[]> {
+  const url = `${serverAddress}/api/tools?agentId=${encodeURIComponent(
+    agentId
+  )}&lang=${lang}`;
   const responseText = await httpGet(url);
-  const data = JSON.parse(responseText) as { server: McpServerDetail };
+  const data = JSON.parse(responseText) as { tools: ToolEntryInfo[] };
   logger.info(
-    `${TAG} getMcpServer → ${name} status=${data.server.status} tools=${data.server.toolCount}`
+    `${TAG} listTools → ${data.tools.length} entries, assigned=${
+      data.tools.filter((e) => e.assigned === true).length
+    }`
   );
-  return withAbsoluteLogoUrl(data.server, serverAddress);
+  return data.tools.map((entry) => withAbsoluteLogoUrl(entry, serverAddress));
+}
+
+/**
+ * 写一条工具分配记录（对应 POST /api/tools/assignment）。
+ * 内置开关与外部加减号同走此端点，服务端算 effective 增删后落盘并广播失效事件。
+ */
+export async function assignTool(
+  serverAddress: string,
+  agentId: string,
+  entryId: string,
+  assigned: boolean
+): Promise<void> {
+  const url = `${serverAddress}/api/tools/assignment`;
+  await httpPost(url, { agentId, entryId, assigned });
+  logger.info(`${TAG} assignTool → ${entryId} ${assigned ? 'on' : 'off'}`);
 }
 
 /**
@@ -1019,6 +1120,7 @@ export function toContentBlocks(
         width: file.width ?? 0,
         height: file.height ?? 0,
         bytes: file.fileSize,
+        name: file.fileName,
       });
     } else {
       blocks.push({
@@ -1050,7 +1152,7 @@ export function fromContentBlocks(
       const ext = EXT_BY_MIME[block.mimeType] ?? 'png';
       files.push({
         id: `blk-${block.hash}-${files.length}`,
-        fileName: `image.${ext}`,
+        fileName: block.name ?? `image.${ext}`,
         url: getAttachmentUrl(block.hash, serverAddress),
         fileSize: block.bytes,
         format: ext,
@@ -1177,6 +1279,10 @@ interface SessionMeta {
   currentPose?: string;
   /** 最后一条真实消息的预览，服务端仅对常驻聊天会话计算 */
   lastMessage?: string;
+  /** 会话占用底数，占用面板的初始化来源，与镜像库同形 */
+  usageState?: UsageState;
+  /** 压缩记录清单，一次压缩一条，与镜像库同形 */
+  compressionLog?: CompressionRecord[];
 }
 
 interface Session extends SessionMeta {
@@ -1195,6 +1301,8 @@ interface ServerToolCall {
   /** 模型自写的工具叙述，随消息落盘，回看读它保真 */
   toolTitle?: string;
   toolIntent?: string;
+  /** MCP 工具所属服务的 logo 图址，随消息落盘，历史行复用 */
+  iconUrl?: string;
   toolResult?: {
     content: string;
     isError: boolean;
@@ -1260,6 +1368,73 @@ export async function deleteSession(
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
   await httpDelete(url);
   logger.info(`${TAG} deleteSession → ${sessionId}`);
+}
+
+/**
+ * 手动压缩指定会话（对应 POST /api/agents/:agentId/sessions/:id/compress）。
+ * 受理即返回 202，压缩在服务端后台跑，进度经 WS 压缩事件族到达。
+ * 回合运行中照常受理，重复请求同样返回 accepted 不报错。
+ */
+export async function triggerCompression(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string
+): Promise<void> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/compress`;
+  await httpPost(url, {}, 30_000);
+  logger.info(`${TAG} triggerCompression → sessionId=${sessionId} accepted`);
+}
+
+/** 全局配置的压缩节，两端共享同一份，开关与阈值一起读写 */
+export interface CompressionConfig {
+  autoCompress: boolean;
+  threshold: number;
+}
+
+/** 服务端全局配置（对应 GET /api/config 返回的 config 节），移动端只消费压缩节 */
+export interface AppConfig {
+  enableLogging: boolean;
+  enableToolNarration: boolean;
+  compression: CompressionConfig;
+}
+
+/**
+ * 读取服务端全局配置（对应 GET /api/config），设置页压缩偏好节与占用面板底行的数据源。
+ */
+export async function fetchAppConfig(
+  serverAddress: string
+): Promise<AppConfig> {
+  const url = `${serverAddress}/api/config`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { config: AppConfig };
+  logger.info(
+    `${TAG} fetchAppConfig → autoCompress=${data.config.compression.autoCompress} threshold=${data.config.compression.threshold}`
+  );
+  return data.config;
+}
+
+/**
+ * 写回压缩偏好（对应 PUT /api/config 的 compression 节）。
+ * enableLogging 是端点必填布尔，写入时带 current 里读到的旧值，
+ * 只合并 compression 字段回写，避免移动端全量配置覆盖服务端其他字段。
+ * @param current 写前读到的现配置，提供 enableLogging 与 enableToolNarration
+ * @param compression 新的压缩节
+ */
+export async function updateCompressionConfig(
+  serverAddress: string,
+  current: AppConfig,
+  compression: CompressionConfig
+): Promise<void> {
+  const url = `${serverAddress}/api/config`;
+  const body = {
+    enableLogging: current.enableLogging,
+    enableToolNarration: current.enableToolNarration,
+    compression,
+  };
+  await httpPut(url, body);
+  logger.info(
+    `${TAG} updateCompressionConfig → autoCompress=${compression.autoCompress} threshold=${compression.threshold}`
+  );
 }
 
 /**
@@ -1353,6 +1528,7 @@ export function convertToChatMessages(
           toolInput: tc.function.arguments,
           toolTitle: tc.toolTitle,
           toolIntent: tc.toolIntent,
+          iconUrl: resolveTimelineIconUrl(tc.iconUrl, serverAddress),
           toolResult: tc.toolResult
             ? { output: tc.toolResult.content, isError: tc.toolResult.isError }
             : undefined,
@@ -1381,6 +1557,7 @@ export function convertToChatMessages(
       result.push({
         _id: uuidv4(),
         text,
+        error: true,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: BOT_ID },
       });

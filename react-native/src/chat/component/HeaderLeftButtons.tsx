@@ -37,8 +37,8 @@ export function HeaderLeftButtons({
   const voiceColor = !voiceEnabled
     ? colors.textSecondary
     : voiceReady === false
-      ? WARN_COLOR
-      : colors.primary;
+    ? WARN_COLOR
+    : colors.primary;
   return (
     <View style={styles.root}>
       <CustomHeaderRightButton onPress={onBack} style={styles.back}>

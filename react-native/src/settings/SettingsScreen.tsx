@@ -1,20 +1,24 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
+  LayoutAnimation,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Share from 'react-native-share';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  ChevronRight,
+  Info,
   Lightbulb,
-  ScrollText,
+  Minimize2,
   Vibrate,
   VibrateOff,
 } from 'lucide-react-native';
@@ -23,22 +27,163 @@ import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
 import { useSettingsStore } from '../stores/settingsStore.ts';
+import { useCompressionConfigStore } from '../stores/compressionConfigStore.ts';
+import type { CompressionConfig } from '../api/server-api.ts';
 import { logger } from '../lib/logger';
+import type { RouteParamList } from '../types/RouteTypes.ts';
 
 import { useTheme, ColorScheme, typography } from '../theme/index.ts';
 
-/** 设置页通用行骨架，图标与标题说明拼装，行尾控件由调用方注入，带 onPress 时整行可点 */
+// 安卓需手动启用 LayoutAnimation，阈值行的收展动画依赖它
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+type SettingsNavigationProp = NativeStackNavigationProp<
+  RouteParamList,
+  'Settings'
+>;
+
+/** 开关轨道与滑钮的通用视觉，按压回调由宿主注入 */
+function Toggle({ on, onPress }: { on: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[styles.toggle, on && styles.toggleOn]}
+    >
+      <View style={[styles.toggleKnob, on && styles.toggleKnobOn]} />
+    </TouchableOpacity>
+  );
+}
+
+/**
+ * 压缩偏好节，全局服务端配置不走本地 MMKV。
+ * 两行，自动压缩开关加阈值行内数字输入，阈值行随开关联动收展，
+ * 乐观写本地缓存让界面立即跟随，写回失败回滚并弹提示。
+ */
+function CompressionSection() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const compression = useCompressionConfigStore(
+    (s) => s.appConfig?.compression ?? null
+  );
+  const applyLocal = useCompressionConfigStore((s) => s.applyLocal);
+  const save = useCompressionConfigStore((s) => s.save);
+  const load = useCompressionConfigStore((s) => s.load);
+  const [thresholdText, setThresholdText] = useState('');
+
+  // 进设置页拉一次全局配置，无配置时偏好节整体不渲染
+  useEffect(() => {
+    load().catch((e) => {
+      logger.warn(
+        `[settings] compression config load failed: ${
+          e instanceof Error ? e.message : e
+        }`
+      );
+    });
+  }, [load]);
+
+  useEffect(() => {
+    if (compression) {
+      setThresholdText(String(compression.threshold));
+    }
+  }, [compression]);
+
+  /** 乐观写本地，网络写回失败时回滚旧值并提示 */
+  const write = async (next: CompressionConfig) => {
+    const prev = compression;
+    if (!prev) return;
+    applyLocal(next);
+    try {
+      await save(next);
+      logger.info(
+        `[settings] compression saved, auto=${next.autoCompress} threshold=${next.threshold}`
+      );
+    } catch (e) {
+      applyLocal(prev);
+      logger.warn(
+        `[settings] compression save failed: ${
+          e instanceof Error ? e.message : e
+        }`
+      );
+      Alert.alert(
+        t('agent.updateFailedTitle'),
+        t('settings.compressSaveFailed')
+      );
+    }
+  };
+
+  const toggleAuto = () => {
+    if (!compression) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    write({ ...compression, autoCompress: !compression.autoCompress });
+  };
+
+  /** 阈值落定，非法输入回退现值，合法值钳制 1 到 100 后写回 */
+  const commitThreshold = () => {
+    if (!compression) return;
+    const parsed = parseInt(thresholdText, 10);
+    if (!Number.isFinite(parsed)) {
+      setThresholdText(String(compression.threshold));
+      return;
+    }
+    const clamped = Math.min(100, Math.max(1, parsed));
+    setThresholdText(String(clamped));
+    if (clamped !== compression.threshold) {
+      write({ ...compression, threshold: clamped });
+    }
+  };
+
+  if (!compression) {
+    return null;
+  }
+
+  return (
+    <View style={styles.card}>
+      <Row
+        icon={<Minimize2 size={19} color={colors.text} />}
+        label={t('settings.autoCompress')}
+        trailing={<Toggle on={compression.autoCompress} onPress={toggleAuto} />}
+      />
+      {compression.autoCompress && (
+        <View style={[styles.row, styles.rowBorderTop]}>
+          <Text style={styles.rowLabel}>
+            {t('settings.compressionThreshold')}
+          </Text>
+          <TextInput
+            style={styles.thresholdInput}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            maxLength={3}
+            value={thresholdText}
+            onChangeText={setThresholdText}
+            onEndEditing={commitThreshold}
+            onSubmitEditing={commitThreshold}
+            accessibilityLabel={t('settings.compressionThreshold')}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** 设置页通用行骨架，图标与标题拼装，行尾控件与整行按压由调用方注入 */
 function Row({
   icon,
   label,
-  description,
   trailing,
   onPress,
 }: {
   icon: React.ReactNode;
   label: string;
-  description: string;
-  trailing: React.ReactNode;
+  trailing?: React.ReactNode;
   onPress?: () => void;
 }): React.JSX.Element {
   const { colors } = useTheme();
@@ -49,7 +194,6 @@ function Row({
       {icon}
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowDesc}>{description}</Text>
       </View>
       {trailing}
     </>
@@ -65,43 +209,10 @@ function Row({
   );
 }
 
-/** 开关行，Row 骨架加行尾拨动开关，开关状态和切换逻辑由调用方注入 */
-function ToggleRow({
-  icon,
-  label,
-  description,
-  value,
-  onToggle,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  value: boolean;
-  onToggle: () => void;
-}): React.JSX.Element {
-  const { colors } = useTheme();
-  const styles = createStyles(colors);
-
-  return (
-    <Row
-      icon={icon}
-      label={label}
-      description={description}
-      trailing={
-        <TouchableOpacity
-          onPress={onToggle}
-          style={[styles.toggle, value && styles.toggleOn]}
-        >
-          <View style={[styles.toggleKnob, value && styles.toggleKnobOn]} />
-        </TouchableOpacity>
-      }
-    />
-  );
-}
-
 function SettingsScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation<SettingsNavigationProp>();
   const [hapticEnabled, setHapticEnabled] = useState(getHapticEnabled);
   const thoughtProcessVisible = useSettingsStore(
     (s) => s.thoughtProcessVisible
@@ -119,28 +230,6 @@ function SettingsScreen(): React.JSX.Element {
     }
   };
 
-  /** 导出运行日志：先落盘缓冲，再取文件清单走系统分享面板 */
-  const handleExportLogs = async () => {
-    logger.info('[Settings] export logs requested');
-    await logger.flush();
-    const files = await logger.listFiles();
-    if (files.length === 0) {
-      logger.warn('[Settings] no log files to export');
-      Alert.alert(t('settings.exportLogs'), t('settings.noLogs'));
-      return;
-    }
-    try {
-      await Share.open({
-        urls: files.map((path) => `file://${path}`),
-        failOnCancel: false,
-      });
-      logger.info(`[Settings] logs shared, count=${files.length}`);
-    } catch (e) {
-      logger.error('[Settings] log export failed:', e);
-      Alert.alert(t('settings.exportLogs'), t('settings.exportFailed'));
-    }
-  };
-
   const styles = createStyles(colors);
 
   return (
@@ -152,7 +241,7 @@ function SettingsScreen(): React.JSX.Element {
       >
         <View style={styles.card}>
           {/* 震动开关，设备级偏好走本地 MMKV */}
-          <ToggleRow
+          <Row
             icon={
               hapticEnabled ? (
                 <Vibrate size={19} color={colors.text} />
@@ -161,25 +250,30 @@ function SettingsScreen(): React.JSX.Element {
               )
             }
             label={t('settings.vibration')}
-            description={t('settings.vibrationDesc')}
-            value={hapticEnabled}
-            onToggle={toggleHapticFeedback}
+            trailing={
+              <Toggle on={hapticEnabled} onPress={toggleHapticFeedback} />
+            }
           />
           {/* 思考过程开关，写显示偏好 store 并持久化到 MMKV */}
-          <ToggleRow
+          <Row
             icon={<Lightbulb size={19} color={colors.text} />}
             label={t('settings.thoughtProcess')}
-            description={t('settings.thoughtProcessDesc')}
-            value={thoughtProcessVisible}
-            onToggle={() => setThoughtProcessVisible(!thoughtProcessVisible)}
+            trailing={
+              <Toggle
+                on={thoughtProcessVisible}
+                onPress={() => setThoughtProcessVisible(!thoughtProcessVisible)}
+              />
+            }
           />
-          {/* 日志导出，落盘缓冲后把日志文件交系统分享面板 */}
+        </View>
+        {/* 压缩偏好，两端共享的服务端全局配置 */}
+        <CompressionSection />
+        {/* 关于入口，导出日志与版本信息收在关于页 */}
+        <View style={styles.card}>
           <Row
-            icon={<ScrollText size={19} color={colors.text} />}
-            label={t('settings.exportLogs')}
-            description={t('settings.exportLogsDesc')}
-            onPress={handleExportLogs}
-            trailing={<ChevronRight size={20} color={colors.textTertiary} />}
+            icon={<Info size={19} color={colors.text} />}
+            label={t('about.title')}
+            onPress={() => navigation.navigate('About')}
           />
         </View>
       </ScrollView>
@@ -205,6 +299,7 @@ const createStyles = (colors: ColorScheme) =>
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.borderLight,
+      marginBottom: 16,
     },
     row: {
       flexDirection: 'row',
@@ -221,10 +316,17 @@ const createStyles = (colors: ColorScheme) =>
       fontWeight: '500',
       color: colors.text,
     },
-    rowDesc: {
-      ...typography.body,
-      color: colors.textSecondary,
-      marginTop: 2,
+    rowBorderTop: {
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight,
+    },
+    /** 阈值行内数字输入，窄盒右对齐等宽数字 */
+    thresholdInput: {
+      width: 56,
+      textAlign: 'right',
+      ...typography.titleSection,
+      fontVariant: ['tabular-nums'],
+      color: colors.text,
     },
     toggle: {
       width: 40,

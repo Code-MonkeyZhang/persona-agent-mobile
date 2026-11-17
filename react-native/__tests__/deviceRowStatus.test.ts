@@ -1,10 +1,11 @@
 /**
  * @file deviceRowStatus.test.ts
- * @description 行状态裁决的直测，覆盖四态判定与颜色文案映射。
+ * @description 行状态裁决的直测，覆盖四态判定、颜色文案映射与在途目标的主机号解析。
  */
 import {
   deviceDotStatus,
   deviceRowStatus,
+  pendingHostIdOf,
   type DeviceRowContext,
 } from '../src/device/device-ui';
 import type { DeviceEntry } from '../src/storage/StorageUtils';
@@ -66,6 +67,25 @@ describe('状态点四态判定', () => {
       'offline'
     );
     expect(deviceDotStatus(other, ctx())).toBe('unknown');
+  });
+});
+
+describe('在途目标的主机号解析', () => {
+  it('主机目标直取设备号，空目标解析为空串', () => {
+    expect(pendingHostIdOf({ kind: 'host', hostId: 'host-b' }, [])).toBe(
+      'host-b'
+    );
+    expect(pendingHostIdOf(null, [])).toBe('');
+  });
+
+  it('地址目标按登记表地址精确匹配，未知地址解析为空串', () => {
+    const devices = [entry('host-a')];
+    expect(
+      pendingHostIdOf({ kind: 'address', address: 'https://host-a' }, devices)
+    ).toBe('host-a');
+    expect(
+      pendingHostIdOf({ kind: 'address', address: 'https://other' }, devices)
+    ).toBe('');
   });
 });
 

@@ -110,7 +110,8 @@ export const MemorySheet = React.forwardRef<
     dismiss: () => sheetRef.current?.dismiss(),
   }));
 
-  const canSave = !saving && draft.content.trim().length > 0;
+  const canSave =
+    !saving && draft.title.trim().length > 0 && draft.content.trim().length > 0;
 
   /** 启停拨动：编辑态乐观更新后即时落库，失败回滚；新增态只改草稿 */
   const handleToggle = async (value: boolean) => {
@@ -128,8 +129,7 @@ export const MemorySheet = React.forwardRef<
   const handleSubmit = async () => {
     if (!canSave) return;
     const content = draft.content.trim();
-    // 标题留空时截取内容开头，与工具侧口径一致
-    const title = draft.title.trim() || content.slice(0, 12);
+    const title = draft.title.trim();
     setSaving(true);
     try {
       await onSubmit({

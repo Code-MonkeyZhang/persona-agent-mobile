@@ -48,9 +48,7 @@ export function missingToI18nKey(missing: VoiceMissing): string {
 /**
  * speak_error reason 换能力缺口，no_content 与未知 reason 返回 null 表示不经能力链路处理。
  */
-export function reasonToMissing(
-  reason: SpeakErrorReason
-): VoiceMissing | null {
+export function reasonToMissing(reason: SpeakErrorReason): VoiceMissing | null {
   return REASON_TO_MISSING[reason] ?? null;
 }
 
