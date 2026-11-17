@@ -325,17 +325,11 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         </GroupCard>
       </GroupSection>
 
-      {/* 聊天配置段：压缩阈值只读，记忆入口带计数压栈进管理页 */}
+      {/* 聊天配置段：记忆入口带计数压栈进管理页，压缩阈值已上收全局配置 */}
       <GroupSection title={t('agent.sectionChat')}>
         <GroupCard>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>
-              {t('agent.compressionThreshold')}
-            </Text>
-            <Text style={styles.rowValue}>{agent.compressionThreshold}%</Text>
-          </View>
           <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
+            style={styles.row}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('MemoryScreen', { agentId })}
           >
