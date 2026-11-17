@@ -16,11 +16,16 @@
     "sendFailed": "Send failed. Check the connection to the host",
     "retryUpload": "Retry upload",
     "modelNoVision": "This model cannot see images. They will be replaced with placeholder text when sent",
-    "downloadFile": "Download file"
+    "downloadFile": "Download file",
+    "compressAction": "Compact",
+    "compressFailed": "Failed to trigger compression"
   },
   "settings": {
     "vibration": "Vibration",
-    "thoughtProcess": "Thought Process"
+    "thoughtProcess": "Thought Process",
+    "autoCompress": "Auto compress",
+    "compressionThreshold": "Compression threshold",
+    "compressSaveFailed": "Failed to save compression preferences, reverted"
   },
   "about": {
     "title": "About",
@@ -51,7 +56,6 @@
     "sectionWorkspace": "Workspace",
     "defaultModel": "Default Model",
     "maxSteps": "Max Steps",
-    "compressionThreshold": "Compression Threshold",
     "memoryEntry": "Memory",
     "systemPrompt": "System Prompt",
     "voiceLanguage": "Voice Language",
@@ -95,6 +99,14 @@
     "executing": "Running",
     "done": "{{count}} steps executed",
     "doneFail": "Ran {{count}} steps · {{fails}} failed",
+    "roundFail": "Round failed",
+    "replied": "Replied",
+    "compressionRunning": "Compacting context",
+    "compressionRetrying": "Retrying compaction",
+    "compressionCompacted": "Compacted",
+    "compressionFloorEmpty": "Nothing to compress yet",
+    "compressionFailed": "Context compaction failed",
+    "compressionUnfinished": "Context compaction unfinished",
     "restore": "Show run status",
     "collapse": "Collapse"
   },

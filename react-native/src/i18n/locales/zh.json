@@ -16,11 +16,16 @@
     "sendFailed": "发送失败，请检查与主机的连接",
     "retryUpload": "重试上传",
     "modelNoVision": "当前模型不支持图片输入，发送后图片将以占位文字代替",
-    "downloadFile": "下载文件"
+    "downloadFile": "下载文件",
+    "compressAction": "压缩",
+    "compressFailed": "压缩请求失败"
   },
   "settings": {
     "vibration": "震动",
-    "thoughtProcess": "思考过程"
+    "thoughtProcess": "思考过程",
+    "autoCompress": "自动压缩",
+    "compressionThreshold": "压缩阈值",
+    "compressSaveFailed": "压缩偏好写回服务端失败，已还原"
   },
   "about": {
     "title": "关于",
@@ -51,7 +56,6 @@
     "sectionWorkspace": "工作空间",
     "defaultModel": "默认模型",
     "maxSteps": "最大步数",
-    "compressionThreshold": "压缩阈值",
     "memoryEntry": "记忆",
     "systemPrompt": "系统提示词",
     "voiceLanguage": "语音语言",
@@ -95,6 +99,14 @@
     "executing": "正在执行",
     "done": "执行了 {{count}} 个步骤",
     "doneFail": "执行了 {{count}} 个步骤 · {{fails}} 步失败",
+    "roundFail": "本轮失败",
+    "replied": "已回复",
+    "compressionRunning": "正在压缩上下文",
+    "compressionRetrying": "正在重试压缩上下文",
+    "compressionCompacted": "已压缩",
+    "compressionFloorEmpty": "没有可压缩的内容",
+    "compressionFailed": "上下文压缩失败",
+    "compressionUnfinished": "上下文压缩未完成",
     "restore": "显示运行状态",
     "collapse": "收起"
   },

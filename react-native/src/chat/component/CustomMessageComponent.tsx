@@ -129,6 +129,14 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     }
 
     if (!isUser.current) {
+      // 服务端 error 消息走红底错误气泡，样式照 demo 的 fdeceb 底 b42318 字
+      if (currentMessage.error) {
+        return (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{currentMessage.text}</Text>
+          </View>
+        );
+      }
       // 流式起始正文为空时不渲染气泡，避免出现空灰块
       if (currentMessage.text.trim().length === 0) {
         return null;
@@ -187,6 +195,8 @@ const CustomMessageComponent: React.FC<CustomMessageProps> = ({
     customTokenizer,
     styles.questionContainer,
     styles.answerContainer,
+    styles.errorContainer,
+    styles.errorText,
     styles.questionContainerQueued,
     styles.questionText,
     styles.questionTextQueued,
@@ -295,6 +305,19 @@ const createStyles = (colors: ColorScheme) =>
       paddingVertical: 10,
       overflow: 'hidden',
     },
+    /** 服务端 error 消息的红底气泡，贴左同助手侧 */
+    errorContainer: {
+      alignSelf: 'flex-start',
+      maxWidth: '100%',
+      backgroundColor: '#fdeceb',
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    errorText: {
+      ...typography.body,
+      color: '#b42318',
+    },
     questionContainer: {
       alignSelf: 'flex-end',
       backgroundColor: colors.primary,
@@ -359,6 +382,7 @@ const customMarkedStyles: MarkedStyles = {
  * 导出组件并自定义 memo 比较函数，仅在消息内容、性能指标、Agent 标识等关键属性变化时重渲染。
  * chatStatus 只影响末条 AI 消息的性能指标行显隐，非末行不参与比较，追加消息不再触发全行重渲染。
  * queued 参与比较，插话注入时灰气泡转蓝能当场触发重渲染。
+ * error 参与比较，实时错误气泡与历史错误回放都当场走红底形态。
  */
 export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
   return (
@@ -367,6 +391,7 @@ export default React.memo(CustomMessageComponent, (prevProps, nextProps) => {
     prevProps.currentMessage?.steps === nextProps.currentMessage?.steps &&
     prevProps.currentMessage?.metrics === nextProps.currentMessage?.metrics &&
     prevProps.currentMessage?.queued === nextProps.currentMessage?.queued &&
+    prevProps.currentMessage?.error === nextProps.currentMessage?.error &&
     prevProps.isLastAIMessage === nextProps.isLastAIMessage &&
     (!prevProps.isLastAIMessage ||
       prevProps.chatStatus === nextProps.chatStatus) &&

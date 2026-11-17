@@ -12,6 +12,7 @@ import { ChatStatus, FileInfo } from '../../types/Chat.ts';
 import { ColorScheme, useTheme, typography } from '../../theme/index.ts';
 import CustomSendComponent from './CustomSendComponent.tsx';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
+import { ContextUsageShell } from './ContextUsageShell.tsx';
 import { CustomChatFooter } from './CustomChatFooter.tsx';
 import type { PickedFile } from '../util/FileUtils.ts';
 import { logger } from '../../lib/logger';
@@ -93,7 +94,10 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
           blurOnSubmit={false}
         />
         <View style={styles.buttonRow}>
-          <CustomAddFileComponent onFileSelected={onFileSelected} />
+          <View style={styles.leftGroup}>
+            <CustomAddFileComponent onFileSelected={onFileSelected} />
+            <ContextUsageShell />
+          </View>
           <CustomSendComponent
             text={text}
             selectedFiles={selectedFiles}
@@ -133,12 +137,18 @@ const createStyles = (colors: ColorScheme) =>
       maxHeight: 200,
       textAlignVertical: 'top',
     },
-    /** 底部按钮行：加号在左，发送在右 */
+    /** 底部按钮行：加号与占用小壳在左成组，发送在右 */
     buttonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: 12,
+    },
+    /** 左组容器，加号与占用小壳相邻，间距照 Demo 的 gap-2.5 */
+    leftGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
   });
 

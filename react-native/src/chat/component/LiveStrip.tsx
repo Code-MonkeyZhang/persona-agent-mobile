@@ -5,9 +5,11 @@
  *   - 摘要与动向句纯函数在 src/lib/tool-summary.ts，那是共享包的整块镜像，
  *     本体无 Grep 与 WebSearch，映射键按工具短名登记，未登记工具回退扳手
  *   - 时间线三档浮在消息区上方不占布局，消息区高度恒定，行数据从消息流加运行态推导不新增存储
- *   - 行纯展示不可点，详情弹层只在桌面端
+ *   - 行纯展示不可点，详情弹层与压缩行的摘要查看只在桌面端，压缩行在移动端同样不可点
  *   - 档位偏好经本地存储跨启动记忆，只记 line 与 hair 两态，中止的轮次不落盘，时间线上它没有发生过
  *   - 连接横幅在位时整层让位到横幅下方，横幅收走滑回顶部
+ *   - 压缩行一次压缩一条随会话持久化，消息侧无逐条真实时间戳可锚，记录间按 at 升序
+ *     落在历史尾部，运行中的记录压轴由运行态合成补位
  */
 import { useEffect, useMemo, useState } from 'react';
 import Animated, {
@@ -28,7 +30,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import BackdropBlur from '../../component/BackdropBlur.tsx';
 import CachedImage from '../../component/CachedImage';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
@@ -41,6 +42,7 @@ import {
   MessageCircle,
   MessageSquare,
   MessageSquareDashed,
+  Minimize2,
   Pencil,
   Smile,
   TerminalSquare,
@@ -49,13 +51,15 @@ import {
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../lib/logger.ts';
 import {
   shortToolName,
   stepPhrase,
   summarizeToolInput,
-  trunc,
 } from '../../lib/tool-summary.ts';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../../stores/chatStore';
+import type { CompressionRuntimeState } from '../../stores/chatStore';
+import type { CompressionRecord } from '../../storage/sync-shapes.ts';
 import { BANNER_HEIGHT, useBannerPresence } from '../../home/ConnectionBanner';
 import {
   getStripCollapsed,
@@ -68,6 +72,12 @@ import { useTheme, typography } from '../../theme';
 /** 时间线行与消息内面板共用的时间线规格色值，取自设计文档与桌面实现，不进主题 token */
 export const ROW_ICON = '#8E8E93';
 export const FAIL_RED = '#d5392e';
+
+/** 压缩行强调色，与占用小壳主色同源 */
+const COMPRESS_BLUE = '#007AFF';
+
+/** token 数格式化成 79.4k 的一位小数口径，压缩行对比与占用面板头行共用 */
+export const formatK = (tokens: number) => `${(tokens / 1000).toFixed(1)}k`;
 
 /** 实时步骤条的一步，tool 为空串代表文字步，detail 是参数摘要或文字步正文
  *  text 标记模型文字步，渲染时按后面跟不跟工具分中间解说行与回复内容行
@@ -164,9 +174,10 @@ export function phaseIcon(liveRun: LiveRunState): IconComponent {
   return liveRun.replying ? MessageSquare : Lightbulb;
 }
 
-/** 时间线行数据，kind 区分五类条目，live 标记运行期未闭合的活动行
+/** 时间线行数据，kind 区分六类条目，live 标记运行期未闭合的活动行
  *  synthetic 标记思考间隙与写作期补出的活动行，文本渲染时取文案不存值
- *  note 是模型中间解说，reply 是回复内容 */
+ *  note 是模型中间解说，reply 是回复内容
+ *  compress 是压缩记录行，一次压缩一条随会话持久化，移动端纯展示不可点 */
 export type TimelineRowData =
   | { kind: 'user'; text: string }
   | { kind: 'think'; text: string; live?: boolean; synthetic?: boolean }
@@ -180,7 +191,8 @@ export type TimelineRowData =
       iconUrl?: string;
       live?: boolean;
       failed?: boolean;
-    };
+    }
+  | { kind: 'compress'; record: CompressionRecord };
 
 /** 状态条用户行的显示文案。正文与附件占位依次空格拼接，空段自动省略。
  * 图片占位固定为 Image 加真实后缀，不随会话内外变化；文件占位为原始文件名带后缀。
@@ -219,15 +231,21 @@ export function userRowText(message: ChatMessage): string {
  * 用户消息出用户行充当轮次锚点，助手消息的思考段出思考行，工具调用出工具行带参数摘要，
  * 落盘消息的中间解说轮末收起不进行，助手正文非空出回复内容行给整轮收尾。
  * 落盘行与运行行的失败判定同源，读 thought 的 isError 与 toolResult 的 isError。
+ * 压缩记录随会话持久化，记录间按 at 升序，消息侧无逐条真实时间戳可锚，历史记录
+ * 落在全部消息行之后，运行中的记录压轴，meta 未带到时由运行态合成一行补位。
  * 运行期 liveRun 的步骤作为活动尾巴接在末尾，当前轮的消息还没落盘由它补齐，
  * 文字步按后面跟不跟工具定性，跟了出中间解说行，没跟出回复内容行，
  * 运行中没有未闭合工具步时按相位补活动行，写作期补正在回复标记，间隙补思考中。
  * @param messages 当前会话消息流，新在前
  * @param liveRun 运行期实时状态，空闲或归属不符传 null
+ * @param compressionRecords 压缩记录清单，按发生时间升序，无记录传空
+ * @param compressionRuntime 压缩运行态，空闲传 null
  */
 export function buildRows(
   messages: ChatMessage[],
-  liveRun: LiveRunState | null
+  liveRun: LiveRunState | null,
+  compressionRecords: CompressionRecord[] = [],
+  compressionRuntime: CompressionRuntimeState | null = null
 ): TimelineRowData[] {
   const rows: TimelineRowData[] = [];
   for (const m of [...messages].reverse()) {
@@ -252,6 +270,11 @@ export function buildRows(
     if (m.text) {
       rows.push({ kind: 'reply', text: m.text });
     }
+  }
+  // 历史记录落在消息行之后，运行行之前，记录间保持时间升序
+  const landedRecords = compressionRecords.filter((r) => r.state !== 'running');
+  for (const r of landedRecords) {
+    rows.push({ kind: 'compress', record: r });
   }
   if (liveRun) {
     liveRun.steps.forEach((st, i) => {
@@ -290,6 +313,33 @@ export function buildRows(
       );
     }
   }
+  // 运行中的压缩行压轴，meta 已带同 id 记录时直接用它，未带到由运行态合成补位
+  const runningRecords = compressionRecords.filter(
+    (r) => r.state === 'running'
+  );
+  for (const r of runningRecords) {
+    rows.push({ kind: 'compress', record: r });
+  }
+  if (
+    compressionRuntime &&
+    (compressionRuntime.phase === 'running' ||
+      compressionRuntime.phase === 'retry') &&
+    !runningRecords.some((r) => r.id === compressionRuntime.recordId)
+  ) {
+    rows.push({
+      kind: 'compress',
+      // 合成记录的 trigger 与 at 不参与渲染，仅满足记录类型，meta 同步后由真实记录顶替
+      record: {
+        id: compressionRuntime.recordId,
+        state: 'running',
+        trigger: 'manual',
+        attempt: compressionRuntime.attempt,
+        before: null,
+        after: null,
+        at: Date.now(),
+      },
+    });
+  }
   return rows;
 }
 
@@ -302,9 +352,6 @@ const BAR_H = 37;
 /** 发丝线档热区全高，胶囊占顶上 6 加 4 */
 const HAIR_ZONE_H = 20;
 
-/** 空闲摘要回退不到工具步数时，用户消息行的截断上限 */
-const USER_LABEL_MAX = 24;
-
 /** 发丝线档胶囊宽 64 高 4 圆角 2，距 header 下缘 6px，热区全宽 20px */
 const CAPSULE_W = 64;
 const HAIR_THICKNESS = 4;
@@ -316,10 +363,11 @@ const SEAM_IDLE = '#D1D1D6';
 
 /**
  * 空闲态一行档摘要，从最新一条带工具步的助手消息现算步数与失败步数。
+ * 失败轮红字优先，消息流末尾是 error 气泡即本轮失败，有失败步数报 doneFail，
+ * 零步骤失败轮同样落 roundFail，不回退已回复。
  * 成功轮优先显示模型写的本轮意图，取最后一个工具步的 toolIntent，未写走步数兜底。
- * 失败轮输出 doneFail 红字整句，意图置空走兜底，不落任何驻留字段。
+ * 零工具步的轮与回退不到任何模型轮的空窗都显示已回复，用户消息原文不上单行。
  * GiftedChat 数组新在前，从头部向尾部扫。
- * 回退不到工具步数时取最新一条用户消息截断，无消息显示思考中。
  * @param t 文案函数
  * @param messages 当前会话消息流，新在前
  */
@@ -327,11 +375,11 @@ export function idleLabel(
   t: Translate,
   messages: ChatMessage[]
 ): { text: string; failed: boolean } {
+  const errTail = messages[0]?.error === true;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     if (m.user._id !== BOT_ID || !m.steps?.length) continue;
     const tools = m.steps.filter((th) => th.type === 'tool_use');
-    if (tools.length === 0) continue;
     const fails = tools.filter(
       (th) => th.isError || th.toolResult?.isError
     ).length;
@@ -341,16 +389,87 @@ export function idleLabel(
         failed: true,
       };
     }
+    if (errTail) {
+      return { text: t('live.roundFail'), failed: true };
+    }
+    if (tools.length === 0) {
+      return { text: t('live.replied'), failed: false };
+    }
     const intent = tools[tools.length - 1]?.toolIntent;
     return intent
       ? { text: intent, failed: false }
       : { text: t('live.done', { count: tools.length }), failed: false };
   }
-  const newest = messages[0];
-  if (newest && newest.user._id === 1) {
-    return { text: trunc(userRowText(newest), USER_LABEL_MAX), failed: false };
+  if (errTail) {
+    return { text: t('live.roundFail'), failed: true };
   }
-  return { text: t('live.thinking'), failed: false };
+  return { text: t('live.replied'), failed: false };
+}
+
+/** 顶条压缩相位的显示形状，mono 是等宽字附注，重试序号或落定对比 */
+interface CompressionPhaseView {
+  icon: IconComponent;
+  label: string;
+  mono: string | null;
+  dots: boolean;
+  failed: boolean;
+}
+
+/**
+ * 顶条压缩相位显示，运行与重试带圆点与序号，落定亮出前后对比。
+ * 失败与真底线同为终态上单行，红字换 XCircle 与时间线压缩行同色。
+ * 中断不进运行态，只在时间线压缩行灰字悬置。
+ * @param t 文案函数
+ * @param state 压缩运行态，空闲无落定记忆返回 null
+ */
+function compressionPhase(
+  t: Translate,
+  state: CompressionRuntimeState | null
+): CompressionPhaseView | null {
+  if (!state) return null;
+  if (state.phase === 'running') {
+    return {
+      icon: Minimize2,
+      label: t('live.compressionRunning'),
+      mono: null,
+      dots: true,
+      failed: false,
+    };
+  }
+  if (state.phase === 'retry') {
+    return {
+      icon: Minimize2,
+      label: t('live.compressionRetrying'),
+      mono: `(${state.attempt}/3)`,
+      dots: true,
+      failed: false,
+    };
+  }
+  if (state.phase === 'failed') {
+    return {
+      icon: XCircle,
+      label:
+        state.failReason === 'no_material'
+          ? t('live.compressionFloorEmpty')
+          : t('live.compressionFailed'),
+      mono: null,
+      dots: false,
+      failed: true,
+    };
+  }
+  const landed = state.lastLanded;
+  if (!landed) return null;
+  const mono =
+    landed.before != null && landed.after != null
+      ? `${formatK(landed.before)} → ${formatK(landed.after)}`
+      : null;
+  return {
+    icon: Minimize2,
+    label: t('live.compressionCompacted'),
+    mono,
+    dots: false,
+    failed: false,
+  };
 }
 
 /** 顶条三档，line 留一行，open 完全展开，hair 完全收起只剩发丝线 */
@@ -405,6 +524,12 @@ export function LiveStrip() {
     (s) => s.sessions[s.displayedSessionId]?.messages ?? EMPTY_MESSAGES
   );
   const liveRun = useChatStore((s) => s.liveRun);
+  const compressionState = useChatStore(
+    (s) => s.compressionStates.get(s.displayedSessionId) ?? null
+  );
+  const compressionRecords = useChatStore(
+    (s) => s.compressionLogs.get(s.displayedSessionId) ?? EMPTY_RECORDS
+  );
   const [mode, setMode] = useState<StripMode>(lastMode);
   const [panelContentH, setPanelContentH] = useState(0);
   const panelH = useSharedValue(0);
@@ -416,8 +541,14 @@ export function LiveStrip() {
 
   const running = !!liveRun && liveRun.sessionId === displayedSessionId;
   const rows = useMemo(
-    () => buildRows(messages, running ? liveRun : null),
-    [messages, running, liveRun]
+    () =>
+      buildRows(
+        messages,
+        running ? liveRun : null,
+        compressionRecords,
+        compressionState
+      ),
+    [messages, running, liveRun, compressionRecords, compressionState]
   );
 
   const applyMode = (next: StripMode) => {
@@ -478,6 +609,9 @@ export function LiveStrip() {
     return null;
   }
 
+  // 压缩相位显示，模型运行态优先让位，让位后不复活直到下一次压缩落定
+  const comp = running ? null : compressionPhase(t, compressionState);
+
   const idle = running ? null : idleLabel(t, messages);
   // 一行档失败镜像：运行中最后一步已失败，顶条镜像同一句红字动向，不带失败标记
   const liveFailed = liveRun
@@ -485,23 +619,26 @@ export function LiveStrip() {
     : false;
   const label = liveRun
     ? liveRunLabel(t, liveRun)
+    : comp
+    ? comp.label
     : idle?.text ?? t('live.thinking');
-  const labelRed = liveRun ? liveFailed : idle?.failed ?? false;
-  const PhaseIcon = liveRun ? phaseIcon(liveRun) : null;
+  const labelRed = liveRun
+    ? liveFailed
+    : comp
+    ? comp.failed
+    : idle?.failed ?? false;
+  const PhaseIcon = liveRun ? phaseIcon(liveRun) : comp ? comp.icon : null;
   const idleFailed = idle?.failed ?? false;
   const barInteractive = mode !== 'hair';
 
   return (
     <Animated.View style={[styles.layer, layerStyle]}>
       <Animated.View style={[styles.shellWrap, shellStyle]}>
-        {/* 条子背景层，磨砂加白底加下描边，随条子档淡入淡出，不参与点击 */}
+        {/* 条子背景层，纯白不透明底加下描边，iOS 与安卓同规格，随条子档淡入淡出，不参与点击 */}
         <Animated.View
-          style={[StyleSheet.absoluteFill, barStyle]}
+          style={[StyleSheet.absoluteFill, styles.shellBg, barStyle]}
           pointerEvents="none"
-        >
-          <BackdropBlur />
-          <View style={styles.shellBg} />
-        </Animated.View>
+        />
         {/* 发丝线层，胶囊热区只在 hair 档接管点击 */}
         <Animated.View
           style={[StyleSheet.absoluteFill, capsuleStyle]}
@@ -509,7 +646,7 @@ export function LiveStrip() {
         >
           <HairSeam
             label={t('live.restore')}
-            running={running}
+            running={running || !!comp?.dots}
             onRestore={() => applyMode('line')}
           />
         </Animated.View>
@@ -530,7 +667,10 @@ export function LiveStrip() {
               accessibilityState={{ expanded: mode === 'open' }}
             >
               {PhaseIcon ? (
-                <PhaseIcon size={11} color={colors.primary} />
+                <PhaseIcon
+                  size={11}
+                  color={comp?.failed ? FAIL_RED : colors.primary}
+                />
               ) : idleFailed ? null : (
                 <CheckCircle size={16} color={colors.success} />
               )}
@@ -542,9 +682,12 @@ export function LiveStrip() {
                 numberOfLines={1}
               >
                 {label}
+                {comp?.mono && (
+                  <Text style={styles.monoNote}> {comp.mono}</Text>
+                )}
               </Text>
               {/* 圆点紧跟动向文字右侧，文字超长先收缩截断，圆点保持在省略号之后 */}
-              {running && !liveFailed && <Dots />}
+              {(running && !liveFailed) || comp?.dots ? <Dots /> : null}
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -564,14 +707,12 @@ export function LiveStrip() {
               data={panelData}
               keyExtractor={(_, i) => `row-${i}`}
               renderItem={({ item }) => <TimelineRow row={item} />}
-              style={{
-                height:
-                  panelContentH > 0
-                    ? Math.min(panelContentH, PANEL_MAX_H)
-                    : PANEL_MAX_H,
-              }}
+              style={{ height: cappedPanelH }}
               contentContainerStyle={styles.panelListContent}
-              onContentSizeChange={(_w, h) => setPanelContentH(h)}
+              onContentSizeChange={(_w, h) => {
+                logger.debug(`[LiveStrip] panel content height ${h}`);
+                setPanelContentH(h);
+              }}
               maintainVisibleContentPosition={{
                 minIndexForVisible: 0,
                 autoscrollToTopThreshold: 0,
@@ -692,6 +833,64 @@ function HairSeam({
 /** 工具行的行数据形状，供前置位组件收窄消费 */
 type ToolRow = Extract<TimelineRowData, { kind: 'tool' }>;
 
+/** 空压缩记录常量，避免选择器每次取值产生新引用引发多余渲染 */
+const EMPTY_RECORDS: CompressionRecord[] = [];
+
+/**
+ * 时间线的压缩行，一次压缩一条记录随会话持久化，移动端纯展示不可点。
+ * 运行与重试带呼吸圆点，重试附等宽序号，完成带前后对比，
+ * 真底线与失败整句红字换 XCircle，中断灰字兜悬置运行态，前后数字缺失不出对比。
+ * @param record 压缩记录
+ */
+function CompressionRow({ record }: { record: CompressionRecord }) {
+  const { t } = useTranslation();
+  const live = record.state === 'running';
+  const retrying = live && record.attempt > 1;
+  const floor = record.state === 'failed' && record.reason === 'no_material';
+  const red = record.state === 'failed';
+  const landed = record.state === 'complete';
+  const label = live
+    ? retrying
+      ? t('live.compressionRetrying')
+      : t('live.compressionRunning')
+    : landed
+    ? t('live.compressionCompacted')
+    : floor
+    ? t('live.compressionFloorEmpty')
+    : record.state === 'failed'
+    ? t('live.compressionFailed')
+    : t('live.compressionUnfinished');
+  const mono =
+    record.before != null && record.after != null
+      ? `${formatK(record.before)} → ${formatK(record.after)}`
+      : null;
+  return (
+    <View style={styles.timelineRow}>
+      {red ? (
+        <XCircle size={14} color={FAIL_RED} />
+      ) : (
+        <Minimize2 size={14} color={live ? COMPRESS_BLUE : ROW_ICON} />
+      )}
+      <Text
+        style={[
+          styles.rowText,
+          red
+            ? styles.failText
+            : live
+            ? styles.liveText
+            : styles.compressIdleText,
+        ]}
+        numberOfLines={2}
+      >
+        {label}
+        {retrying && <Text style={styles.monoNote}> ({record.attempt}/3)</Text>}
+        {landed && mono && <Text style={styles.monoNote}> {mono}</Text>}
+      </Text>
+      {live && <Dots style={styles.rowDots} />}
+    </View>
+  );
+}
+
 /** 工具行前置位，MCP 工具显所属服务 logo，经 CachedImage 走内容哈希缓存，图址缺失或加载失败回退身份图标 */
 function ToolLeadingIcon({ row }: { row: ToolRow }) {
   const [logoFailed, setLogoFailed] = useState(false);
@@ -719,7 +918,9 @@ function TimelineRow({ row }: { row: TimelineRowData }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const live =
-    row.kind === 'user' || row.kind === 'note' ? false : row.live ?? false;
+    row.kind === 'user' || row.kind === 'note' || row.kind === 'compress'
+      ? false
+      : row.live ?? false;
 
   if (row.kind === 'user') {
     return (
@@ -767,6 +968,11 @@ function TimelineRow({ row }: { row: TimelineRowData }) {
     );
   }
 
+  // 压缩行自带完整渲染，纯展示不可点
+  if (row.kind === 'compress') {
+    return <CompressionRow record={row.record} />;
+  }
+
   const summary = stepPhrase(t, {
     tool: row.tool,
     detail: row.detail,
@@ -811,10 +1017,9 @@ const styles = StyleSheet.create({
   shellWrap: {
     overflow: 'hidden',
   },
-  // 白色七成透明底加下描边是设计规格值，与桌面 bg-background/80 backdrop-blur 同口径
+  // 纯白不透明底加下描边，聊天文字不透出，iOS 与安卓统一规格
   shellBg: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
   },
@@ -903,6 +1108,12 @@ const styles = StyleSheet.create({
   liveText: {
     fontWeight: '500',
     color: '#333333',
+  },
+  compressIdleText: {
+    color: ROW_ICON,
+  },
+  monoNote: {
+    fontVariant: ['tabular-nums'],
   },
   failText: {
     color: FAIL_RED,

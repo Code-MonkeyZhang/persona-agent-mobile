@@ -108,6 +108,8 @@ export interface ChatMessage extends IMessage {
   metrics?: Metrics;
   citations?: Citation[];
   aborted?: boolean;
+  /** 服务端 error 角色消息标记，渲染走红底错误气泡，空闲收起行据此亮本轮失败 */
+  error?: boolean;
   /** 待注入插话标记，服务端缓冲取空后清除 */
   queued?: boolean;
   /** 关联服务端待注入缓冲条目的 id */
