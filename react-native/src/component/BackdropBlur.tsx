@@ -1,6 +1,6 @@
 /**
  * @file component/BackdropBlur.tsx
- * @description 面板背景模糊层的统一渲染入口，聊天输入区与直播条共用。
+ * @description 面板背景模糊层的统一渲染入口，聊天输入区使用。
  *   iOS 走 @sbaiahmed1/react-native-blur 的原生毛玻璃，组件在编译期静态注册，
  *   消除 expo-blur 运行时登记竞态导致的偶发红色占位视图。
  *   安卓保持半透明白降级底色，与历史视觉一致，不启用真模糊。

@@ -218,7 +218,7 @@ const DeviceManageScreen: React.FC = () => {
   );
 };
 
-/** 占位行：未知地址的扫码手输在途时排在清单首位，地址当名字，连接中蓝点脉动，失败转红点按重试 */
+/** 占位行：未知地址的扫码手输在途时排在清单首位，地址当名字单行截断，名字与状态上下堆叠复用 rowPress 的收缩约束，连接中蓝点脉动，失败转红点按重试 */
 function PendingRow({
   address,
   failed,
@@ -243,17 +243,19 @@ function PendingRow({
         disabled={!failed}
         onPress={onRetry}
       >
-        <Text style={styles.rowName} numberOfLines={1}>
-          {address}
-        </Text>
-        <View style={styles.rowSub}>
-          <StatusDot
-            color={failed ? dotColors.red : dotColors.blue}
-            pulse={!failed}
-          />
-          <Text style={failed ? styles.rowSubTextError : styles.rowSubText}>
-            {t(failed ? 'device.pairRetry' : 'device.statusConnecting')}
+        <View style={styles.rowPress}>
+          <Text style={styles.rowName} numberOfLines={1}>
+            {address}
           </Text>
+          <View style={styles.rowSub}>
+            <StatusDot
+              color={failed ? dotColors.red : dotColors.blue}
+              pulse={!failed}
+            />
+            <Text style={failed ? styles.rowSubTextError : styles.rowSubText}>
+              {t(failed ? 'device.pairRetry' : 'device.statusConnecting')}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     </Reanimated.View>
