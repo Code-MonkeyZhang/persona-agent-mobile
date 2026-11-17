@@ -123,10 +123,7 @@ export class ImageCache {
   }
 
   /** 键已确定后的解析主体，记忆命中、并发合并与未命中下载共用 */
-  private resolveKeyed(
-    key: string,
-    source: string
-  ): Promise<string | null> {
+  private resolveKeyed(key: string, source: string): Promise<string | null> {
     const known = this.memo.get(key);
     if (known !== undefined) {
       return Promise.resolve(known === FAILED ? null : known);

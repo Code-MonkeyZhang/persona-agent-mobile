@@ -5,6 +5,7 @@
  *   渲染命中、排队下载与种入共用同一套实例表，忘掉设备即丢弃实例。
  */
 import RNFS from 'react-native-fs';
+import { downloadAsync } from 'expo-file-system/legacy';
 import { ImageCache } from './image-cache.ts';
 import { attachmentsDirFor } from './cache-layout.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
@@ -13,7 +14,7 @@ import { logger } from '../lib/logger';
 /** 设备附件缓存实例表，键为 hostId */
 const instances = new Map<string, ImageCache>();
 
-/** 附件缓存能力的 RNFS 依赖，全部设备实例共用 */
+/** 附件缓存能力依赖，全部设备实例共用，文件操作走 RNFS，下载走 expo-file-system */
 const deps = {
   mkdir: (path: string) => RNFS.mkdir(path).catch(() => undefined),
   readDir: async (path: string) =>
@@ -22,30 +23,26 @@ const deps = {
   moveFile: (from: string, to: string) => RNFS.moveFile(from, to),
   copyFile: (from: string, to: string) => RNFS.copyFile(from, to),
   sha256: (path: string) => RNFS.hash(path, 'sha256'),
-  download: (url: string, toFile: string) =>
-    new Promise<{ statusCode: number; contentType?: string }>(
-      (resolve, reject) => {
-        let statusCode = 0;
-        let contentType: string | undefined;
-        const job = RNFS.downloadFile({
-          fromUrl: url,
-          toFile,
-          background: false,
-          connectionTimeout: 15_000,
-          readTimeout: 30_000,
-          begin: (res) => {
-            statusCode = res.statusCode;
-            const headers = res.headers as Record<string, string>;
-            for (const name of Object.keys(headers)) {
-              if (name.toLowerCase() === 'content-type') {
-                contentType = headers[name];
-              }
-            }
-          },
-        });
-        job.promise.then(() => resolve({ statusCode, contentType }), reject);
+  /**
+   * 下载走 expo-file-system 的 legacy downloadAsync，返回状态与响应头，
+   * 失败以携带非空 code 的错误 reject 给 JS 层兜底。
+   * RNFS 的 downloadFile 失败回调里以 null code 调 reject，新 bridge 的
+   * PromiseImpl 非空断言直接 NPE 崩进程，2026-11-16 真机复现后弃用该通道。
+   * 目标 URI 必须是 file:/// 开头，Android 权限校验对无 scheme 的纯路径
+   * 只授读权限会拒写，RNFS 风格的纯路径在这里统一补前缀。
+   */
+  download: async (url: string, toFile: string) => {
+    const fileUri = toFile.startsWith('file://') ? toFile : `file://${toFile}`;
+    const result = await downloadAsync(url, fileUri);
+    const headers = result.headers;
+    let contentType: string | undefined;
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === 'content-type') {
+        contentType = headers[name];
       }
-    ),
+    }
+    return { statusCode: result.status, contentType };
+  },
   log: (message: string) => logger.info(`[ImageCache] ${message}`),
 };
 

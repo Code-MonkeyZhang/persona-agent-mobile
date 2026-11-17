@@ -50,6 +50,12 @@ jest.mock('react-native-fs', () => ({
   downloadFile: jest.fn(() => ({ promise: Promise.resolve() })),
 }));
 
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(() =>
+    Promise.resolve({ uri: '', status: 200, headers: {} })
+  ),
+}));
+
 jest.mock('../src/storage/image-cache.ts', () => ({
   ImageCache: jest.fn((dir: string) => new mockFakeCacheImpl(dir)),
 }));

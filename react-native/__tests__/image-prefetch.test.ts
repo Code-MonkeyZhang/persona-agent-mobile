@@ -17,7 +17,6 @@ function agent(id: string): AgentInfo {
     systemPrompt: 'prompt',
     maxSteps: 10,
     skillNames: [],
-    compressionThreshold: 50,
     createdAt: 1,
     updatedAt: 1,
   };

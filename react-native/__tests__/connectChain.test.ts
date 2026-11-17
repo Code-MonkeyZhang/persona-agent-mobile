@@ -46,6 +46,12 @@ jest.mock('react-native-fs', () => ({
   downloadFile: jest.fn(() => ({ promise: Promise.resolve() })),
 }));
 
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(() =>
+    Promise.resolve({ uri: '', status: 200, headers: {} })
+  ),
+}));
+
 jest.mock('../src/api/ws-client', () => ({
   connect: jest.fn(),
   disconnect: jest.fn(),
