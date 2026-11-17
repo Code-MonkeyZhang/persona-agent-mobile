@@ -14,6 +14,9 @@ import type {
   LauncherOrderDoc,
   LauncherPrefEntry,
   WallpaperDoc,
+  BreakdownShares,
+  UsageState,
+  CompressionRecord,
 } from '../storage/sync-shapes.ts';
 
 /** 日志标签前缀 */
@@ -48,6 +51,13 @@ export type SpeakErrorReason =
   | 'no_voice_id'
   | 'no_content'
   | 'voice_not_found';
+
+/** compression_failed 事件的原因枚举，区分无料、服务商、摘要不合格与中断 */
+export type CompressionFailReason =
+  | 'no_material'
+  | 'provider'
+  | 'bad_summary'
+  | 'interrupted';
 
 /** 模型配置（对齐 @persona/shared 的 ModelConfig） */
 export interface ModelConfig {
@@ -199,6 +209,42 @@ export type ServerMessage =
       sessionIds: string[];
       /** 带归属的同一份全量，旧服务端缺失时头像圈不转不误转 */
       runs?: RunningSessionEntry[];
+    }
+  | {
+      /**
+       * 占用快照推送。模型报数落账后、压缩落定后、配置变化的刷新与报数缺席的
+       * 补位各推一次，订阅回执后补推一次当前值，source 区分快照跟着哪类事件到达
+       */
+      type: 'context_usage';
+      sessionId: string;
+      used: number;
+      window: number;
+      shares: BreakdownShares | null;
+      source: 'model' | 'compression' | 'estimate';
+    }
+  | {
+      /** 压缩开始事件，attempt 递增重试时重发喂重试序号 */
+      type: 'compression_started';
+      sessionId: string;
+      recordId: string;
+      attempt: number;
+      before: number | null;
+    }
+  | {
+      /** 压缩落定事件，携带压缩前后的占用分子 */
+      type: 'compression_complete';
+      sessionId: string;
+      recordId: string;
+      before: number | null;
+      after: number | null;
+      trigger: 'auto' | 'manual';
+    }
+  | {
+      /** 压缩终态失败事件，原因码区分无料、服务商、摘要不合格与中断 */
+      type: 'compression_failed';
+      sessionId: string;
+      recordId: string;
+      reason: CompressionFailReason;
     };
 
 /**
@@ -365,8 +411,6 @@ export interface AgentInfo {
   voiceId?: string;
   /** 头像内容哈希，路由层按文件现算，URL 构造器据此拼 h 查询串 */
   avatarHash?: string;
-  /** 上下文压缩阈值（百分比 1–100） */
-  compressionThreshold: number;
   /** 语音语言（映射到 MiniMax language_boost） */
   voiceLanguage?: string;
   createdAt: number;
@@ -380,7 +424,6 @@ export interface AgentUpdateInput {
   systemPrompt?: string;
   defaultModel?: ModelConfig;
   maxSteps?: number;
-  compressionThreshold?: number;
   voiceId?: string;
   voiceLanguage?: string;
   skillNames?: string[];
@@ -1236,6 +1279,10 @@ interface SessionMeta {
   currentPose?: string;
   /** 最后一条真实消息的预览，服务端仅对常驻聊天会话计算 */
   lastMessage?: string;
+  /** 会话占用底数，占用面板的初始化来源，与镜像库同形 */
+  usageState?: UsageState;
+  /** 压缩记录清单，一次压缩一条，与镜像库同形 */
+  compressionLog?: CompressionRecord[];
 }
 
 interface Session extends SessionMeta {
@@ -1321,6 +1368,73 @@ export async function deleteSession(
   const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
   await httpDelete(url);
   logger.info(`${TAG} deleteSession → ${sessionId}`);
+}
+
+/**
+ * 手动压缩指定会话（对应 POST /api/agents/:agentId/sessions/:id/compress）。
+ * 受理即返回 202，压缩在服务端后台跑，进度经 WS 压缩事件族到达。
+ * 回合运行中照常受理，重复请求同样返回 accepted 不报错。
+ */
+export async function triggerCompression(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string
+): Promise<void> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}/compress`;
+  await httpPost(url, {}, 30_000);
+  logger.info(`${TAG} triggerCompression → sessionId=${sessionId} accepted`);
+}
+
+/** 全局配置的压缩节，两端共享同一份，开关与阈值一起读写 */
+export interface CompressionConfig {
+  autoCompress: boolean;
+  threshold: number;
+}
+
+/** 服务端全局配置（对应 GET /api/config 返回的 config 节），移动端只消费压缩节 */
+export interface AppConfig {
+  enableLogging: boolean;
+  enableToolNarration: boolean;
+  compression: CompressionConfig;
+}
+
+/**
+ * 读取服务端全局配置（对应 GET /api/config），设置页压缩偏好节与占用面板底行的数据源。
+ */
+export async function fetchAppConfig(
+  serverAddress: string
+): Promise<AppConfig> {
+  const url = `${serverAddress}/api/config`;
+  const responseText = await httpGet(url);
+  const data = JSON.parse(responseText) as { config: AppConfig };
+  logger.info(
+    `${TAG} fetchAppConfig → autoCompress=${data.config.compression.autoCompress} threshold=${data.config.compression.threshold}`
+  );
+  return data.config;
+}
+
+/**
+ * 写回压缩偏好（对应 PUT /api/config 的 compression 节）。
+ * enableLogging 是端点必填布尔，写入时带 current 里读到的旧值，
+ * 只合并 compression 字段回写，避免移动端全量配置覆盖服务端其他字段。
+ * @param current 写前读到的现配置，提供 enableLogging 与 enableToolNarration
+ * @param compression 新的压缩节
+ */
+export async function updateCompressionConfig(
+  serverAddress: string,
+  current: AppConfig,
+  compression: CompressionConfig
+): Promise<void> {
+  const url = `${serverAddress}/api/config`;
+  const body = {
+    enableLogging: current.enableLogging,
+    enableToolNarration: current.enableToolNarration,
+    compression,
+  };
+  await httpPut(url, body);
+  logger.info(
+    `${TAG} updateCompressionConfig → autoCompress=${compression.autoCompress} threshold=${compression.threshold}`
+  );
 }
 
 /**
@@ -1443,6 +1557,7 @@ export function convertToChatMessages(
       result.push({
         _id: uuidv4(),
         text,
+        error: true,
         createdAt: new Date(sessionCreatedAt + result.length * 1000),
         user: { _id: BOT_ID },
       });

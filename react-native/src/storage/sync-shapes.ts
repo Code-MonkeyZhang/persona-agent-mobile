@@ -2,8 +2,8 @@
  * @file storage/sync-shapes.ts
  * @description 同步链路的数据形状与纯函数，抄录自 persona-agent 仓的 @persona/shared。
  *   移动端是独立 git 仓，与 monorepo 无包共享机制，此文件承担镜像库的形状契约，
- *   抄录时点为 stage 10 施工加小手机偏好接入，来源文件 schema.ts、session.ts、
- *   changes.ts、session-view.ts、preview.ts、launcher.ts，服务端接口变化时需手工同步。
+ *   抄录时点为 stage 10 施工加小手机偏好接入与上下文压缩接入，来源文件 schema.ts、
+ *   session.ts、changes.ts、session-view.ts、preview.ts、launcher.ts，服务端接口变化时需手工同步。
  *   附带镜像 Message 到本地 ServerChatMessage 的投影，镜像读路径与 HTTP 详情接口同形。
  */
 import type { AgentInfo } from '../api/server-api.ts';
@@ -101,6 +101,62 @@ export interface SessionMeta {
   hasUnread?: boolean;
   /** 最后一条真实消息的预览，镜像读路径现算 */
   lastMessage?: string;
+  /** 会话占用底数，占用面板的初始化来源，报数经变更流随 meta 同步到各端 */
+  usageState?: UsageState;
+  /** 压缩记录清单，一次压缩一条，时间线压缩行的唯一数据源 */
+  compressionLog?: CompressionRecord[];
+}
+
+/** 分段估算，三段 token 数，真实报数定总量，估算定构成 */
+export interface BreakdownShares {
+  messages: number;
+  systemPersona: number;
+  toolsSkills: number;
+}
+
+/**
+ * 会话占用底数，base 为 null 表示该模型不报真实数字。
+ * - base 是最近一次对账通过的报数，口径为 input 加 cacheRead 加 cacheWrite
+ * - anchorSeq 是报数请求时刻的会话消息数，之后的持久消息按估算计入分子
+ * - netAdjust 是压缩净调整，压缩落地时叠加，新报数落账时清零
+ * - shares 是报数请求的拼装快照，桌面端分段展示消费，移动端留作镜像保真
+ * - assemblyTokens 是随底数一并记录的装配估算量，分子先减报数时装配再加现行装配
+ */
+export interface UsageState {
+  base: number | null;
+  anchorSeq: number;
+  netAdjust: number;
+  shares: BreakdownShares | null;
+  /**
+   * 报数时的装配估算量，即当次 shares 的 systemPersona 加 toolsSkills 合计。
+   * undefined 表示旧底数未记录装配，分子不参与装配修正，下一次报数自动升级。
+   */
+  assemblyTokens?: number;
+}
+
+/**
+ * 压缩记录，随 SessionMeta 持久化，时间线压缩行的唯一数据源。
+ * - attempt 是最新一次尝试的序号，从一次起算，重试递增
+ * - before 与 after 是分子快照，数字缺失时为 null
+ * - summary 仅最新一条 complete 记录携带，摘要查看是桌面端独有，移动端不消费
+ */
+/** 压缩失败原因码，no_material 是真底线，interrupted 只来自服务端崩溃恢复的 meta */
+export type CompressionFailReason =
+  | 'no_material'
+  | 'provider'
+  | 'bad_summary'
+  | 'interrupted';
+
+export interface CompressionRecord {
+  id: string;
+  state: 'running' | 'complete' | 'failed' | 'interrupted';
+  trigger: 'auto' | 'manual';
+  attempt: number;
+  before: number | null;
+  after: number | null;
+  reason?: CompressionFailReason;
+  summary?: string;
+  at: number;
 }
 
 /** 快照里的单条消息，seq 为消息行号 */
@@ -143,9 +199,9 @@ export type ChangeKind =
  * - session_created 与 session_updated 的 data 为完整会话元信息
  * - session_deleted 的 data 为空对象，id 由 sessionId 字段承载
  * - turn_end 的 data 为 { turnEnds }，是边界的完整快照
- * - agents_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉角色列表
- * - tools_invalidated 的 data 为空对象，sessionId 为 null，客户端整份重拉工具注册表
+ * - agents_invalidated 的 data 为 { agentId }，标记哪个 Agent 的配置变了，sessionId 为 null，客户端整份重拉角色列表
  * - launcher_prefs_updated 的 data 为 LauncherPrefsChangeData，携带整份偏好文档
+ * - tools_invalidated 的 data 为 { agentIds } 或空对象，空对象表示注册表级全局变化，sessionId 为 null，客户端整份重拉工具注册表
  */
 export interface SessionChange {
   /** 全局递增序号，客户端以此判断自己追平到哪里 */
