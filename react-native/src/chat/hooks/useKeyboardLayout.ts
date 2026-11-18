@@ -129,12 +129,6 @@ export function useKeyboardLayout(
       avoidance.value,
   }));
 
-  /** 浮层视觉占位总高的终态值，事件时刻一次跳变，供回底按钮等 JS 侧定位 */
-  const overlayHeight =
-    inputBarHeight +
-    companionBubbleHeight +
-    keyboardAvoidanceOf(keyboardHeight, KEYBOARD_GAP, insetsBottom);
-
   /** 安卓避让垫在浮层外露出背景，iOS 垫在浮层内由毛玻璃底座收编，静态不参与动画 */
   const isAndroid = Platform.OS === 'android';
   const fibInsetStyle = useMemo<StyleProp<ViewStyle>>(
@@ -149,6 +143,5 @@ export function useKeyboardLayout(
     keyboardLiftStyle,
     overlaySpacerStyle,
     fibInsetStyle,
-    overlayHeight,
   };
 }

@@ -34,7 +34,7 @@ import {
 } from '@sayem314/react-native-keep-awake';
 import { ColorScheme, useTheme, typography } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
-import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
+import { ScrollToBottomButton } from './component/ScrollToBottomButton.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
 import { LiveStrip } from './component/LiveStrip.tsx';
@@ -78,9 +78,6 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 >;
 
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
-
-/** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
-const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
 
 /** 消息窗口的初始与扩展尺寸，列表更新成本随总条数线性放大，窗口化后稳定在常数级 */
 const MESSAGE_WINDOW_BASE = 300;
@@ -150,18 +147,14 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const {
-    keyboardLiftStyle,
-    overlaySpacerStyle,
-    fibInsetStyle,
-    overlayHeight,
-  } = useKeyboardLayout(
-    textInputViewRef,
-    scroll.scrollToBottom,
-    insets.bottom,
-    inputBarHeight,
-    companionBubbleHeight
-  );
+  const { keyboardLiftStyle, overlaySpacerStyle, fibInsetStyle } =
+    useKeyboardLayout(
+      textInputViewRef,
+      scroll.scrollToBottom,
+      insets.bottom,
+      inputBarHeight,
+      companionBubbleHeight
+    );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const attachments = useAttachments();
   const clearDraft = attachments.clear;
@@ -418,20 +411,6 @@ function ChatScreen(): React.JSX.Element {
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // 回底按钮定位跟随浮层占位终态，事件时刻一次跳变
-  const scrollStyle = useMemo(
-    () =>
-      StyleSheet.create({
-        scrollToBottomContainerStyle: {
-          width: 30,
-          height: 30,
-          right: 16,
-          bottom: overlayHeight + 44,
-        },
-      }),
-    [overlayHeight]
-  );
-
   const slideStyle = useMemo(
     () =>
       StyleSheet.create({
@@ -579,9 +558,6 @@ function ChatScreen(): React.JSX.Element {
                 // 日期浮动胶囊在每次消息更新时全量扫描所有消息，上万条会话下堵塞 JS 线程，这里关闭
                 false
               }
-              isScrollToBottomEnabled={true}
-              scrollToBottomComponent={renderScrollToBottom}
-              scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
           {/* Pane 2: 陪伴内容 */}
@@ -654,6 +630,11 @@ function ChatScreen(): React.JSX.Element {
                 modelNoVision &&
                 attachments.items.some((f) => f.type === FileType.image)
               }
+            />
+            {/* 回底按钮锚定输入栏上方，显隐由滚动阈值与陪伴页状态共同决定 */}
+            <ScrollToBottomButton
+              visible={scroll.scrolledUp && !companion.companionOpen}
+              onPress={scroll.scrollToBottom}
             />
           </View>
         </View>
