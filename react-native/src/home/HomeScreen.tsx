@@ -573,6 +573,8 @@ const HomeScreen: React.FC = () => {
         <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
+        {/* 选择器模块下缘线，挂在固定区尾部常驻，不随列表滚动 */}
+        <View style={styles.divider} />
       </View>
 
       {/* === 滚动区，从聊天入口开始，底部避让 home indicator === */}
@@ -590,8 +592,6 @@ const HomeScreen: React.FC = () => {
         )}
         ListHeaderComponent={
           <>
-            {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
-            <View style={styles.divider} />
             {/* 未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
             <HomeListHeader
               preview={chatEntryPreview}
