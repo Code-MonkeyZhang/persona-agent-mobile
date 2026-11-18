@@ -11,7 +11,7 @@
     "attachmentUploading": "附件还在上传中，稍等一下",
     "attachmentLimit": "最多添加 {{max}} 个附件",
     "fileOversize": "单个附件不能超过 {{size}}MB",
-    "sendUploadFailed": "有附件上传失败，点击重试或删除后再发送",
+    "sendUploadFailed": "附件上传失败，点击重试或删除后再发送",
     "notConnected": "未连接到主机，请检查网络后重试",
     "sendFailed": "发送失败，请检查与主机的连接",
     "retryUpload": "重试上传",
@@ -41,10 +41,9 @@
   "phone": {
     "resetLayout": "重置桌面布局",
     "resetLayoutDesc": "恢复默认排序",
-    "settingsNote": "壁纸与布局跟随服务器，换设备不丢",
     "loading": "正在加载应用…",
     "loadFailed": "应用加载失败，点按重试",
-    "emptyHint": "暂无可用应用，在桌面端商城安装后会同步到这里",
+    "emptyHint": "暂无可用应用，可在桌面端商城安装",
     "pageLoadFailed": "页面加载失败，点按重试"
   },
   "agent": {
@@ -67,7 +66,7 @@
     "male": "男声",
     "cloned": "克隆音色",
     "selectModel": "选择模型",
-    "noConfiguredModel": "暂无已配置密钥的模型供应商",
+    "noConfiguredModel": "暂无可用模型供应商",
     "selectVoice": "选择音色",
     "langDefault": "跟随默认",
     "langZh": "中文",
@@ -180,7 +179,7 @@
     "newChat": "新对话",
     "newSession": "新建会话",
     "connFailed": "连接失败",
-    "connNoAddress": "还没填入地址，请填入地址",
+    "connNoAddress": "未连接到主机",
     "connected": "已连接",
     "chat": "聊天",
     "memory": "记忆",
@@ -232,7 +231,7 @@
     "sectionDocs": "文档",
     "docsNeedsAuth": "完成授权后可查看文档",
     "docsUnavailable": "连接后可查看文档",
-    "docsMissing": "该工具未在握手中提供文档",
+    "docsMissing": "该工具未提供文档",
     "sectionContent": "内容",
     "instructionsMissing": "该技能暂无使用说明"
   },

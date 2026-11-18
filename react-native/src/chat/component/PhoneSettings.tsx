@@ -202,9 +202,6 @@ const PhoneSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               onPress={handleResetLayout}
             />
           </View>
-          <Text style={[styles.note, { color: colors.textTertiary }]}>
-            {t('phone.settingsNote')}
-          </Text>
         </ScrollView>
       ) : (
         <PhoneWallpaperPage />
@@ -254,12 +251,6 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 48,
-  },
-  note: {
-    ...typography.caption,
-    lineHeight: 18,
-    paddingHorizontal: 8,
-    marginTop: 10,
   },
 });
 

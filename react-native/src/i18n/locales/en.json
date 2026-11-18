@@ -11,7 +11,7 @@
     "attachmentUploading": "Attachments are still uploading, hold on",
     "attachmentLimit": "You can add up to {{max}} attachments",
     "fileOversize": "Each attachment must be under {{size}}MB",
-    "sendUploadFailed": "Some attachments failed to upload. Click to retry or remove it",
+    "sendUploadFailed": "Attachment upload failed. Click to retry or remove it",
     "notConnected": "Not connected to the host. Check the network and try again",
     "sendFailed": "Send failed. Check the connection to the host",
     "retryUpload": "Retry upload",
@@ -41,10 +41,9 @@
   "phone": {
     "resetLayout": "Reset Layout",
     "resetLayoutDesc": "Restore default order",
-    "settingsNote": "Wallpaper and layout follow the server across devices",
     "loading": "Loading apps…",
     "loadFailed": "Failed to load apps, tap to retry",
-    "emptyHint": "No apps yet, install from the desktop marketplace to see them here",
+    "emptyHint": "No apps yet, install from the desktop marketplace",
     "pageLoadFailed": "Failed to load page, tap to retry"
   },
   "agent": {
@@ -67,7 +66,7 @@
     "male": "Male",
     "cloned": "Cloned",
     "selectModel": "Select Model",
-    "noConfiguredModel": "No model providers configured yet",
+    "noConfiguredModel": "No model providers available",
     "selectVoice": "Select Voice",
     "langDefault": "Follow default",
     "langZh": "中文",
@@ -180,7 +179,7 @@
     "newChat": "New Chat",
     "newSession": "New Session",
     "connFailed": "Connection failed",
-    "connNoAddress": "No server address yet, tap to add one",
+    "connNoAddress": "Not connected to the host",
     "connected": "Connected",
     "chat": "Chat",
     "memory": "Memory",
@@ -232,7 +231,7 @@
     "sectionDocs": "Docs",
     "docsNeedsAuth": "Complete authorization to view docs",
     "docsUnavailable": "Connect to view docs",
-    "docsMissing": "This tool provides no docs in handshake",
+    "docsMissing": "This tool provides no docs",
     "sectionContent": "Content",
     "instructionsMissing": "No instructions for this skill"
   },
