@@ -28,6 +28,7 @@ import {
   getServerAddress,
   getServerAgentId,
 } from '../../storage/StorageUtils.ts';
+import { notify } from '../../lib/notify';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { logger } from '../../lib/logger';
@@ -159,7 +160,7 @@ export function ContextUsageShell() {
     const address = getServerAddress();
     const agentId = getServerAgentId();
     if (!address || !agentId) {
-      useChatStore.getState().showNotice('chat.notConnected');
+      notify.warn('chat.notConnected');
       return;
     }
     try {
@@ -173,7 +174,7 @@ export function ContextUsageShell() {
           e instanceof Error ? e.message : e
         }`
       );
-      useChatStore.getState().showNotice('chat.compressFailed');
+      notify.error('chat.compressFailed');
     }
   }, [compressing, sessionId]);
 

@@ -11,11 +11,11 @@
     "attachmentUploading": "附件还在上传中，稍等一下",
     "attachmentLimit": "最多添加 {{max}} 个附件",
     "fileOversize": "单个附件不能超过 {{size}}MB",
-    "sendUploadFailed": "有附件上传失败，点击红卡重试或删除后再发送",
+    "sendUploadFailed": "有附件上传失败，点击重试或删除后再发送",
     "notConnected": "未连接到主机，请检查网络后重试",
     "sendFailed": "发送失败，请检查与主机的连接",
     "retryUpload": "重试上传",
-    "modelNoVision": "当前模型不支持图片输入，发送后图片将以占位文字代替",
+    "modelNoVision": "当前模型不支持图片读取，发送后图片将以占位文字代替",
     "downloadFile": "下载文件",
     "compressAction": "压缩",
     "compressFailed": "压缩请求失败"
@@ -266,7 +266,7 @@
     "deleteFailed": "记忆删除失败"
   },
   "voice": {
-    "onButNoKeyMobile": "MiniMax API Key 未配置，请在桌面端设置中配置语音 API，一次配置全端生效",
-    "onButNoVoiceMobile": "当前 Agent 未设置音色，请在桌面端 Agent 编辑器中配置音色，一次配置全端生效"
+    "onButNoKeyMobile": "MiniMax API Key 未配置，请在桌面端设置中配置语音 API",
+    "onButNoVoiceMobile": "当前 Agent 未设置音色，请在桌面端 Agent 编辑器中配置音色"
   }
 }

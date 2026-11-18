@@ -23,7 +23,7 @@ import {
 } from '../../api/server-api.ts';
 import { getServerAddress } from '../../storage/StorageUtils.ts';
 import { imageCache } from '../../storage/image-cache-rn.ts';
-import { useChatStore } from '../../stores/chatStore.ts';
+import { notify } from '../../lib/notify';
 import { logger } from '../../lib/logger';
 
 /**
@@ -94,14 +94,14 @@ export function useAttachments() {
       if (picked.length === 0) return;
       const sized = picked.filter((p) => p.fileSize <= MAX_ATTACH_BYTES);
       if (sized.length < picked.length) {
-        useChatStore.getState().showNotice('chat.fileOversize', {
+        notify.warn('chat.fileOversize', {
           size: String(MAX_ATTACH_BYTES / 1024 / 1024),
         });
       }
       const room = Math.max(0, MAX_ATTACHMENTS - items.length);
       const taken = sized.slice(0, room);
       if (sized.length > room) {
-        useChatStore.getState().showNotice('chat.attachmentLimit', {
+        notify.warn('chat.attachmentLimit', {
           max: String(MAX_ATTACHMENTS),
         });
       }

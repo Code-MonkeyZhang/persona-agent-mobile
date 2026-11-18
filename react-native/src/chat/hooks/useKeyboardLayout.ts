@@ -5,9 +5,10 @@
  *   同一份动画值逐帧联动，开合全程不再出现占位一次性跳变。
  *   避让全部收进 translateY 纯位移，安全区垫底为静态样式，
  *   动画期浮层内部零布局重排。
+ *   另以 JS 终态值给出浮层顶边净高，供聊天页注册给应用内通知作抬升量。
  *   安全区避让两端分工，安卓垫在浮层外露出背景，iOS 垫在浮层内由毛玻璃底座收编。
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   TextInput,
@@ -107,6 +108,26 @@ export function useKeyboardLayout(
     }
   }, [keyboardVisible, keyboardHeight, insetsBottom, textInputViewRef]);
 
+  /** 浮层顶边距屏幕底边的净高，键盘取事件终态值，聊天页注册给应用内通知作抬升量 */
+  const [overlayTopOffset, setOverlayTopOffset] = useState(0);
+  useEffect(() => {
+    setOverlayTopOffset(
+      keyboardAvoidanceOf(
+        keyboardHeight,
+        keyboardVisible ? KEYBOARD_GAP : 0,
+        insetsBottom
+      ) +
+        inputBarHeight +
+        companionBubbleHeight
+    );
+  }, [
+    keyboardVisible,
+    keyboardHeight,
+    insetsBottom,
+    inputBarHeight,
+    companionBubbleHeight,
+  ]);
+
   /** 避让净高的唯一事实源，浮层抬升与列表占位共用，两端逐帧同幅 */
   const avoidance = useDerivedValue(() =>
     keyboardAvoidanceOf(
@@ -143,5 +164,6 @@ export function useKeyboardLayout(
     keyboardLiftStyle,
     overlaySpacerStyle,
     fibInsetStyle,
+    overlayTopOffset,
   };
 }

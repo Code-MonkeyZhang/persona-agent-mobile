@@ -22,7 +22,6 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -32,7 +31,7 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { ColorScheme, useTheme, typography } from '../theme/index.ts';
+import { ColorScheme, useTheme } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
 import { ScrollToBottomButton } from './component/ScrollToBottomButton.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
@@ -42,7 +41,11 @@ import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
 import { CompanionReplyBubble } from './component/CompanionReplyBubble.tsx';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
@@ -63,6 +66,7 @@ import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
 import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
+import { notify } from '../lib/notify';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
 import Animated, {
   useAnimatedStyle,
@@ -89,6 +93,9 @@ const MESSAGE_WINDOW_STEP = 300;
  * 倒置列表里 paddingBottom 映射视觉顶，与桌面 MessageList 的 STRIP_TOP_RESERVE 同规格，两边调整需同步。
  */
 const STRIP_TOP_RESERVE = 37;
+
+/** 应用内通知胶囊距输入浮层顶边的净空 */
+const NOTICE_CLEARANCE = 6;
 
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
@@ -130,8 +137,6 @@ function ChatScreen(): React.JSX.Element {
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
   const agentName = useChatStore((s) => s.agentName);
-  /** 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除 */
-  const notice = useChatStore((s) => s.notice);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -147,17 +152,29 @@ function ChatScreen(): React.JSX.Element {
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
-  const { keyboardLiftStyle, overlaySpacerStyle, fibInsetStyle } =
-    useKeyboardLayout(
-      textInputViewRef,
-      scroll.scrollToBottom,
-      insets.bottom,
-      inputBarHeight,
-      companionBubbleHeight
-    );
+  const {
+    keyboardLiftStyle,
+    overlaySpacerStyle,
+    fibInsetStyle,
+    overlayTopOffset,
+  } = useKeyboardLayout(
+    textInputViewRef,
+    scroll.scrollToBottom,
+    insets.bottom,
+    inputBarHeight,
+    companionBubbleHeight
+  );
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const attachments = useAttachments();
   const clearDraft = attachments.clear;
+
+  /** 聚焦时把浮层顶边注册给应用内通知作抬升量，失焦或卸载清零回基线，栈内压入的页面用基线位置 */
+  useFocusEffect(
+    useCallback(() => {
+      notify.setPageLift(overlayTopOffset + NOTICE_CLEARANCE);
+      return () => notify.setPageLift(0);
+    }, [overlayTopOffset])
+  );
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
@@ -328,18 +345,18 @@ function ChatScreen(): React.JSX.Element {
     async (text: string): Promise<boolean> => {
       if (!isConnected()) {
         logger.warn('[inputBox] send blocked, ws not connected');
-        useChatStore.getState().showNotice('chat.notConnected');
+        notify.warn('chat.notConnected');
         return false;
       }
       if (attachments.isUploading) {
         logger.info('[inputBox] send blocked, attachments uploading');
-        useChatStore.getState().showNotice('chat.attachmentUploading');
+        notify.info('chat.attachmentUploading');
         return false;
       }
       const settled = await attachments.uploadAll();
       if (!settled) {
         logger.warn('[inputBox] send blocked, attachment upload failed');
-        useChatStore.getState().showNotice('chat.sendUploadFailed');
+        notify.error('chat.sendUploadFailed');
         return false;
       }
       logger.info(
@@ -601,14 +618,6 @@ function ChatScreen(): React.JSX.Element {
         {/* 底部避让容器持静态安全区垫底，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
         <View style={fibInsetStyle}>
           <BackdropBlur />
-          {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
-          {notice && (
-            <View style={styles.noticeBubble}>
-              <Text style={styles.noticeText}>
-                {t(notice.key, notice.values)}
-              </Text>
-            </View>
-          )}
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -673,20 +682,6 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
-    },
-    /** 附件与上传类事件的提示气泡，浮在输入卡上方居中 */
-    noticeBubble: {
-      alignSelf: 'center',
-      backgroundColor: colors.overlay,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      marginBottom: 6,
-      maxWidth: '80%',
-    },
-    noticeText: {
-      ...typography.body,
-      color: colors.primaryForeground,
     },
   });
 

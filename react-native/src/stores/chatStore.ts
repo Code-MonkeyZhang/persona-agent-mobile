@@ -54,6 +54,7 @@ import { useVoiceStore } from './voiceStore.ts';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import { logger } from '../lib/logger';
+import { notify } from '../lib/notify';
 import i18n from '../i18n/index';
 import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
@@ -65,9 +66,6 @@ export const BOT_ID = 2;
 export const textPlaceholder = '...';
 /** 空消息数组的模块级常量，避免组件内兜底取值每次产生新引用引发多余渲染 */
 export const EMPTY_MESSAGES: ChatMessage[] = [];
-
-/** 提示气泡的序号，新的提示顶掉旧的并让旧计时失效 */
-let noticeSeq = 0;
 
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
 const createBotMessage = (): ChatMessage => ({
@@ -245,10 +243,6 @@ interface ChatStore {
   compressionStates: Map<string, CompressionRuntimeState>;
   /** 压缩记录清单，镜像 meta 初始化，事件按 recordId 幂等 upsert */
   compressionLogs: Map<string, CompressionRecord[]>;
-  /**
-   * 附件与发送类事件的提示气泡，键走 i18n，一段时间后自动清除。
-   */
-  notice: { key: string; values?: Record<string, string> } | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
@@ -264,8 +258,6 @@ interface ChatStore {
   setPoseError: (sessionId: string, value: boolean) => void;
   /** 主机切换后清空全部会话分片与展示态，旧主机的内存现场不再串台 */
   resetForHostSwitch: () => void;
-  /** 提示气泡的唯一写入口，新的提示顶掉旧的并重置计时 */
-  showNotice: (key: string, values?: Record<string, string>) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -280,7 +272,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   usageSnapshots: new Map(),
   compressionStates: new Map(),
   compressionLogs: new Map(),
-  notice: null,
 
   activateSession: async (sessionId) => {
     if (get().displayedSessionId === sessionId) {
@@ -360,7 +351,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const address = getServerAddress();
     if (!agentId || !address) {
       logger.warn(`${TAG} send skipped: no agent or server address`);
-      useChatStore.getState().showNotice('chat.notConnected');
+      notify.warn('chat.notConnected');
       return;
     }
 
@@ -394,13 +385,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           logger.warn(
             `${TAG} interjection rejected: ${result.error ?? 'unknown'}`
           );
-          useChatStore.getState().showNotice('chat.sendFailed');
+          notify.error('chat.sendFailed');
         }
       } catch (e) {
         logger.warn(
           `${TAG} interjection failed: ${e instanceof Error ? e.message : e}`
         );
-        useChatStore.getState().showNotice('chat.sendFailed');
+        notify.error('chat.sendFailed');
       }
       return;
     }
@@ -449,12 +440,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (!result.success) {
         rollbackGeneratingState(get().displayedSessionId);
         logger.warn(`${TAG} send rejected: ${result.error ?? 'unknown'}`);
-        useChatStore.getState().showNotice('chat.sendFailed');
+        notify.error('chat.sendFailed');
       }
     } catch (e) {
       logger.error(`${TAG} send error: ${e instanceof Error ? e.message : e}`);
       rollbackGeneratingState(get().displayedSessionId);
-      useChatStore.getState().showNotice('chat.sendFailed');
+      notify.error('chat.sendFailed');
     }
   },
 
@@ -506,16 +497,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       compressionStates: new Map(),
       compressionLogs: new Map(),
     });
-  },
-
-  showNotice: (key, values) => {
-    const seq = ++noticeSeq;
-    set({ notice: { key, values } });
-    setTimeout(() => {
-      if (noticeSeq === seq) {
-        set({ notice: null });
-      }
-    }, 2600);
   },
 }));
 
