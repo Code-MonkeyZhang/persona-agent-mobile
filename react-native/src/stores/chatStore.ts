@@ -43,7 +43,7 @@ import {
   resolveTimelineIconUrl,
 } from '../api/server-api.ts';
 import { getDeviceId } from '../utils/DeviceUtils.ts';
-import { summarizeToolInput } from '../lib/tool-summary.ts';
+import { summarizeToolInput, successfulPose } from '../lib/tool-summary.ts';
 import { type LiveRunState, type LiveStep } from '../chat/component/LiveStrip';
 import {
   useSessionStore,
@@ -793,6 +793,7 @@ const lastRefreshedAt: Record<string, number> = {};
  * 从本地重读指定会话的消息列表。
  * 武装刷新与追平补拉场景使用，扫描规则保证渲染顺序与实时链路一致。
  * 入口先做更新时间预检查，会话无变化且本地已有消息时零成本返回。
+ * 会话档案携带 currentPose 时同步回填立绘表情，漏事件后立绘由此追平。
  */
 async function refreshFromDisk(sessionId: string): Promise<void> {
   if (!sessionId) {
@@ -829,7 +830,14 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     updateSlice(sessionId, (prev) => ({
       ...prev,
       messages: convertToChatMessages(view.messages, view.createdAt, address),
+      pose: view.currentPose ?? prev.pose,
+      poseError: view.currentPose ? false : prev.poseError,
     }));
+    if (view.currentPose) {
+      logger.debug(
+        `${TAG} pose backfilled from disk, session=${sessionId} pose=${view.currentPose}`
+      );
+    }
     // 追平补拉同时收敛压缩记录，离线期间的记录由镜像 meta 兜底带回
     seedCompressionData(sessionId, view);
     logger.info(`${TAG} messages refreshed from disk, session=${sessionId}`);
@@ -968,22 +976,15 @@ function registerWsHandler(): void {
         } contentLen=${content?.length ?? 0}`
       );
 
-      // 检测 show_pose 指令，切换陪伴立绘
-      if (toolCalls && toolCalls.length > 0) {
-        for (const tc of toolCalls) {
-          if (tc.name === 'show_pose' && tc.arguments) {
-            const pose = tc.arguments.pose as string;
-            const result = toolResults?.find((tr) => tr.toolCallId === tc.id);
-            if (pose && result?.success) {
-              logger.debug(`${TAG} pose change: ${pose}`);
-              updateSlice(sessionId, (prev) => ({
-                ...prev,
-                pose,
-                poseError: false,
-              }));
-            }
-          }
-        }
+      // 检测 show_pose 指令，切换陪伴立绘，广播名为注册全名，归一化与成功判定收敛在 successfulPose
+      const pose = successfulPose(toolCalls, toolResults);
+      if (pose) {
+        logger.debug(`${TAG} pose change: ${pose}`);
+        updateSlice(sessionId, (prev) => ({
+          ...prev,
+          pose,
+          poseError: false,
+        }));
       }
 
       // 工具执行失败时记录日志
