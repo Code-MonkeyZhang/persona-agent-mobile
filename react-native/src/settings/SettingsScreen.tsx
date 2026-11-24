@@ -1,3 +1,10 @@
+/**
+ * @file settings/SettingsScreen.tsx
+ * @description 设置页单页平铺三组：通用、聊天、关于。
+ *   通用组收震动、思考过程、呼吸动画与思考气泡，都是设备本地的开关，各设备各管各的。
+ *   聊天组收自动压缩与压缩阈值，是两端共享的服务端全局配置。
+ *   关于组只有一个带版本号与箭头的入口行，点进关于本项目页。
+ */
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import {
@@ -16,13 +23,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
+  ChevronRight,
   Info,
   Lightbulb,
+  MessageCircleMore,
   Minimize2,
   Vibrate,
   VibrateOff,
+  Wind,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import DeviceInfo from 'react-native-device-info';
 import { setHapticFeedbackEnabled, trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { getHapticEnabled } from '../storage/StorageUtils.ts';
@@ -63,7 +74,8 @@ function Toggle({ on, onPress }: { on: boolean; onPress: () => void }) {
 }
 
 /**
- * 压缩偏好节，全局服务端配置不走本地 MMKV。
+ * 聊天组的压缩偏好节，全局服务端配置不走本地 MMKV。
+ * 节首带组头，无配置时组头与卡一起不渲染。
  * 两行，自动压缩开关加阈值行内数字输入，阈值行随开关联动收展，
  * 乐观写本地缓存让界面立即跟随，写回失败回滚并弹提示。
  */
@@ -146,31 +158,36 @@ function CompressionSection() {
   }
 
   return (
-    <View style={styles.card}>
-      <Row
-        icon={<Minimize2 size={19} color={colors.text} />}
-        label={t('settings.autoCompress')}
-        trailing={<Toggle on={compression.autoCompress} onPress={toggleAuto} />}
-      />
-      {compression.autoCompress && (
-        <View style={[styles.row, styles.rowBorderTop]}>
-          <Text style={styles.rowLabel}>
-            {t('settings.compressionThreshold')}
-          </Text>
-          <TextInput
-            style={styles.thresholdInput}
-            keyboardType="number-pad"
-            returnKeyType="done"
-            maxLength={3}
-            value={thresholdText}
-            onChangeText={setThresholdText}
-            onEndEditing={commitThreshold}
-            onSubmitEditing={commitThreshold}
-            accessibilityLabel={t('settings.compressionThreshold')}
-          />
-        </View>
-      )}
-    </View>
+    <>
+      <Text style={styles.sectionTitle}>{t('settings.chat')}</Text>
+      <View style={styles.card}>
+        <Row
+          icon={<Minimize2 size={19} color={colors.text} />}
+          label={t('settings.autoCompress')}
+          trailing={
+            <Toggle on={compression.autoCompress} onPress={toggleAuto} />
+          }
+        />
+        {compression.autoCompress && (
+          <View style={[styles.row, styles.rowBorderTop]}>
+            <Text style={styles.rowLabel}>
+              {t('settings.compressionThreshold')}
+            </Text>
+            <TextInput
+              style={styles.thresholdInput}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              maxLength={3}
+              value={thresholdText}
+              onChangeText={setThresholdText}
+              onEndEditing={commitThreshold}
+              onSubmitEditing={commitThreshold}
+              accessibilityLabel={t('settings.compressionThreshold')}
+            />
+          </View>
+        )}
+      </View>
+    </>
   );
 }
 
@@ -220,6 +237,14 @@ function SettingsScreen(): React.JSX.Element {
   const setThoughtProcessVisible = useSettingsStore(
     (s) => s.setThoughtProcessVisible
   );
+  const breathEnabled = useSettingsStore((s) => s.breathEnabled);
+  const setBreathEnabled = useSettingsStore((s) => s.setBreathEnabled);
+  const thinkingBubbleEnabled = useSettingsStore(
+    (s) => s.thinkingBubbleEnabled
+  );
+  const setThinkingBubbleEnabled = useSettingsStore(
+    (s) => s.setThinkingBubbleEnabled
+  );
 
   const toggleHapticFeedback = () => {
     const value = !hapticEnabled;
@@ -239,6 +264,7 @@ function SettingsScreen(): React.JSX.Element {
         style={styles.container}
         contentContainerStyle={styles.content}
       >
+        <Text style={styles.sectionTitle}>{t('settings.general')}</Text>
         <View style={styles.card}>
           {/* 震动开关，设备级偏好走本地 MMKV */}
           <Row
@@ -265,14 +291,45 @@ function SettingsScreen(): React.JSX.Element {
               />
             }
           />
+          {/* 呼吸动画开关，陪伴立绘的常驻起伏，关掉后完全静止 */}
+          <Row
+            icon={<Wind size={19} color={colors.text} />}
+            label={t('settings.breathAnimation')}
+            trailing={
+              <Toggle
+                on={breathEnabled}
+                onPress={() => setBreathEnabled(!breathEnabled)}
+              />
+            }
+          />
+          {/* 思考气泡开关，生成期间头顶常驻的思考气泡，关掉后情绪气泡照出 */}
+          <Row
+            icon={<MessageCircleMore size={19} color={colors.text} />}
+            label={t('settings.thinkingBubble')}
+            trailing={
+              <Toggle
+                on={thinkingBubbleEnabled}
+                onPress={() => setThinkingBubbleEnabled(!thinkingBubbleEnabled)}
+              />
+            }
+          />
         </View>
-        {/* 压缩偏好，两端共享的服务端全局配置 */}
+        {/* 压缩偏好，两端共享的服务端全局配置，节首自带聊天组头 */}
         <CompressionSection />
-        {/* 关于入口，导出日志与版本信息收在关于页 */}
+        <Text style={styles.sectionTitle}>{t('settings.aboutGroup')}</Text>
+        {/* 关于入口，行尾带当前版本号与箭头，导出日志与版本信息收在关于页 */}
         <View style={styles.card}>
           <Row
             icon={<Info size={19} color={colors.text} />}
             label={t('about.title')}
+            trailing={
+              <View style={styles.versionTrail}>
+                <Text style={styles.versionText}>
+                  {DeviceInfo.getVersion()}
+                </Text>
+                <ChevronRight size={18} color={colors.textTertiary} />
+              </View>
+            }
             onPress={() => navigation.navigate('About')}
           />
         </View>
@@ -292,6 +349,22 @@ const createStyles = (colors: ColorScheme) =>
     },
     content: {
       padding: 16,
+    },
+    /** 灰字组头，贴左与卡内文字对齐 */
+    sectionTitle: {
+      ...typography.meta,
+      color: colors.textTertiary,
+      marginLeft: 16,
+      marginBottom: 8,
+    },
+    versionTrail: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    versionText: {
+      ...typography.titleSection,
+      color: colors.textTertiary,
     },
     card: {
       backgroundColor: colors.card,

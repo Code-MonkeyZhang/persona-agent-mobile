@@ -8,27 +8,32 @@
     "stop": "停止生成",
     "generating": "正在生成",
     "loadEarlier": "加载更早的消息",
-    "attachmentUploading": "附件还在上传中，稍等一下",
+    "attachmentUploading": "附件上传中，请稍候",
     "attachmentLimit": "最多添加 {{max}} 个附件",
     "fileOversize": "单个附件不能超过 {{size}}MB",
-    "sendUploadFailed": "附件上传失败，点击重试或删除后再发送",
+    "sendUploadFailed": "附件上传失败，请重试或删除",
     "notConnected": "未连接到主机，请检查网络后重试",
-    "sendFailed": "发送失败，请检查与主机的连接",
+    "sendFailed": "发送失败，请检查连接",
     "retryUpload": "重试上传",
-    "modelNoVision": "当前模型不支持图片读取，发送后图片将以占位文字代替",
+    "modelNoVision": "当前模型不支持图片输入，发送后将以占位文字代替",
     "downloadFile": "下载文件",
     "compressAction": "压缩",
     "compressFailed": "压缩请求失败"
   },
   "settings": {
+    "general": "通用",
+    "chat": "聊天",
+    "aboutGroup": "关于",
     "vibration": "震动",
     "thoughtProcess": "思考过程",
+    "breathAnimation": "呼吸动画",
+    "thinkingBubble": "思考气泡",
     "autoCompress": "自动压缩",
     "compressionThreshold": "压缩阈值",
-    "compressSaveFailed": "压缩偏好写回服务端失败，已还原"
+    "compressSaveFailed": "压缩偏好保存失败，已还原"
   },
   "about": {
-    "title": "关于",
+    "title": "关于本项目",
     "version": "版本",
     "build": "构建号",
     "serverVersion": "服务器版本",
@@ -43,7 +48,7 @@
     "resetLayoutDesc": "恢复默认排序",
     "loading": "正在加载应用…",
     "loadFailed": "应用加载失败，点按重试",
-    "emptyHint": "暂无可用应用，可在桌面端商城安装",
+    "emptyHint": "暂无应用，可在桌面端商城安装",
     "pageLoadFailed": "页面加载失败，点按重试"
   },
   "agent": {
@@ -61,7 +66,7 @@
     "voiceNone": "未选择音色",
     "voicePreview": "试听",
     "voicePreviewText": "你好，这是我的声音。",
-    "voicePreviewFailed": "试听失败，请检查语音服务配置",
+    "voicePreviewFailed": "试听失败，请检查语音配置",
     "female": "女声",
     "male": "男声",
     "cloned": "克隆音色",
@@ -73,7 +78,7 @@
     "langEn": "English",
     "langJa": "日本語",
     "updateFailedTitle": "修改未保存",
-    "updateFailedMsg": "写回服务端失败，已还原该项"
+    "updateFailedMsg": "保存失败，已还原该项"
   },
   "thought": {
     "entry": "思考过程"
@@ -93,7 +98,7 @@
     "bashKill": "终止后台命令",
     "webfetch": "正在抓取网页",
     "webfetchFallback": "正在抓取网页",
-    "showPose": "切换表情",
+    "showPose": "正在演出",
     "getPose": "查看当前表情",
     "executing": "正在执行",
     "done": "执行了 {{count}} 个步骤",
@@ -111,7 +116,7 @@
   },
   "companion": {
     "noAssetTitle": "该 Agent 还未配置陪伴形象",
-    "noAssetHint": "在 assets/pose/ 目录下添加表情图片即可启用"
+    "noAssetHint": "在 assets/pose/ 目录添加表情图片即可"
   },
   "wallpaper": {
     "title": "壁纸",
@@ -120,7 +125,7 @@
     "customs": "自定义",
     "upload": "上传壁纸",
     "empty": "还没有自定义壁纸",
-    "tooSmall": "图片清晰度不够，请换一张短边至少 720 的图片",
+    "tooSmall": "图片太小，请换一张短边至少 720 的图片",
     "uploadFailed": "上传失败",
     "deleteFailed": "删除失败",
     "dawn": "黎明",
@@ -133,7 +138,7 @@
     "placeholder": "https://xxx.trycloudflare.com",
     "connect": "连接",
     "connecting": "连接中...",
-    "scanning": "将二维码放入框内即可自动扫描",
+    "scanning": "将二维码放入框内",
     "cameraPermissionDenied": "需要相机权限才能扫码"
   },
   "error": {
@@ -153,7 +158,7 @@
     "rename": "重命名",
     "deleteShort": "删除",
     "deleteConfirmTitle": "删除“{{name}}”？",
-    "deleteConfirmBody": "将移除这台设备在本机的连接记录，桌面端不受影响，随时可以重新添加。",
+    "deleteConfirmBody": "将移除这台设备的连接记录，桌面端不受影响。",
     "scanAdd": "扫码添加",
     "inputAddress": "输入地址",
     "statusConnected": "已连接",
@@ -206,7 +211,7 @@
     "allSkillsAssigned": "已全部分配",
     "builtinOff": "已关闭",
     "funcCount": "{{count}} 个功能",
-    "loadFailed": "加载失败，请检查连接后重试",
+    "loadFailed": "加载失败，请重试",
     "assignFailedTitle": "分配未保存",
     "assignFailedMsg": "写回服务端失败，请重试"
   },
@@ -249,9 +254,9 @@
     "noKeys": "无触发词",
     "pinnedSubline": "常驻记忆",
     "titleLabel": "标题",
-    "titlePlaceholder": "必填，一句短语概括这条记忆",
+    "titlePlaceholder": "必填，一句短语概括",
     "contentLabel": "内容",
-    "contentPlaceholder": "一条自含的事实，只说一件事",
+    "contentPlaceholder": "一条自含的事实",
     "keysLabel": "触发词",
     "keysPlaceholder": "用逗号分隔，如：上海，搬家",
     "typeLabel": "类型",
@@ -265,7 +270,7 @@
     "deleteFailed": "记忆删除失败"
   },
   "voice": {
-    "onButNoKeyMobile": "MiniMax API Key 未配置，请在桌面端设置中配置语音 API",
-    "onButNoVoiceMobile": "当前 Agent 未设置音色，请在桌面端 Agent 编辑器中配置音色"
+    "onButNoKeyMobile": "MiniMax API Key 未配置，请在桌面端设置 ▸ 语音 中配置",
+    "onButNoVoiceMobile": "当前 Agent 未设置音色，请在桌面端编辑器中选择音色"
   }
 }

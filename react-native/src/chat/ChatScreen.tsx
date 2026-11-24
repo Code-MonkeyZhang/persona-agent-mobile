@@ -114,6 +114,8 @@ function ChatScreen(): React.JSX.Element {
   const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
   /** 非视觉横幅的数据源，agent 默认模型与供应商视觉清单任一取不到就不出横幅 */
   const [modelNoVision, setModelNoVision] = useState(false);
+  /** 情绪气泡的每角色微调偏移，来自 agent 配置，取不到时按零偏移 */
+  const [bubbleOffset, setBubbleOffset] = useState({ x: 0, y: 0 });
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
@@ -132,7 +134,6 @@ function ChatScreen(): React.JSX.Element {
   const sessionTitles = useSessionStore((s) => s.sessionTitles);
 
   // ==================== chatStore ====================
-  const displayedSessionId = useChatStore((s) => s.displayedSessionId);
   const sessionSlice = useChatStore((s) => s.sessions[s.displayedSessionId]);
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
@@ -146,9 +147,6 @@ function ChatScreen(): React.JSX.Element {
     () => messages.slice(0, windowCount),
     [messages, windowCount]
   );
-
-  const currentPose = sessionSlice?.pose ?? 'default';
-  const poseError = sessionSlice?.poseError ?? false;
 
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
@@ -379,7 +377,8 @@ function ChatScreen(): React.JSX.Element {
   }, []);
 
   // ==================== 模型视觉能力 ====================
-  /** 非视觉横幅的数据源，agent 默认模型不在供应商视觉清单时置位，任一环取不到就维持不出横幅 */
+  /** agent 详情到手的两个消费方：非视觉横幅的数据源与气泡偏移。
+   *  agent 默认模型不在供应商视觉清单时横幅置位，任一环取不到就维持不出横幅 */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -396,7 +395,14 @@ function ChatScreen(): React.JSX.Element {
         const provider = providers.find(
           (p) => p.id === agent.defaultModel.provider
         );
-        if (cancelled || !provider?.visionModelIds) {
+        if (cancelled) {
+          return;
+        }
+        setBubbleOffset({
+          x: agent.bubbleOffsetX ?? 0,
+          y: agent.bubbleOffsetY ?? 0,
+        });
+        if (!provider?.visionModelIds) {
           return;
         }
         setModelNoVision(
@@ -583,13 +589,10 @@ function ChatScreen(): React.JSX.Element {
               agentId={currentAgentId}
               serverAddr={serverAddressRef.current}
               hasAssets={companion.hasAssets}
-              currentPose={currentPose}
               bgError={companion.bgError}
-              poseError={poseError}
               onBgError={() => companion.setBgError(true)}
-              onPoseError={() =>
-                useChatStore.getState().setPoseError(displayedSessionId, true)
-              }
+              bubbleOffset={bubbleOffset}
+              targetSessionId={activeSessionId}
             />
           </Pressable>
         </Animated.View>

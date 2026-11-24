@@ -6,7 +6,6 @@
  */
 import {
   shortToolName,
-  successfulPose,
   summarizeToolInput,
   stepPhrase,
   type NarrationTranslate,
@@ -55,6 +54,18 @@ describe('summarizeToolInput', () => {
     ).toBe('/tmp/a.ts');
   });
 
+  it('show_pose 摘要覆盖三参数，动作与气泡转中文观感', () => {
+    expect(
+      summarizeToolInput('show_pose', {
+        pose: '开心',
+        motion: 'happy-bounce',
+        bubble: 'happy',
+      })
+    ).toBe('开心 开心弹跳 高兴');
+    expect(summarizeToolInput('show_pose', { bubble: 'sigh' })).toBe('叹气');
+    expect(summarizeToolInput('show_pose', {})).toBe('');
+  });
+
   it('未登记工具压成 JSON 串并打码凭据', () => {
     const summary = summarizeToolInput('built_in_memory__update', {
       content: 'hello',
@@ -96,49 +107,5 @@ describe('stepPhrase', () => {
     expect(stepPhrase(t, { tool: 'deepwiki__search', detail: '' })).toBe(
       '正在执行 search'
     );
-  });
-});
-
-describe('successfulPose', () => {
-  const results = [
-    { toolCallId: 't1', toolName: 'pose', result: '', success: true },
-  ];
-
-  it('全名广播且结果成功时返回表情名', () => {
-    const calls = [
-      {
-        id: 't1',
-        name: 'built_in_pose__show_pose',
-        arguments: { pose: 'angry' },
-      },
-    ];
-    expect(successfulPose(calls, results)).toBe('angry');
-  });
-
-  it('结果失败或缺 pose 参数时不切换', () => {
-    const calls = [
-      {
-        id: 't1',
-        name: 'built_in_pose__show_pose',
-        arguments: { pose: 'angry' },
-      },
-    ];
-    expect(successfulPose(calls, [{ ...results[0], success: false }])).toBe(
-      undefined
-    );
-    expect(successfulPose([{ ...calls[0], arguments: {} }], results)).toBe(
-      undefined
-    );
-  });
-
-  it('无 pose 工具调用时返回 undefined', () => {
-    const calls = [
-      {
-        id: 't2',
-        name: 'built_in_terminal__bash',
-        arguments: { command: 'ls' },
-      },
-    ];
-    expect(successfulPose(calls, results)).toBe(undefined);
   });
 });

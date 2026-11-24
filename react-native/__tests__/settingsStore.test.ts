@@ -1,7 +1,7 @@
 /**
  * @file settingsStore.test.ts
  * @description 显示偏好仓库的直测，假 MMKV 落内存表，
- *   覆盖默认开启、关闭落盘、重新开启回写。
+ *   覆盖思考过程、呼吸动画与思考气泡三个开关的默认开启、关闭落盘、重新开启回写。
  */
 import { useSettingsStore } from '../src/stores/settingsStore';
 
@@ -57,5 +57,51 @@ describe('settingsStore', () => {
 
     expect(useSettingsStore.getState().thoughtProcessVisible).toBe(true);
     expect(mmkvStore.get(STORAGE_KEY)).toBe('true');
+  });
+});
+
+describe('settingsStore 呼吸动画开关', () => {
+  const BREATH_KEY = 'bedrock/breathAnimation';
+
+  it('默认开启', () => {
+    expect(useSettingsStore.getState().breathEnabled).toBe(true);
+    expect(mmkvStore.has(BREATH_KEY)).toBe(false);
+  });
+
+  it('关闭时状态与 MMKV 同步落盘', () => {
+    useSettingsStore.getState().setBreathEnabled(false);
+
+    expect(useSettingsStore.getState().breathEnabled).toBe(false);
+    expect(mmkvStore.get(BREATH_KEY)).toBe('false');
+  });
+
+  it('重新开启时回写为 true', () => {
+    useSettingsStore.getState().setBreathEnabled(true);
+
+    expect(useSettingsStore.getState().breathEnabled).toBe(true);
+    expect(mmkvStore.get(BREATH_KEY)).toBe('true');
+  });
+});
+
+describe('settingsStore 思考气泡开关', () => {
+  const THINKING_KEY = 'bedrock/thinkingBubble';
+
+  it('默认开启', () => {
+    expect(useSettingsStore.getState().thinkingBubbleEnabled).toBe(true);
+    expect(mmkvStore.has(THINKING_KEY)).toBe(false);
+  });
+
+  it('关闭时状态与 MMKV 同步落盘', () => {
+    useSettingsStore.getState().setThinkingBubbleEnabled(false);
+
+    expect(useSettingsStore.getState().thinkingBubbleEnabled).toBe(false);
+    expect(mmkvStore.get(THINKING_KEY)).toBe('false');
+  });
+
+  it('重新开启时回写为 true', () => {
+    useSettingsStore.getState().setThinkingBubbleEnabled(true);
+
+    expect(useSettingsStore.getState().thinkingBubbleEnabled).toBe(true);
+    expect(mmkvStore.get(THINKING_KEY)).toBe('true');
   });
 });
