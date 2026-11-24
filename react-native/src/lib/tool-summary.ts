@@ -5,7 +5,14 @@
  *     本文件整块镜像维护，两处改动需同步，这是跨仓纪律
  *   - 唯一偏差是 hostnameFromUrl 用正则实现，RN 的类型环境不带 WHATWG URL 全局
  *   - 零 react-native 依赖，jest 可直接 import，镜像口径由 __tests__/tool-summary.test.ts 锁定
+ *   - 演出的动作与气泡名单取自 lib/performance，那是 shared 的 performance.ts 的镜像
  */
+import {
+  BUBBLE_CN,
+  MOTION_CN,
+  isBubbleName,
+  isMotionName,
+} from './performance.ts';
 
 /** 掩码替换用的固定星串，定长不泄露原始凭据长度 */
 const MASK = '********';
@@ -72,30 +79,6 @@ export function shortToolName(toolName: string): string {
 }
 
 /**
- * 从 step_complete 的工具调用里提取成功执行的表情名。
- * 服务端广播的是注册全名，先归一化再比对短名，
- * 同 id 的执行结果成功且 pose 参数为字符串时返回该值，否则返回 undefined。
- * @param toolCalls 步骤内的工具调用列表
- * @param toolResults 同一步骤的工具执行结果列表
- */
-export function successfulPose(
-  toolCalls:
-    | readonly {
-        id: string;
-        name: string;
-        arguments?: Record<string, unknown>;
-      }[]
-    | undefined,
-  toolResults: readonly { toolCallId: string; success: boolean }[] | undefined
-): string | undefined {
-  const call = toolCalls?.find((tc) => shortToolName(tc.name) === 'show_pose');
-  if (!call) return undefined;
-  const pose = call.arguments?.pose;
-  const result = toolResults?.find((tr) => tr.toolCallId === call.id);
-  return typeof pose === 'string' && result?.success ? pose : undefined;
-}
-
-/**
  * 把工具入参对象压成一句参数摘要，供时间线行动向句复用
  * 摘要只取关键参数字段，缺参返回空串由调用方走文案回退，掩码先于截断执行
  * @param toolName 工具全名或短名
@@ -124,9 +107,17 @@ export function summarizeToolInput(
     case 'web_fetch':
       summary = hostnameFromUrl(str(toolInput.url));
       break;
-    case 'show_pose':
-      summary = str(toolInput.pose);
+    case 'show_pose': {
+      const { motion, bubble } = toolInput;
+      summary = [
+        str(toolInput.pose),
+        isMotionName(motion) ? MOTION_CN[motion] : str(motion),
+        isBubbleName(bubble) ? BUBBLE_CN[bubble] : str(bubble),
+      ]
+        .filter(Boolean)
+        .join(' ');
       break;
+    }
     case 'get_current_pose':
       summary = '';
       break;
