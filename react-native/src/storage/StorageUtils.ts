@@ -9,6 +9,8 @@ export const storage = new MMKV();
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
 const showThoughtProcessKey = keyPrefix + 'showThoughtProcess';
+const breathAnimationKey = keyPrefix + 'breathAnimation';
+const thinkingBubbleKey = keyPrefix + 'thinkingBubble';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
@@ -36,6 +38,26 @@ export function saveShowThoughtProcess(enabled: boolean) {
 /** 获取思考过程入口显示开关，未设置时默认显示 */
 export function getShowThoughtProcess() {
   return storage.getBoolean(showThoughtProcessKey) ?? true;
+}
+
+/** 保存陪伴立绘的呼吸动画开关 */
+export function saveBreathAnimation(enabled: boolean) {
+  storage.set(breathAnimationKey, enabled);
+}
+
+/** 获取陪伴立绘的呼吸动画开关，未设置时默认开启 */
+export function getBreathAnimation() {
+  return storage.getBoolean(breathAnimationKey) ?? true;
+}
+
+/** 保存生成期间头顶思考气泡的开关 */
+export function saveThinkingBubble(enabled: boolean) {
+  storage.set(thinkingBubbleKey, enabled);
+}
+
+/** 获取思考气泡开关，未设置时默认开启 */
+export function getThinkingBubble() {
+  return storage.getBoolean(thinkingBubbleKey) ?? true;
 }
 
 export function getTextModel(): Model {
