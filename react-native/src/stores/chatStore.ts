@@ -685,12 +685,10 @@ function appendUserBubble(sessionId: string, message: ChatMessage): void {
 
 /**
  * 发送失败的现场回滚：结束生成态与顶栏时间线，乐观用户消息保留作已发凭证，与桌面端行为对齐。
+ * 新会话的展示身份是空串，创建服务端会话这一步就失败时，被乐观置为生成态的正是空串分片，同样要回滚。
  * @param sessionId 回滚目标分片，新会话转正前后都取当时的展示身份
  */
 function rollbackGeneratingState(sessionId: string): void {
-  if (!sessionId) {
-    return;
-  }
   const { liveRun } = useChatStore.getState();
   if (liveRun?.sessionId === sessionId) {
     useChatStore.setState({ liveRun: null });
