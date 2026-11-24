@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileType } from '../types/Chat.ts';
 import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
+import type { BubbleName, MotionName } from '../lib/performance.ts';
 import { logger } from '../lib/logger';
 import { getDeviceId } from '../utils/DeviceUtils.ts';
 import type {
@@ -135,6 +136,17 @@ export type ServerMessage =
       type: 'content_started';
       sessionId: string;
       stepIndex: number;
+    }
+  | {
+      /**
+       * 立绘演出事件，show_pose 执行成功时随步骤落定广播，原样携带请求的三个参数
+       * pose 缺省代表本次不换脸，同名短路由演出引擎按实际显示的脸判定
+       */
+      type: 'pose_changed';
+      sessionId: string;
+      pose?: string;
+      motion?: MotionName;
+      bubble?: BubbleName;
     }
   | { type: 'round_complete'; sessionId: string }
   | { type: 'turn_complete'; sessionId: string }
@@ -413,6 +425,9 @@ export interface AgentInfo {
   avatarHash?: string;
   /** 语音语言（映射到 MiniMax language_boost） */
   voiceLanguage?: string;
+  /** 情绪气泡相对立绘挂载点左上角的偏移，单位是挂载点宽高的百分比，给构图特殊的角色兜底，缺省按零 */
+  bubbleOffsetX?: number;
+  bubbleOffsetY?: number;
   createdAt: number;
   updatedAt: number;
 }

@@ -43,7 +43,7 @@ import {
   resolveTimelineIconUrl,
 } from '../api/server-api.ts';
 import { getDeviceId } from '../utils/DeviceUtils.ts';
-import { summarizeToolInput, successfulPose } from '../lib/tool-summary.ts';
+import { summarizeToolInput } from '../lib/tool-summary.ts';
 import { type LiveRunState, type LiveStep } from '../chat/component/LiveStrip';
 import {
   useSessionStore,
@@ -51,6 +51,7 @@ import {
   NEW_CHAT_SESSION,
 } from './sessionStore.ts';
 import { useVoiceStore } from './voiceStore.ts';
+import { usePerformanceStore } from './performanceStore.ts';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import { logger } from '../lib/logger';
@@ -197,10 +198,8 @@ interface SessionChatState {
   status: ChatStatus;
   /** 错过步骤事件的轮次由空缓冲武装，回合结束后从磁盘整包重拉 */
   armedDiskRefresh: boolean;
-  /** 陪伴立绘当前姿态 */
+  /** 会话元数据记录的立绘名，pose_changed 与落盘回填写入，会话切换时交演出引擎瞬切恢复 */
   pose: string;
-  /** 立绘加载失败标记，姿态切换时清除 */
-  poseError: boolean;
 }
 
 const createSlice = (): SessionChatState => ({
@@ -208,7 +207,6 @@ const createSlice = (): SessionChatState => ({
   status: ChatStatus.Init,
   armedDiskRefresh: false,
   pose: 'default',
-  poseError: false,
 });
 
 interface ChatStore {
@@ -254,8 +252,6 @@ interface ChatStore {
   removeSession: (sessionId: string) => void;
   /** 更新当前 agent 显示名 */
   setAgentProfile: (name: string) => void;
-  /** 标记会话立绘加载失败 */
-  setPoseError: (sessionId: string, value: boolean) => void;
   /** 主机切换后清空全部会话分片与展示态，旧主机的内存现场不再串台 */
   resetForHostSwitch: () => void;
 }
@@ -286,6 +282,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         sessions: { ...state.sessions, [NEW_CHAT_SESSION]: createSlice() },
         displayedSessionId: NEW_CHAT_SESSION,
       }));
+      usePerformanceStore.getState().restore('default');
       return;
     }
 
@@ -295,6 +292,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // 流式进行中的会话保留现场，仅补订阅，不重拉
     if (get().sessions[sessionId]?.status === ChatStatus.Running) {
       wsClient.subscribe(sessionId);
+      usePerformanceStore.getState().restore(get().sessions[sessionId].pose);
       logger.info(`${TAG} keep live session=${sessionId}`);
       return;
     }
@@ -314,7 +312,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             address
           ),
           pose: view.currentPose ?? 'default',
-          poseError: false,
         }));
         seedCompressionData(sessionId, view);
         logger.info(
@@ -323,9 +320,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           }, pose=${view.currentPose ?? 'default'}`
         );
       }
-      // 加载期间已切走则不抢订阅，避免迟到的加载覆盖新会话的订阅
+      // 加载期间已切走则不抢订阅，避免迟到的加载覆盖新会话的订阅，演出也不上台
       if (useChatStore.getState().displayedSessionId === sessionId) {
         wsClient.subscribe(sessionId);
+        usePerformanceStore
+          .getState()
+          .restore(
+            useChatStore.getState().sessions[sessionId]?.pose ?? 'default'
+          );
       }
     } catch (e) {
       logger.error(
@@ -475,10 +477,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const next = name || 'AI';
     set({ agentName: next });
     logger.debug(`${TAG} agent profile updated, name=${next}`);
-  },
-
-  setPoseError: (sessionId, value) => {
-    updateSlice(sessionId, (slice) => ({ ...slice, poseError: value }));
   },
 
   resetForHostSwitch: () => {
@@ -831,9 +829,12 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
       ...prev,
       messages: convertToChatMessages(view.messages, view.createdAt, address),
       pose: view.currentPose ?? prev.pose,
-      poseError: view.currentPose ? false : prev.poseError,
     }));
     if (view.currentPose) {
+      // 漏掉 pose_changed 时的兜底通道，会话仍是当前展示才把脸追平
+      if (useChatStore.getState().displayedSessionId === sessionId) {
+        usePerformanceStore.getState().restore(view.currentPose);
+      }
       logger.debug(
         `${TAG} pose backfilled from disk, session=${sessionId} pose=${view.currentPose}`
       );
@@ -938,6 +939,22 @@ function registerWsHandler(): void {
         `[live-strip] content started, session=${sessionId} step=${stepIndex}`
       );
     },
+    onPoseChanged: (sessionId, pose, motion, bubble) => {
+      if (!useChatStore.getState().sessions[sessionId]) {
+        logger.warn(`${TAG} pose_changed for unknown session: ${sessionId}`);
+        return;
+      }
+      // 分片先记下立绘名，会话切换与落盘回填的恢复都读它
+      if (pose) {
+        updateSlice(sessionId, (prev) => ({ ...prev, pose }));
+      }
+      // ws 单订阅，切走的会话不再有事件，这里的比对是防御位
+      if (useChatStore.getState().displayedSessionId !== sessionId) {
+        logger.info(`${TAG} pose_changed ignored, session not displayed`);
+        return;
+      }
+      usePerformanceStore.getState().perform({ pose, motion, bubble });
+    },
     onStepComplete: (sessionId, content, thinking, toolCalls, toolResults) => {
       const slice = useChatStore.getState().sessions[sessionId];
       if (!slice) {
@@ -975,17 +992,6 @@ function registerWsHandler(): void {
           buffer.thoughts.length
         } contentLen=${content?.length ?? 0}`
       );
-
-      // 检测 show_pose 指令，切换陪伴立绘，广播名为注册全名，归一化与成功判定收敛在 successfulPose
-      const pose = successfulPose(toolCalls, toolResults);
-      if (pose) {
-        logger.debug(`${TAG} pose change: ${pose}`);
-        updateSlice(sessionId, (prev) => ({
-          ...prev,
-          pose,
-          poseError: false,
-        }));
-      }
 
       // 工具执行失败时记录日志
       if (toolResults && toolResults.length > 0) {
