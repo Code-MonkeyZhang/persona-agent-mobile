@@ -15,7 +15,7 @@
     "notConnected": "Not connected to the host. Check the network and try again",
     "sendFailed": "Send failed. Check the connection",
     "retryUpload": "Retry upload",
-    "modelNoVision": "This model cannot see images. They will be replaced with placeholder text when sent",
+    "modelNoVision": "This model cannot see images",
     "downloadFile": "Download file",
     "compressAction": "Compact",
     "compressFailed": "Failed to trigger compression"
@@ -105,12 +105,12 @@
     "doneFail": "Ran {{count}} steps · {{fails}} failed",
     "roundFail": "Round failed",
     "replied": "Replied",
-    "compressionRunning": "Compacting context",
+    "compressionRunning": "Compacting",
     "compressionRetrying": "Retrying compaction",
     "compressionCompacted": "Compacted",
     "compressionFloorEmpty": "Nothing to compress yet",
-    "compressionFailed": "Context compaction failed",
-    "compressionUnfinished": "Context compaction unfinished",
+    "compressionFailed": "Compaction failed",
+    "compressionUnfinished": "Compaction unfinished",
     "restore": "Show run status",
     "collapse": "Collapse"
   },
@@ -271,6 +271,6 @@
   },
   "voice": {
     "onButNoKeyMobile": "The MiniMax API key is missing. Add it in the desktop app under Settings - Voice.",
-    "onButNoVoiceMobile": "This agent has no voice yet. Assign one in the desktop Agent editor."
+    "onButNoVoiceMobile": "This agent has no voice yet."
   }
 }
