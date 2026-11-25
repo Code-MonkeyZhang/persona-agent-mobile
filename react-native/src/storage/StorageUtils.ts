@@ -17,6 +17,7 @@ const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 const companionOpenKey = keyPrefix + 'companionOpen';
 const stripCollapsedKey = keyPrefix + 'stripCollapsed';
 const lastConversationKey = keyPrefix + 'lastConversation';
+const lastUsedProviderKey = keyPrefix + 'lastUsedProvider';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
 const devicesKey = keyPrefix + 'devices';
@@ -146,6 +147,20 @@ export function getLastConversation(): LastConversation | null {
 /** 清掉上次会话恢复对，切换主机后旧主机的会话身份不再恢复 */
 export function clearLastConversation(): void {
   storage.delete(lastConversationKey);
+}
+
+/**
+ * 保存聊天页最后一次点选的模型所在的供应商，模型弹层据此把它排在第三段。
+ * 全局单键不按主机分区，换主机后这家若没有密钥，排位时自然落空。
+ */
+export function saveLastUsedProvider(providerId: string) {
+  storage.set(lastUsedProviderKey, providerId);
+  logger.info(`[Storage] last used provider saved: ${providerId}`);
+}
+
+/** 读取上次使用的供应商，未设置时返回空字符串 */
+export function getLastUsedProvider(): string {
+  return storage.getString(lastUsedProviderKey) ?? '';
 }
 
 /** 手机端记住的主机条目，hostId 是身份，地址是属性 */

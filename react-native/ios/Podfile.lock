@@ -55,6 +55,8 @@ PODS:
     - SDWebImageWebPCoder (~> 0.14.6)
   - ExpoKeepAwake (55.0.8):
     - ExpoModulesCore
+  - ExpoLinearGradient (55.0.18):
+    - ExpoModulesCore
   - ExpoLogBox (55.0.13):
     - React-Core
   - ExpoModulesCore (55.0.26):
@@ -3461,6 +3463,7 @@ DEPENDENCIES:
   - ExpoFont (from `../node_modules/expo/node_modules/expo-font/ios`)
   - ExpoImage (from `../node_modules/expo-image/ios`)
   - ExpoKeepAwake (from `../node_modules/expo/node_modules/expo-keep-awake/ios`)
+  - ExpoLinearGradient (from `../node_modules/expo-linear-gradient/ios`)
   - "ExpoLogBox (from `../node_modules/expo/node_modules/@expo/log-box`)"
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoModulesJSI (from `../node_modules/expo-modules-core`)
@@ -3603,6 +3606,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-image/ios"
   ExpoKeepAwake:
     :path: "../node_modules/expo/node_modules/expo-keep-awake/ios"
+  ExpoLinearGradient:
+    :path: "../node_modules/expo-linear-gradient/ios"
   ExpoLogBox:
     :path: "../node_modules/expo/node_modules/@expo/log-box"
   ExpoModulesCore:
@@ -3822,6 +3827,7 @@ SPEC CHECKSUMS:
   ExpoFont: 21550be2946ea5bbf50f1a20b31facd19ba4150c
   ExpoImage: eeba1f2a1c6f89ba079e832dfef2b29a5ed1d8ca
   ExpoKeepAwake: 45e456e29335bbd400554646a2f29e628c24072e
+  ExpoLinearGradient: ecb1317aa861f723631715a0413a3fdee9fc5dd9
   ExpoLogBox: 87ffef2b3ae204b602748ab4020eb1cc5454a6d6
   ExpoModulesCore: 3f37b9765e601161e461ec55f495ef42db63b478
   ExpoModulesJSI: 37c1f4647b4506df11abf061ab1e4c30c307b023
@@ -3936,4 +3942,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: ea492fbe6942b5310dfe5c6518867fc0b820a171
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.14.3

@@ -2,11 +2,11 @@
  * @file AgentDetailScreen.tsx
  * @description Agent 详情页。
  *   名字简介与数字配置与系统提示词只读展示，模型与音色与语音语言走底部选择器可改，
- *   模型选择器只列已配置密钥的供应商，当前默认模型所在组置顶，
+ *   模型弹层与聊天页共用 ModelSheet，只列已配置密钥的供应商，当前默认模型所在的供应商置顶，
  *   写回走 updateAgent 改一项存一项，失败回滚，音色段带真试听。
  *   长相基准是 demo 的 AgentDetailPage，页面壳由原生 Stack header 承担。
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -52,6 +52,7 @@ import {
   SheetGroupLabel,
   SheetOption,
 } from './component/ActionSheet.tsx';
+import { ModelSheet } from '../chat/component/ModelSheet.tsx';
 
 type Props = NativeStackScreenProps<RouteParamList, 'AgentDetail'>;
 
@@ -96,19 +97,6 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const ttsApiKeyRef = useRef<string | null>(null);
   const sheetRef = useRef<ActionSheetHandle>(null);
-
-  /** 模型选择器的供应商列表，只留配了密钥的，当前默认模型所在供应商置顶其余按名称排 */
-  const modelProviders = useMemo(() => {
-    const current = agent?.defaultModel.provider;
-    return providers
-      .filter((p) => p.hasAuth)
-      .sort((a, b) => {
-        if (a.id === current || b.id === current) {
-          return a.id === current ? -1 : 1;
-        }
-        return a.name.localeCompare(b.name);
-      });
-  }, [providers, agent?.defaultModel.provider]);
 
   useEffect(() => {
     const load = async () => {
@@ -391,44 +379,18 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         </GroupCard>
       </GroupSection>
 
-      {/* 模型选择器：只列已配置供应商，组名用显示名，组内按字母序 */}
+      {/* 模型弹层：与聊天页同一个弹层，当前值就是 Agent 默认，点选只改默认模型不写上次使用 */}
       {sheet === 'model' ? (
-        <ActionSheet
+        <ModelSheet
           ref={sheetRef}
-          title={t('agent.selectModel')}
+          providers={providers}
+          value={agent.defaultModel}
           onClose={() => setSheet(null)}
-        >
-          {modelProviders.length === 0 ? (
-            <Text style={styles.sheetEmptyHint}>
-              {t('agent.noConfiguredModel')}
-            </Text>
-          ) : (
-            modelProviders.map((provider) => (
-              <View key={provider.id}>
-                <SheetGroupLabel>{provider.name}</SheetGroupLabel>
-                {[...provider.models]
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((model) => (
-                    <SheetOption
-                      key={model}
-                      label={model}
-                      mono
-                      selected={
-                        agent.defaultModel.provider === provider.id &&
-                        agent.defaultModel.model === model
-                      }
-                      onPress={() => {
-                        patch({
-                          defaultModel: { provider: provider.id, model },
-                        });
-                        closeSheet();
-                      }}
-                    />
-                  ))}
-              </View>
-            ))
-          )}
-        </ActionSheet>
+          onPick={(selection) => {
+            patch({ defaultModel: selection });
+            closeSheet();
+          }}
+        />
       ) : null}
 
       {/* 音色选择器：克隆组在前，预置按男女分组 */}
@@ -510,12 +472,6 @@ const createStyles = (colors: ColorScheme) =>
     emptyText: {
       ...typography.bodyLg,
       color: colors.textSecondary,
-    },
-    sheetEmptyHint: {
-      ...typography.content,
-      color: colors.textTertiary,
-      textAlign: 'center',
-      paddingVertical: 24,
     },
     headerCard: {
       flexDirection: 'row',

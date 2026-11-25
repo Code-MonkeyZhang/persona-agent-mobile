@@ -34,6 +34,8 @@ export interface ColorScheme {
   // 品牌与状态
   primary: string;
   primarySelectedBackground: string;
+  /** 主色的更浅一档，模型弹层选中行的整行底色 */
+  primaryFaintBackground: string;
   primaryBorder: string;
   primaryDisabled: string;
   error: string;
@@ -45,6 +47,9 @@ export interface ColorScheme {
   info: string;
   // 文件列表
   fileItemBorder: string;
+  // 徽章
+  /** 容量徽章的描边色，与上下文占用小壳的描边同色 */
+  badgeBorder: string;
 }
 
 export const lightColors: ColorScheme = {
@@ -78,6 +83,7 @@ export const lightColors: ColorScheme = {
 
   primary: '#007AFF',
   primarySelectedBackground: 'rgba(0, 122, 255, 0.1)',
+  primaryFaintBackground: 'rgba(0, 122, 255, 0.06)',
   primaryBorder: 'rgba(0, 122, 255, 0.25)',
   primaryDisabled: 'rgba(0, 122, 255, 0.4)',
   error: '#ff4444',
@@ -89,4 +95,5 @@ export const lightColors: ColorScheme = {
   info: '#33b5e5',
 
   fileItemBorder: '#e0e0e0',
+  badgeBorder: '#e3e3e6',
 };

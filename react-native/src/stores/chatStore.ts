@@ -6,6 +6,7 @@
  *   - 远端用户消息经 user_message 事件实时追加并切入生成态，回声由运行态守卫拦截
  *   - 生成期间消息流无占位气泡，轮次步骤进响应式 store 外的缓冲，步骤到达零渲染，turn_complete 到达组装整轮气泡
  *   - 忙时插话进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染
+ *   - 新建态的模型选择暂存在此，首条消息建会话后转正写进会话并清空
  *   - 页面只是订阅者，ChatScreen 不再持有消息状态
  */
 import { create } from 'zustand';
@@ -19,10 +20,12 @@ import {
   convertToChatMessages,
   chatSessionIdFor,
   stripLastTextThought,
+  updateSessionModel,
   type PendingInput,
   type ServerChatMessage,
   type ToolCall,
   type WsToolResult,
+  type ModelConfig,
 } from '../api/server-api.ts';
 import {
   getServerAddress,
@@ -241,11 +244,15 @@ interface ChatStore {
   compressionStates: Map<string, CompressionRuntimeState>;
   /** 压缩记录清单，镜像 meta 初始化，事件按 recordId 幂等 upsert */
   compressionLogs: Map<string, CompressionRecord[]>;
+  /** 新建态暂存的模型选择，会话尚未建立时它就是生效模型，首条消息建会话后转正写入并清空 */
+  draftModel: { agentId: string; model: ModelConfig } | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
   /** 发送用户消息，附件已达 uploaded 态，空闲走新回合占位链路，忙时进服务端待注入缓冲，失败回滚生成态并提示 */
   sendMessage: (text: string, files: FileInfo[]) => Promise<void>;
+  /** 暂存新建态的模型选择，传 null 清空 */
+  setDraftModel: (model: ModelConfig | null) => void;
   /** 请求服务端中止当前会话的生成 */
   stopGeneration: () => void;
   /** 删除会话分片，会话列表删除时调用 */
@@ -268,6 +275,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   usageSnapshots: new Map(),
   compressionStates: new Map(),
   compressionLogs: new Map(),
+  draftModel: null,
 
   activateSession: async (sessionId) => {
     if (get().displayedSessionId === sessionId) {
@@ -276,11 +284,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const agentId = getServerAgentId();
     saveLastConversation(agentId, sessionId);
 
-    // 新建空白态，直接重置分片
+    // 新建空白态，直接重置分片，上一份草稿暂存的模型选择随之作废
     if (sessionId === NEW_CHAT_SESSION) {
       useChatStore.setState((state) => ({
         sessions: { ...state.sessions, [NEW_CHAT_SESSION]: createSlice() },
         displayedSessionId: NEW_CHAT_SESSION,
+        draftModel: null,
       }));
       usePerformanceStore.getState().restore('default');
       return;
@@ -418,6 +427,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         sid = await createSession(agentId, address);
         adoptSessionId(sid);
         logger.debug(`${TAG} send: auto-created session ${sid}`);
+        await promoteDraftModel(agentId, sid, address);
       }
       logger.debug(
         `${TAG} send: text="${text.substring(
@@ -449,6 +459,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       rollbackGeneratingState(get().displayedSessionId);
       notify.error('chat.sendFailed');
     }
+  },
+
+  setDraftModel: (model) => {
+    const agentId = getServerAgentId();
+    set({ draftModel: model ? { agentId, model } : null });
+    logger.info(
+      `${TAG} draft model ${
+        model ? `stashed: ${model.provider}/${model.model}` : 'cleared'
+      }`
+    );
   },
 
   stopGeneration: () => {
@@ -494,6 +514,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       usageSnapshots: new Map(),
       compressionStates: new Map(),
       compressionLogs: new Map(),
+      // 旧主机的草稿模型选择不带到新主机
+      draftModel: null,
     });
   },
 }));
@@ -721,6 +743,32 @@ function adoptSessionId(sessionId: string): void {
   });
   saveLastConversation(getServerAgentId(), sessionId);
   useSessionStore.getState().setActiveSessionId(sessionId);
+}
+
+/**
+ * 把新建态暂存的模型选择转正写进刚建立的会话。
+ * 必须在首条消息发出前完成，服务端按发送时刻的会话配置选模型。
+ * 写入失败只记日志，消息按默认模型继续发出，暂存随即清空。
+ * @param agentId 会话所属的 Agent，与暂存时的 Agent 对不上就不转正
+ * @param sessionId 刚建立的真实会话 id
+ * @param address 服务器地址
+ */
+async function promoteDraftModel(
+  agentId: string,
+  sessionId: string,
+  address: string
+): Promise<void> {
+  const draft = useChatStore.getState().draftModel;
+  if (!draft || draft.agentId !== agentId) {
+    return;
+  }
+  useChatStore.getState().setDraftModel(null);
+  const ok = await updateSessionModel(address, agentId, sessionId, draft.model);
+  logger.info(
+    `${TAG} draft model promote, session=${sessionId} model=${
+      draft.model.provider
+    }/${draft.model.model}: ${ok ? 'ok' : 'failed'}`
+  );
 }
 
 /**

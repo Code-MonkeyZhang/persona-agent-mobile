@@ -367,6 +367,38 @@ export async function createSession(
 }
 
 /**
+ * 写入指定会话的模型，对应 PUT /api/agents/:agentId/sessions/:sessionId 的 model 字段。
+ * 服务端按发送时刻的会话配置选模型，切换立即作用于下一条回复，进行中的回复不中断。
+ * 成功与失败都在这里记日志并折成布尔值，调用方不必再包一层异常处理。
+ * @param serverAddress 服务器地址
+ * @param agentId Agent ID
+ * @param sessionId 会话 ID
+ * @param model 新的供应商与模型
+ * @returns 写入是否成功
+ */
+export async function updateSessionModel(
+  serverAddress: string,
+  agentId: string,
+  sessionId: string,
+  model: ModelConfig
+): Promise<boolean> {
+  const url = `${serverAddress}/api/agents/${agentId}/sessions/${sessionId}`;
+  const label = `session=${sessionId} model=${model.provider}/${model.model}`;
+  try {
+    await httpPut(url, { model });
+    logger.info(`${TAG} updateSessionModel ok, ${label}`);
+    return true;
+  } catch (e) {
+    logger.warn(
+      `${TAG} updateSessionModel failed, ${label}: ${
+        e instanceof Error ? e.message : e
+      }`
+    );
+    return false;
+  }
+}
+
+/**
  * 通过 HTTP POST 发送用户消息。服务器立即返回 `{ success: true }`，
  * AI 回复通过 WebSocket 的 step_complete / round_complete 事件异步到达。
  *
@@ -604,6 +636,8 @@ export interface ProviderStatus {
   docUrl: string;
   /** 视觉模型清单，服务端按模型 input 是否含图片过滤生成，缺失时不做视觉判定 */
   visionModelIds?: string[];
+  /** 模型 id 到上下文窗口精确值的映射，缺失时不显示容量徽章 */
+  contextWindows?: Record<string, number>;
 }
 
 /** 音色条目（对应 GET /api/voices 的返回，预置与克隆一起返回） */
