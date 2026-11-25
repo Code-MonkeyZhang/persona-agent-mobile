@@ -6,7 +6,7 @@
  *
  * 消息路由规则：
  *   - 状态型消息（title_updated）直接写 sessionStore，不经 handler
- *   - 事件型消息（step_complete / turn_complete / round_complete / error / speak_ready / speak_error / app_notification / pending_input_changed / user_message）携带 sessionId 转给注册的 handler
+ *   - 事件型消息（step_complete / pose_changed / turn_complete / round_complete / error / speak_ready / speak_error / app_notification / pending_input_changed / user_message）携带 sessionId 转给注册的 handler
  *   - connected / keepalive 在模块内部处理
  */
 import type {
@@ -20,6 +20,7 @@ import type {
   RunningSessionEntry,
 } from './server-api.ts';
 import type { ContentBlock } from '../types/Chat.ts';
+import type { BubbleName, MotionName } from '../lib/performance.ts';
 import type { SessionChange } from '../storage/sync-shapes.ts';
 import { useSessionStore } from '../stores/sessionStore.ts';
 import { useConnectionStore } from '../stores/connectionStore.ts';
@@ -61,6 +62,16 @@ export interface WsEventHandler {
   ): void;
   /** 正文开始信号，只报开始不带文字，时间线据此切正在回复相位 */
   onContentStarted(sessionId: string, stepIndex: number): void;
+  /**
+   * 立绘演出事件，show_pose 执行成功时到达，原样携带请求的三个参数
+   * pose 缺省代表本次不换脸，归属由 sessionId 路由，演出引擎据它换脸播演出
+   */
+  onPoseChanged(
+    sessionId: string,
+    pose?: string,
+    motion?: MotionName,
+    bubble?: BubbleName
+  ): void;
   /** 轮次边界信号，客户端据此把轮次缓冲组装成整轮气泡，生成状态保持 */
   onTurnComplete(sessionId: string): void;
   onComplete(sessionId: string): void;
@@ -443,6 +454,20 @@ function handleMessage(msg: ServerMessage): void {
         `${TAG} content_started, sessionId=${msg.sessionId} step=${msg.stepIndex}`
       );
       currentHandler?.onContentStarted(msg.sessionId, msg.stepIndex);
+      break;
+
+    case 'pose_changed':
+      logger.info(
+        `${TAG} pose_changed, sessionId=${msg.sessionId} pose=${
+          msg.pose ?? 'keep'
+        } motion=${msg.motion ?? 'none'} bubble=${msg.bubble ?? 'none'}`
+      );
+      currentHandler?.onPoseChanged(
+        msg.sessionId,
+        msg.pose,
+        msg.motion,
+        msg.bubble
+      );
       break;
 
     case 'step_complete':

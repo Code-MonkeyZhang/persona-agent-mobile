@@ -137,7 +137,6 @@ const HomeListHeader = React.memo(function ({
           style={styles.chatCardSignal}
         />
       </PressableRow>
-      <View style={styles.divider} />
       {/* 记忆入口行，与桌面第二栏同构，位次在工具之前 */}
       <PressableRow
         style={styles.navEntryRow}
@@ -569,7 +568,9 @@ const HomeScreen: React.FC = () => {
             );
           })}
         </ScrollView>
-        {/* 状态槽，红蓝绿条由公共组件按连接态渲染，与 Chat 页同款 */}
+        {/* 选择器模块下缘线，整线横跨屏幕两边，横幅贴线弹出，常驻不随列表滚动 */}
+        <View style={styles.sectionDivider} />
+        {/* 状态槽，红蓝绿条由公共组件按连接态渲染，位于下缘线下方，与 Chat 页同款 */}
         <ConnectionBanner />
         {/* 固定区下沿淡阴影压在滚动内容之上，透明底出影仅 iOS 生效 */}
         <View style={styles.fixedShadow} />
@@ -590,8 +591,6 @@ const HomeScreen: React.FC = () => {
         )}
         ListHeaderComponent={
           <>
-            {/* 分割线，聊天块首元素，随列表内容一起滚动 */}
-            <View style={styles.divider} />
             {/* 未读纯查数据,在场判定由服务端轮末完成,渲染侧不二次抑制 */}
             <HomeListHeader
               preview={chatEntryPreview}
@@ -753,11 +752,11 @@ const createStyles = (colors: ColorScheme) =>
     flatList: {
       flex: 1,
     },
-    divider: {
+    /** 固定区下缘线，整线横跨屏幕两边，上距横滑条 10，下无间距供横幅或列表贴线 */
+    sectionDivider: {
       height: 1,
       backgroundColor: colors.borderLight,
-      marginHorizontal: 16,
-      marginVertical: 10,
+      marginTop: 10,
     },
     /** 固定区下沿淡阴影，透明底出影仅 iOS 生效 */
     fixedShadow: {

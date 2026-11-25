@@ -54,6 +54,18 @@ describe('summarizeToolInput', () => {
     ).toBe('/tmp/a.ts');
   });
 
+  it('show_pose 摘要覆盖三参数，动作与气泡转中文观感', () => {
+    expect(
+      summarizeToolInput('show_pose', {
+        pose: '开心',
+        motion: 'happy-bounce',
+        bubble: 'happy',
+      })
+    ).toBe('开心 开心弹跳 高兴');
+    expect(summarizeToolInput('show_pose', { bubble: 'sigh' })).toBe('叹气');
+    expect(summarizeToolInput('show_pose', {})).toBe('');
+  });
+
   it('未登记工具压成 JSON 串并打码凭据', () => {
     const summary = summarizeToolInput('built_in_memory__update', {
       content: 'hello',
@@ -86,14 +98,14 @@ describe('stepPhrase', () => {
   });
 
   it('未登记工具兜底显示短名', () => {
-    expect(
-      stepPhrase(t, { tool: 'built_in_memory__update', detail: '' })
-    ).toBe('正在执行 update');
+    expect(stepPhrase(t, { tool: 'built_in_memory__update', detail: '' })).toBe(
+      '正在执行 update'
+    );
   });
 
   it('MCP 全名兜底同样只显短名', () => {
-    expect(
-      stepPhrase(t, { tool: 'deepwiki__search', detail: '' })
-    ).toBe('正在执行 search');
+    expect(stepPhrase(t, { tool: 'deepwiki__search', detail: '' })).toBe(
+      '正在执行 search'
+    );
   });
 });

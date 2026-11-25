@@ -5,6 +5,9 @@
  *   遮罩随面板位置原地淡入，点遮罩或下拉拖拽条收起，收起完成走 onDismiss 回调 onClose，
  *   选中项经 handle 的 dismiss 带动画收起，高度固定不随内容变化，列表在面板内部滚动，
  *   分组标签与选项行配套输出，选项行支持等宽字体，长相基准是 demo NavDetailShared 的同名家族。
+ *   标题可选，header 插槽放在滚动区上方不随列表滚动，模型弹层用它放供应商胶囊行并省掉标题。
+ *   contentKey 变化时滚动区重建回到顶部，换清单不沿用上一份的滚动位置。
+ *   拖拽手势只在竖向上接管，横向移动让给 header 插槽里的横向滚动区。
  */
 import React, { useEffect, useRef } from 'react';
 import { BackHandler, StyleSheet, Text, TouchableOpacity } from 'react-native';
@@ -23,6 +26,14 @@ import {
 
 /** 面板高度占屏比的默认档，长列表弹层用 */
 const DEFAULT_SNAP_POINT = '62%';
+
+/**
+ * 面板拖拽手势的方向判定。内容区默认对任何方向的移动都会接管并取消下层视图的触摸，
+ * 这里改成竖向位移先超过阈值才接管拖动，横向位移先超过阈值则主动让位，
+ * header 插槽里的横向滚动区才能完整收到横向手势。
+ */
+const PAN_ACTIVE_OFFSET_Y: [number, number] = [-6, 6];
+const PAN_FAIL_OFFSET_X: [number, number] = [-12, 12];
 
 /** 弹层组件的实例类型，经组件 ref 推断取得 */
 type SheetInstance = React.ComponentRef<typeof BottomSheetModal>;
@@ -43,10 +54,15 @@ const SheetBackdrop = (
 );
 
 interface ActionSheetProps {
-  title: string;
+  /** 面板标题，用 header 插槽自带头部时不传 */
+  title?: string;
   /** 面板高度占屏比，默认 62%，短内容弹层传矮档 */
   snapPoint?: string;
   onClose: () => void;
+  /** 滚动区上方的插槽，内容不随列表滚动 */
+  header?: React.ReactNode;
+  /** 清单标识，变化时滚动区重建并回到顶部，弹层内切换清单时用 */
+  contentKey?: string;
   children: React.ReactNode;
 }
 
@@ -54,7 +70,10 @@ interface ActionSheetProps {
 export const ActionSheet = React.forwardRef<
   ActionSheetHandle,
   ActionSheetProps
->(function ActionSheetBase({ title, snapPoint, onClose, children }, ref) {
+>(function ActionSheetBase(
+  { title, snapPoint, onClose, header, contentKey, children },
+  ref
+) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const sheetRef = useRef<SheetInstance>(null);
@@ -77,13 +96,19 @@ export const ActionSheet = React.forwardRef<
       ref={sheetRef}
       snapPoints={[snapPoint ?? DEFAULT_SNAP_POINT]}
       enableDynamicSizing={false}
+      activeOffsetY={PAN_ACTIVE_OFFSET_Y}
+      failOffsetX={PAN_FAIL_OFFSET_X}
       onDismiss={onClose}
       backdropComponent={SheetBackdrop}
       backgroundStyle={styles.panel}
       handleIndicatorStyle={styles.dragBar}
     >
-      <Text style={styles.title}>{title}</Text>
-      <BottomSheetScrollView contentContainerStyle={styles.scrollContent}>
+      {header}
+      {title ? <Text style={styles.title}>{title}</Text> : null}
+      <BottomSheetScrollView
+        key={contentKey}
+        contentContainerStyle={styles.scrollContent}
+      >
         {children}
       </BottomSheetScrollView>
     </BottomSheetModal>

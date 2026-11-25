@@ -1,6 +1,6 @@
 /**
  * @file hooks/useChatScroll.ts
- * @description 聊天消息列表的滚动控制：自动滚底、思考面板展开时的逐帧滚动补偿、用户滚动检测。
+ * @description 聊天消息列表的滚动控制：自动滚底、思考面板展开时的逐帧滚动补偿、用户滚动检测、回底按钮显隐。
  */
 import { useCallback, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -19,11 +19,16 @@ import { ChatStatus } from '../../types/Chat';
 import { logger } from '../../lib/logger';
 import { PANEL_REVEAL } from '../component/CollapsedThoughtProcess.tsx';
 
+/** 回底按钮显隐阈值，与被替换的 gifted-chat 默认 scrollToBottomOffset 同值，触发点不变 */
+const SCROLL_UP_THRESHOLD = 200;
+
 export function useChatScroll(
   chatStatusRef: React.MutableRefObject<ChatStatus>
 ) {
   const flatListRef = useAnimatedRef<AnimatedList<ChatMessage>>();
   const [userScrolled, setUserScrolled] = useState(false);
+  const [scrolledUp, setScrolledUp] = useState(false);
+  const scrolledUpRef = useRef(false);
   const contentHeightRef = useRef(0);
   const containerHeightRef = useRef(0);
   const currentScrollOffsetRef = useRef(0);
@@ -34,18 +39,29 @@ export function useChatScroll(
   const compensateBase = useSharedValue(0);
   const compensateHeight = useSharedValue(0);
 
-  /** 将消息列表滚动到顶部（GiftedChat 是倒序的，offset=0 即最新消息） */
+  /** 将消息列表滚动到顶部（GiftedChat 是倒序的，offset=0 即最新消息），回底语义下按钮必然隐藏 */
   const scrollToBottom = useCallback(() => {
+    scrolledUpRef.current = false;
+    setScrolledUp(false);
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [flatListRef]);
 
   /**
-   * 记录当前滚动偏移量。
+   * 记录当前滚动偏移量，并按阈值翻转回底按钮显隐。
    * gifted-chat v3 列表经 reanimated 派发 onScroll，
    * 事件为官方 ScrollEvent 形态，contentOffset 位于顶层。
+   * 倒序列表偏移能越过阈值即说明内容高于容器，无需额外的内容高守卫。
    */
   const handleScroll = useCallback((scrollEvent: ScrollEvent) => {
     currentScrollOffsetRef.current = scrollEvent.contentOffset.y;
+    const next = scrollEvent.contentOffset.y > SCROLL_UP_THRESHOLD;
+    if (next !== scrolledUpRef.current) {
+      scrolledUpRef.current = next;
+      setScrolledUp(next);
+      logger.debug(
+        `[ChatScroll] scrolledUp=${next} offset=${scrollEvent.contentOffset.y}`
+      );
+    }
   }, []);
 
   /** 用户手动拖拽滚动时标记 userScrolled，暂停自动滚底 */
@@ -114,6 +130,7 @@ export function useChatScroll(
     flatListRef,
     userScrolled,
     setUserScrolled,
+    scrolledUp,
     contentHeightRef,
     containerHeightRef,
     currentScrollOffsetRef,

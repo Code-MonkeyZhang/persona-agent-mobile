@@ -9,12 +9,15 @@ export const storage = new MMKV();
 const keyPrefix = 'bedrock/';
 const hapticEnabledKey = keyPrefix + 'hapticEnabled';
 const showThoughtProcessKey = keyPrefix + 'showThoughtProcess';
+const breathAnimationKey = keyPrefix + 'breathAnimation';
+const thinkingBubbleKey = keyPrefix + 'thinkingBubble';
 const serverAddressKey = keyPrefix + 'serverAddress';
 const serverAgentIdKey = keyPrefix + 'serverAgentId';
 const ttsEnabledKey = keyPrefix + 'ttsEnabled';
 const companionOpenKey = keyPrefix + 'companionOpen';
 const stripCollapsedKey = keyPrefix + 'stripCollapsed';
 const lastConversationKey = keyPrefix + 'lastConversation';
+const lastUsedProviderKey = keyPrefix + 'lastUsedProvider';
 const deviceIdKey = keyPrefix + 'deviceId';
 const deviceNameKey = keyPrefix + 'deviceName';
 const devicesKey = keyPrefix + 'devices';
@@ -36,6 +39,26 @@ export function saveShowThoughtProcess(enabled: boolean) {
 /** 获取思考过程入口显示开关，未设置时默认显示 */
 export function getShowThoughtProcess() {
   return storage.getBoolean(showThoughtProcessKey) ?? true;
+}
+
+/** 保存陪伴立绘的呼吸动画开关 */
+export function saveBreathAnimation(enabled: boolean) {
+  storage.set(breathAnimationKey, enabled);
+}
+
+/** 获取陪伴立绘的呼吸动画开关，未设置时默认开启 */
+export function getBreathAnimation() {
+  return storage.getBoolean(breathAnimationKey) ?? true;
+}
+
+/** 保存生成期间头顶思考气泡的开关 */
+export function saveThinkingBubble(enabled: boolean) {
+  storage.set(thinkingBubbleKey, enabled);
+}
+
+/** 获取思考气泡开关，未设置时默认开启 */
+export function getThinkingBubble() {
+  return storage.getBoolean(thinkingBubbleKey) ?? true;
 }
 
 export function getTextModel(): Model {
@@ -124,6 +147,20 @@ export function getLastConversation(): LastConversation | null {
 /** 清掉上次会话恢复对，切换主机后旧主机的会话身份不再恢复 */
 export function clearLastConversation(): void {
   storage.delete(lastConversationKey);
+}
+
+/**
+ * 保存聊天页最后一次点选的模型所在的供应商，模型弹层据此把它排在第三段。
+ * 全局单键不按主机分区，换主机后这家若没有密钥，排位时自然落空。
+ */
+export function saveLastUsedProvider(providerId: string) {
+  storage.set(lastUsedProviderKey, providerId);
+  logger.info(`[Storage] last used provider saved: ${providerId}`);
+}
+
+/** 读取上次使用的供应商，未设置时返回空字符串 */
+export function getLastUsedProvider(): string {
+  return storage.getString(lastUsedProviderKey) ?? '';
 }
 
 /** 手机端记住的主机条目，hostId 是身份，地址是属性 */

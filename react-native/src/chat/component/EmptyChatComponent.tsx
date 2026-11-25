@@ -1,14 +1,19 @@
 /**
  * @file EmptyChatComponent.tsx
  * @description 聊天页面无消息时的简短提示。
- * 加载状态显示旋转加载动画。
+ * 加载状态显示原生 ActivityIndicator。
  * 注意：GiftedChat 的列表是倒序渲染的（最新消息在顶部），
  * 所以需要 scaleY: -1 来翻转布局方向。
  */
 import React from 'react';
-import { Text, Platform, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Text,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
-import LoadingSpinner from './LoadingSpinner.tsx';
 import { useTheme, ColorScheme, typography } from '../../theme/index.ts';
 
 const isAndroid = Platform.OS === 'android';
@@ -28,7 +33,7 @@ export const EmptyChatComponent = ({
   return (
     <View style={styles.emptyChatContainer}>
       {isLoadingMessages ? (
-        <LoadingSpinner visible={true} size={28} />
+        <ActivityIndicator size={28} color={colors.textSecondary} />
       ) : (
         <Text style={styles.hintText}>{t('chat.startConversation')}</Text>
       )}

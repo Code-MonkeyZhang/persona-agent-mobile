@@ -5,8 +5,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, AppState, StyleSheet, View, Text } from 'react-native';
+import { Keyboard, AppState, StyleSheet } from 'react-native';
 import Toast from 'react-native-toast-message';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { SystemBars } from 'react-native-edge-to-edge';
 import ChatScreen from './chat/ChatScreen.tsx';
 import HomeScreen from './home/HomeScreen.tsx';
@@ -18,6 +22,7 @@ import AgentNavPage from './agent-nav/AgentNavPage.tsx';
 import McpDetailScreen from './agent-nav/McpDetailScreen.tsx';
 import SkillDetailScreen from './agent-nav/SkillDetailScreen.tsx';
 import BuiltinDetailScreen from './agent-nav/BuiltinDetailScreen.tsx';
+import { NoticeToast } from './component/NoticeToast.tsx';
 import MemoryScreen from './agent-detail/MemoryScreen.tsx';
 import ScanQRScreen from './server/ScanQRScreen.tsx';
 import DeviceManageScreen from './device/DeviceManageScreen.tsx';
@@ -32,38 +37,49 @@ import { initDeviceLayer, setupSync } from './storage/sync-setup.ts';
 import { ThemeProvider, useTheme } from './theme/index.ts';
 import { configureErrorHandling } from './utils/ErrorUtils.ts';
 import { logger } from './lib/logger';
+import { notify } from './lib/notify';
 import './i18n/index.ts';
 import i18n, { detectLanguage } from './i18n/index.ts';
 
 // 创建Stack导航器实例，用于全屏页面之间的跳转
 const Stack = createNativeStackNavigator<RouteParamList>();
 
-/** 语音配置类提醒的琥珀色样式，库内置只有 success error info 三色，警示色走自定义类型 */
+/** 应用内通知三类渲染器，词表与 notify 入口一致，胶囊组件自取主题 */
 const toastConfig = {
   warn: ({ text1 }: { text1?: string }) => (
-    <View style={styles.toastWarn}>
-      <Text style={styles.toastWarnText}>{text1}</Text>
-    </View>
+    <NoticeToast kind="warn" text={text1} />
   ),
+  error: ({ text1 }: { text1?: string }) => (
+    <NoticeToast kind="error" text={text1} />
+  ),
+  info: ({ text1 }: { text1?: string }) => (
+    <NoticeToast kind="info" text={text1} />
+  ),
+};
+
+/**
+ * 应用内通知的挂载宿主。
+ * - 在导航容器内取安全区底注册给 notify 作基线偏移
+ * - 静态行为在此声明一次，底部居中 2.6 秒自动退场
+ * - 不随 iOS 键盘自抬，聊天页的键盘避让由注册的抬升量在调用时刻算进 bottomOffset
+ */
+const ToastHost = () => {
+  const insets = useSafeAreaInsets();
+  React.useEffect(() => {
+    notify.setBaseInset(insets.bottom);
+  }, [insets.bottom]);
+  return (
+    <Toast
+      config={toastConfig}
+      position="bottom"
+      visibilityTime={2600}
+      avoidKeyboard={false}
+    />
+  );
 };
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  toastWarn: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fcd34d',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginHorizontal: 16,
-    alignSelf: 'center',
-  },
-  toastWarnText: {
-    color: '#92400e',
-    fontSize: 13,
-    lineHeight: 19,
-  },
 });
 
 /**
@@ -191,7 +207,8 @@ const AppNavigator = () => {
  */
 const AppWithTheme = () => {
   return (
-    <>
+    <SafeAreaProvider>
+      {/* 安全区上下文根，导航页面与通知挂载宿主共用同一份 insets */}
       <SystemBars style="auto" />
       {/* 手势根视图：左滑删除等 RNGH 手势组件依赖此包装，原抽屉导航器自带的隐式包装已随抽屉移除 */}
       <GestureHandlerRootView style={styles.flex}>
@@ -206,13 +223,13 @@ const AppWithTheme = () => {
               }}
             >
               <AppNavigator />
-              {/* 语音提醒 Toast 挂导航容器内一次，ChatScreen 与详情页共用 */}
-              <Toast config={toastConfig} />
+              {/* 应用内通知挂导航容器内一次，全页面共用，底部居中 */}
+              <ToastHost />
             </NavigationContainer>
           </BottomSheetModalProvider>
         </KeyboardProvider>
       </GestureHandlerRootView>
-    </>
+    </SafeAreaProvider>
   );
 };
 

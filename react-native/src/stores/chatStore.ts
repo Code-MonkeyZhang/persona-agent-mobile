@@ -6,6 +6,7 @@
  *   - 远端用户消息经 user_message 事件实时追加并切入生成态，回声由运行态守卫拦截
  *   - 生成期间消息流无占位气泡，轮次步骤进响应式 store 外的缓冲，步骤到达零渲染，turn_complete 到达组装整轮气泡
  *   - 忙时插话进服务端待注入缓冲，灰气泡由 pending_input_changed 广播渲染
+ *   - 新建态的模型选择暂存在此，首条消息建会话后转正写进会话并清空
  *   - 页面只是订阅者，ChatScreen 不再持有消息状态
  */
 import { create } from 'zustand';
@@ -19,10 +20,12 @@ import {
   convertToChatMessages,
   chatSessionIdFor,
   stripLastTextThought,
+  updateSessionModel,
   type PendingInput,
   type ServerChatMessage,
   type ToolCall,
   type WsToolResult,
+  type ModelConfig,
 } from '../api/server-api.ts';
 import {
   getServerAddress,
@@ -51,9 +54,11 @@ import {
   NEW_CHAT_SESSION,
 } from './sessionStore.ts';
 import { useVoiceStore } from './voiceStore.ts';
+import { usePerformanceStore } from './performanceStore.ts';
 import { trigger } from '../chat/util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
 import { logger } from '../lib/logger';
+import { notify } from '../lib/notify';
 import i18n from '../i18n/index';
 import type { ChatMessage, ContentBlock, FileInfo } from '../types/Chat.ts';
 import type { Thought } from '../types/Thought';
@@ -65,9 +70,6 @@ export const BOT_ID = 2;
 export const textPlaceholder = '...';
 /** 空消息数组的模块级常量，避免组件内兜底取值每次产生新引用引发多余渲染 */
 export const EMPTY_MESSAGES: ChatMessage[] = [];
-
-/** 提示气泡的序号，新的提示顶掉旧的并让旧计时失效 */
-let noticeSeq = 0;
 
 /** 创建一条 AI 气泡消息，轮次组装与错误提示的公共构造 */
 const createBotMessage = (): ChatMessage => ({
@@ -199,10 +201,8 @@ interface SessionChatState {
   status: ChatStatus;
   /** 错过步骤事件的轮次由空缓冲武装，回合结束后从磁盘整包重拉 */
   armedDiskRefresh: boolean;
-  /** 陪伴立绘当前姿态 */
+  /** 会话元数据记录的立绘名，pose_changed 与落盘回填写入，会话切换时交演出引擎瞬切恢复 */
   pose: string;
-  /** 立绘加载失败标记，姿态切换时清除 */
-  poseError: boolean;
 }
 
 const createSlice = (): SessionChatState => ({
@@ -210,7 +210,6 @@ const createSlice = (): SessionChatState => ({
   status: ChatStatus.Init,
   armedDiskRefresh: false,
   pose: 'default',
-  poseError: false,
 });
 
 interface ChatStore {
@@ -245,27 +244,23 @@ interface ChatStore {
   compressionStates: Map<string, CompressionRuntimeState>;
   /** 压缩记录清单，镜像 meta 初始化，事件按 recordId 幂等 upsert */
   compressionLogs: Map<string, CompressionRecord[]>;
-  /**
-   * 附件与发送类事件的提示气泡，键走 i18n，一段时间后自动清除。
-   */
-  notice: { key: string; values?: Record<string, string> } | null;
+  /** 新建态暂存的模型选择，会话尚未建立时它就是生效模型，首条消息建会话后转正写入并清空 */
+  draftModel: { agentId: string; model: ModelConfig } | null;
 
   /** 切换展示目标会话，需要时从服务器加载，流式进行中则保留现场 */
   activateSession: (sessionId: string) => Promise<void>;
   /** 发送用户消息，附件已达 uploaded 态，空闲走新回合占位链路，忙时进服务端待注入缓冲，失败回滚生成态并提示 */
   sendMessage: (text: string, files: FileInfo[]) => Promise<void>;
+  /** 暂存新建态的模型选择，传 null 清空 */
+  setDraftModel: (model: ModelConfig | null) => void;
   /** 请求服务端中止当前会话的生成 */
   stopGeneration: () => void;
   /** 删除会话分片，会话列表删除时调用 */
   removeSession: (sessionId: string) => void;
   /** 更新当前 agent 显示名 */
   setAgentProfile: (name: string) => void;
-  /** 标记会话立绘加载失败 */
-  setPoseError: (sessionId: string, value: boolean) => void;
   /** 主机切换后清空全部会话分片与展示态，旧主机的内存现场不再串台 */
   resetForHostSwitch: () => void;
-  /** 提示气泡的唯一写入口，新的提示顶掉旧的并重置计时 */
-  showNotice: (key: string, values?: Record<string, string>) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -280,7 +275,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   usageSnapshots: new Map(),
   compressionStates: new Map(),
   compressionLogs: new Map(),
-  notice: null,
+  draftModel: null,
 
   activateSession: async (sessionId) => {
     if (get().displayedSessionId === sessionId) {
@@ -289,12 +284,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const agentId = getServerAgentId();
     saveLastConversation(agentId, sessionId);
 
-    // 新建空白态，直接重置分片
+    // 新建空白态，直接重置分片，上一份草稿暂存的模型选择随之作废
     if (sessionId === NEW_CHAT_SESSION) {
       useChatStore.setState((state) => ({
         sessions: { ...state.sessions, [NEW_CHAT_SESSION]: createSlice() },
         displayedSessionId: NEW_CHAT_SESSION,
+        draftModel: null,
       }));
+      usePerformanceStore.getState().restore('default');
       return;
     }
 
@@ -304,6 +301,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // 流式进行中的会话保留现场，仅补订阅，不重拉
     if (get().sessions[sessionId]?.status === ChatStatus.Running) {
       wsClient.subscribe(sessionId);
+      usePerformanceStore.getState().restore(get().sessions[sessionId].pose);
       logger.info(`${TAG} keep live session=${sessionId}`);
       return;
     }
@@ -323,7 +321,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             address
           ),
           pose: view.currentPose ?? 'default',
-          poseError: false,
         }));
         seedCompressionData(sessionId, view);
         logger.info(
@@ -332,9 +329,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           }, pose=${view.currentPose ?? 'default'}`
         );
       }
-      // 加载期间已切走则不抢订阅，避免迟到的加载覆盖新会话的订阅
+      // 加载期间已切走则不抢订阅，避免迟到的加载覆盖新会话的订阅，演出也不上台
       if (useChatStore.getState().displayedSessionId === sessionId) {
         wsClient.subscribe(sessionId);
+        usePerformanceStore
+          .getState()
+          .restore(
+            useChatStore.getState().sessions[sessionId]?.pose ?? 'default'
+          );
       }
     } catch (e) {
       logger.error(
@@ -360,7 +362,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const address = getServerAddress();
     if (!agentId || !address) {
       logger.warn(`${TAG} send skipped: no agent or server address`);
-      useChatStore.getState().showNotice('chat.notConnected');
+      notify.warn('chat.notConnected');
       return;
     }
 
@@ -394,13 +396,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           logger.warn(
             `${TAG} interjection rejected: ${result.error ?? 'unknown'}`
           );
-          useChatStore.getState().showNotice('chat.sendFailed');
+          notify.error('chat.sendFailed');
         }
       } catch (e) {
         logger.warn(
           `${TAG} interjection failed: ${e instanceof Error ? e.message : e}`
         );
-        useChatStore.getState().showNotice('chat.sendFailed');
+        notify.error('chat.sendFailed');
       }
       return;
     }
@@ -425,6 +427,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         sid = await createSession(agentId, address);
         adoptSessionId(sid);
         logger.debug(`${TAG} send: auto-created session ${sid}`);
+        await promoteDraftModel(agentId, sid, address);
       }
       logger.debug(
         `${TAG} send: text="${text.substring(
@@ -449,13 +452,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (!result.success) {
         rollbackGeneratingState(get().displayedSessionId);
         logger.warn(`${TAG} send rejected: ${result.error ?? 'unknown'}`);
-        useChatStore.getState().showNotice('chat.sendFailed');
+        notify.error('chat.sendFailed');
       }
     } catch (e) {
       logger.error(`${TAG} send error: ${e instanceof Error ? e.message : e}`);
       rollbackGeneratingState(get().displayedSessionId);
-      useChatStore.getState().showNotice('chat.sendFailed');
+      notify.error('chat.sendFailed');
     }
+  },
+
+  setDraftModel: (model) => {
+    const agentId = getServerAgentId();
+    set({ draftModel: model ? { agentId, model } : null });
+    logger.info(
+      `${TAG} draft model ${
+        model ? `stashed: ${model.provider}/${model.model}` : 'cleared'
+      }`
+    );
   },
 
   stopGeneration: () => {
@@ -486,10 +499,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     logger.debug(`${TAG} agent profile updated, name=${next}`);
   },
 
-  setPoseError: (sessionId, value) => {
-    updateSlice(sessionId, (slice) => ({ ...slice, poseError: value }));
-  },
-
   resetForHostSwitch: () => {
     logger.info(`${TAG} reset for host switch`);
     set({
@@ -505,17 +514,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       usageSnapshots: new Map(),
       compressionStates: new Map(),
       compressionLogs: new Map(),
+      // 旧主机的草稿模型选择不带到新主机
+      draftModel: null,
     });
-  },
-
-  showNotice: (key, values) => {
-    const seq = ++noticeSeq;
-    set({ notice: { key, values } });
-    setTimeout(() => {
-      if (noticeSeq === seq) {
-        set({ notice: null });
-      }
-    }, 2600);
   },
 }));
 
@@ -706,12 +707,10 @@ function appendUserBubble(sessionId: string, message: ChatMessage): void {
 
 /**
  * 发送失败的现场回滚：结束生成态与顶栏时间线，乐观用户消息保留作已发凭证，与桌面端行为对齐。
+ * 新会话的展示身份是空串，创建服务端会话这一步就失败时，被乐观置为生成态的正是空串分片，同样要回滚。
  * @param sessionId 回滚目标分片，新会话转正前后都取当时的展示身份
  */
 function rollbackGeneratingState(sessionId: string): void {
-  if (!sessionId) {
-    return;
-  }
   const { liveRun } = useChatStore.getState();
   if (liveRun?.sessionId === sessionId) {
     useChatStore.setState({ liveRun: null });
@@ -744,6 +743,32 @@ function adoptSessionId(sessionId: string): void {
   });
   saveLastConversation(getServerAgentId(), sessionId);
   useSessionStore.getState().setActiveSessionId(sessionId);
+}
+
+/**
+ * 把新建态暂存的模型选择转正写进刚建立的会话。
+ * 必须在首条消息发出前完成，服务端按发送时刻的会话配置选模型。
+ * 写入失败只记日志，消息按默认模型继续发出，暂存随即清空。
+ * @param agentId 会话所属的 Agent，与暂存时的 Agent 对不上就不转正
+ * @param sessionId 刚建立的真实会话 id
+ * @param address 服务器地址
+ */
+async function promoteDraftModel(
+  agentId: string,
+  sessionId: string,
+  address: string
+): Promise<void> {
+  const draft = useChatStore.getState().draftModel;
+  if (!draft || draft.agentId !== agentId) {
+    return;
+  }
+  useChatStore.getState().setDraftModel(null);
+  const ok = await updateSessionModel(address, agentId, sessionId, draft.model);
+  logger.info(
+    `${TAG} draft model promote, session=${sessionId} model=${
+      draft.model.provider
+    }/${draft.model.model}: ${ok ? 'ok' : 'failed'}`
+  );
 }
 
 /**
@@ -812,6 +837,7 @@ const lastRefreshedAt: Record<string, number> = {};
  * 从本地重读指定会话的消息列表。
  * 武装刷新与追平补拉场景使用，扫描规则保证渲染顺序与实时链路一致。
  * 入口先做更新时间预检查，会话无变化且本地已有消息时零成本返回。
+ * 会话档案携带 currentPose 时同步回填立绘表情，漏事件后立绘由此追平。
  */
 async function refreshFromDisk(sessionId: string): Promise<void> {
   if (!sessionId) {
@@ -848,7 +874,17 @@ async function refreshFromDisk(sessionId: string): Promise<void> {
     updateSlice(sessionId, (prev) => ({
       ...prev,
       messages: convertToChatMessages(view.messages, view.createdAt, address),
+      pose: view.currentPose ?? prev.pose,
     }));
+    if (view.currentPose) {
+      // 漏掉 pose_changed 时的兜底通道，会话仍是当前展示才把脸追平
+      if (useChatStore.getState().displayedSessionId === sessionId) {
+        usePerformanceStore.getState().restore(view.currentPose);
+      }
+      logger.debug(
+        `${TAG} pose backfilled from disk, session=${sessionId} pose=${view.currentPose}`
+      );
+    }
     // 追平补拉同时收敛压缩记录，离线期间的记录由镜像 meta 兜底带回
     seedCompressionData(sessionId, view);
     logger.info(`${TAG} messages refreshed from disk, session=${sessionId}`);
@@ -949,6 +985,22 @@ function registerWsHandler(): void {
         `[live-strip] content started, session=${sessionId} step=${stepIndex}`
       );
     },
+    onPoseChanged: (sessionId, pose, motion, bubble) => {
+      if (!useChatStore.getState().sessions[sessionId]) {
+        logger.warn(`${TAG} pose_changed for unknown session: ${sessionId}`);
+        return;
+      }
+      // 分片先记下立绘名，会话切换与落盘回填的恢复都读它
+      if (pose) {
+        updateSlice(sessionId, (prev) => ({ ...prev, pose }));
+      }
+      // ws 单订阅，切走的会话不再有事件，这里的比对是防御位
+      if (useChatStore.getState().displayedSessionId !== sessionId) {
+        logger.info(`${TAG} pose_changed ignored, session not displayed`);
+        return;
+      }
+      usePerformanceStore.getState().perform({ pose, motion, bubble });
+    },
     onStepComplete: (sessionId, content, thinking, toolCalls, toolResults) => {
       const slice = useChatStore.getState().sessions[sessionId];
       if (!slice) {
@@ -986,24 +1038,6 @@ function registerWsHandler(): void {
           buffer.thoughts.length
         } contentLen=${content?.length ?? 0}`
       );
-
-      // 检测 show_pose 指令，切换陪伴立绘
-      if (toolCalls && toolCalls.length > 0) {
-        for (const tc of toolCalls) {
-          if (tc.name === 'show_pose' && tc.arguments) {
-            const pose = tc.arguments.pose as string;
-            const result = toolResults?.find((tr) => tr.toolCallId === tc.id);
-            if (pose && result?.success) {
-              logger.debug(`${TAG} pose change: ${pose}`);
-              updateSlice(sessionId, (prev) => ({
-                ...prev,
-                pose,
-                poseError: false,
-              }));
-            }
-          }
-        }
-      }
 
       // 工具执行失败时记录日志
       if (toolResults && toolResults.length > 0) {

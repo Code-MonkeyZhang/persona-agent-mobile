@@ -1,21 +1,16 @@
 /**
  * @file hooks/useCompanionMode.ts
- * @description 陪伴面板状态管理：面板开关、pose 资源加载、背景错误标记。
- *   当前姿态与立绘加载错误保存在 chatStore 会话分片中，随会话切换恢复。
+ * @description 陪伴面板状态管理：面板开关、资源就绪态、背景错误标记。
+ *   立绘清单的加载收敛在 performanceStore 的 loadCatalog，这里只消费它的结果。
+ *   演出状态在 performanceStore，会话元数据记录的立绘名在 chatStore 会话分片。
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Keyboard } from 'react-native';
 import {
-  fetchPoses,
-  notePoseAssets,
-  type PoseAssets,
-} from '../../api/server-api';
-import {
   saveCompanionOpen,
   getCompanionOpen,
-  savePosesAssets,
-  getPosesAssets,
 } from '../../storage/StorageUtils';
+import { loadCatalog } from '../../stores/performanceStore.ts';
 import { logger } from '../../lib/logger';
 
 export function useCompanionMode(
@@ -29,7 +24,7 @@ export function useCompanionMode(
   /** 背景图加载失败标记 */
   const [bgError, setBgError] = useState(false);
 
-  /** Agent 切换时请求 pose 清单，成功落 MMKV，失败回退本地清单保证断网可用 */
+  /** Agent 切换时重拉立绘清单，网络失败由加载器回退本地缓存，两条路径都无才算没有资源 */
   useEffect(() => {
     if (!agentId || !serverAddressRef.current) {
       return;
@@ -37,25 +32,15 @@ export function useCompanionMode(
     let cancelled = false;
     setHasAssets(null);
     setBgError(false);
-    logger.info(`[Companion] fetchPoses agentId=${agentId}`);
-    fetchPoses(agentId, serverAddressRef.current)
-      .then((assets: PoseAssets) => {
-        savePosesAssets(agentId, assets);
+    logger.info(`[Companion] load catalog agentId=${agentId}`);
+    loadCatalog(agentId, true)
+      .then((assets) => {
         if (!cancelled) {
           setHasAssets(assets.poses.length > 0);
         }
       })
       .catch(() => {
-        const cached = getPosesAssets(agentId);
-        if (cached) {
-          notePoseAssets(agentId, cached);
-          if (!cancelled) {
-            setHasAssets(cached.poses.length > 0);
-          }
-          logger.info('[Companion] poses loaded from local cache');
-          return;
-        }
-        logger.error('[Companion] fetchPoses failed');
+        logger.error('[Companion] pose catalog unavailable');
         if (!cancelled) {
           setHasAssets(false);
         }

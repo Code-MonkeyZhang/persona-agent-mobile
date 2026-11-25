@@ -5,7 +5,14 @@
  *     本文件整块镜像维护，两处改动需同步，这是跨仓纪律
  *   - 唯一偏差是 hostnameFromUrl 用正则实现，RN 的类型环境不带 WHATWG URL 全局
  *   - 零 react-native 依赖，jest 可直接 import，镜像口径由 __tests__/tool-summary.test.ts 锁定
+ *   - 演出的动作与气泡名单取自 lib/performance，那是 shared 的 performance.ts 的镜像
  */
+import {
+  BUBBLE_CN,
+  MOTION_CN,
+  isBubbleName,
+  isMotionName,
+} from './performance.ts';
 
 /** 掩码替换用的固定星串，定长不泄露原始凭据长度 */
 const MASK = '********';
@@ -100,9 +107,17 @@ export function summarizeToolInput(
     case 'web_fetch':
       summary = hostnameFromUrl(str(toolInput.url));
       break;
-    case 'show_pose':
-      summary = str(toolInput.pose);
+    case 'show_pose': {
+      const { motion, bubble } = toolInput;
+      summary = [
+        str(toolInput.pose),
+        isMotionName(motion) ? MOTION_CN[motion] : str(motion),
+        isBubbleName(bubble) ? BUBBLE_CN[bubble] : str(bubble),
+      ]
+        .filter(Boolean)
+        .join(' ');
       break;
+    }
     case 'get_current_pose':
       summary = '';
       break;

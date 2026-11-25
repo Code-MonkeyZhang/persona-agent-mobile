@@ -10,9 +10,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import RNFS from 'react-native-fs';
-import Toast from 'react-native-toast-message';
 import { synthesize } from '../lib/tts';
 import { getAudioPlayer } from '../lib/audio-player';
+import { notify } from '../lib/notify';
 import { fetchAgentDetail, fetchTtsConfig } from '../api/server-api';
 import type { SpeakErrorReason } from '../api/server-api';
 import {
@@ -29,7 +29,6 @@ import {
   saveTtsEnabled,
 } from '../storage/StorageUtils';
 import { logger } from '../lib/logger';
-import i18n from '../i18n/index.ts';
 
 const CACHE_DIR = `${RNFS.DocumentDirectoryPath}/tts_cache`;
 
@@ -54,7 +53,7 @@ interface VoiceStore {
   speakStage: SpeakStage;
 
   toggleVoice: () => Promise<void>;
-  refreshCapability: (notify: boolean) => Promise<boolean>;
+  refreshCapability: (remind: boolean) => Promise<boolean>;
   noteChatSent: (voiceEnabled: boolean, sessionId: string) => void;
   noteRoundEnded: (sessionId: string) => void;
   noteSpeakError: (reason: SpeakErrorReason) => void;
@@ -65,10 +64,6 @@ interface VoiceStore {
 
 /** 本机发起且开着语音的回合，等待动画只认这个会话 */
 let awaitVoiceSessionId: string | null = null;
-
-function showWarn(text: string) {
-  Toast.show({ type: 'warn', text1: text });
-}
 
 /**
  * 清理 tts_cache 目录下的旧缓存文件，确保每次播放前目录是干净的
@@ -134,10 +129,10 @@ export const useVoiceStore = create<VoiceStore>()(
       },
 
       /**
-       * 现查能力并回写 voiceReady。notify 为真时按缺口逐条弹引导，供点击开启用；
+       * 现查能力并回写 voiceReady。remind 为真时按缺口逐条弹引导，供点击开启用；
        * 静默路径供连接恢复后补查，只定图标视觉态不打扰。
        */
-      refreshCapability: async (notify) => {
+      refreshCapability: async (remind) => {
         let hasKey = false;
         let hasVoice = false;
         const address = getServerAddress();
@@ -157,14 +152,14 @@ export const useVoiceStore = create<VoiceStore>()(
         const missing = listMissing({ hasKey, hasVoice });
         const next = missing.length === 0;
         set({ voiceReady: next });
-        if (notify) {
-          missing.forEach((m) => showWarn(i18n.t(missingToI18nKey(m))));
+        if (remind) {
+          missing.forEach((m) => notify.warn(missingToI18nKey(m)));
         }
         logger.info('[TTS] capability checked', {
           hasKey,
           hasVoice,
           ready: next,
-          notify,
+          remind,
         });
         return next;
       },
@@ -200,7 +195,7 @@ export const useVoiceStore = create<VoiceStore>()(
         const prev = get().voiceReady;
         set({ voiceReady: false, speakStage: 'idle' });
         if (shouldNotifyOnDowngrade(prev, false)) {
-          showWarn(i18n.t(missingToI18nKey(missing)));
+          notify.warn(missingToI18nKey(missing));
         }
         logger.info(`[TTS] speak_error handled, reason=${reason} prev=${prev}`);
       },
@@ -230,11 +225,11 @@ export const useVoiceStore = create<VoiceStore>()(
           logger.debug(`[TTS] audio written to ${filePath}`);
           getAudioPlayer().play(filePath);
         } catch (err) {
-          const message =
-            err instanceof Error ? err.message : i18n.t('error.ttsFailed');
-          logger.error(`[TTS] speak failed: ${message}`);
+          logger.error(
+            `[TTS] speak failed: ${err instanceof Error ? err.message : err}`
+          );
           set({ speakStage: 'idle' });
-          Toast.show({ type: 'error', text1: message });
+          notify.error('error.ttsFailed');
         }
       },
 

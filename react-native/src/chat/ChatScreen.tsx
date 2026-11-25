@@ -3,7 +3,7 @@
  * @description 聊天页，从会话主页压栈进入的普通页面，返回即卸载。
  *   组合 useChatScroll / useCompanionMode / useKeyboardLayout，
  *   以及 GiftedChat、FloatingInputBar、CompanionContent 等子组件。
- *   本文件负责：会话切换、header 配置、slide 动画、渲染编排。
+ *   本文件负责：会话切换、header 配置、slide 动画、模型数据源与点选、渲染编排。
  *   消息与生成状态订阅自 chatStore，本组件不持有消息数据，
  *   agent 拉取与启动恢复由会话主页完成。
  */
@@ -22,7 +22,6 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -32,9 +31,9 @@ import {
   activateKeepAwake,
   deactivateKeepAwake,
 } from '@sayem314/react-native-keep-awake';
-import { ColorScheme, useTheme, typography } from '../theme/index.ts';
+import { ColorScheme, useTheme } from '../theme/index.ts';
 import CustomMessageComponent from './component/CustomMessageComponent.tsx';
-import { CustomScrollToBottomComponent } from './component/CustomScrollToBottomComponent.tsx';
+import { ScrollToBottomButton } from './component/ScrollToBottomButton.tsx';
 import { EmptyChatComponent } from './component/EmptyChatComponent.tsx';
 import { ChatHeaderTitle } from './component/ChatHeaderTitle.tsx';
 import { LiveStrip } from './component/LiveStrip.tsx';
@@ -42,16 +41,30 @@ import ConnectionBanner from '../home/ConnectionBanner.tsx';
 import { HeaderRightButtons } from './component/HeaderRightButtons.tsx';
 import { HeaderLeftButtons } from './component/HeaderLeftButtons.tsx';
 import { CompanionReplyBubble } from './component/CompanionReplyBubble.tsx';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteParamList } from '../types/RouteTypes.ts';
-import { getServerAddress, getServerAgentId } from '../storage/StorageUtils.ts';
+import {
+  getServerAddress,
+  getServerAgentId,
+  saveLastUsedProvider,
+} from '../storage/StorageUtils.ts';
 import { cacheDb } from '../storage/cache-db.ts';
 import { useMirrorStore } from '../stores/mirrorStore';
 import { isConnected, viewed as wsViewed } from '../api/ws-client.ts';
 import { logger } from '../lib/logger';
-import { fetchAgentDetail, listProviders } from '../api/server-api.ts';
+import {
+  fetchAgentDetail,
+  listProviders,
+  updateSessionModel,
+  type ModelConfig,
+  type ProviderStatus,
+} from '../api/server-api.ts';
 import { ChatStatus, ChatMessage, FileType } from '../types/Chat.ts';
 import { trigger } from './util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types';
@@ -63,6 +76,8 @@ import { useSessionStore, NEW_CHAT_SESSION } from '../stores/sessionStore';
 import { useChatStore, EMPTY_MESSAGES, BOT_ID } from '../stores/chatStore';
 import { useChatScroll } from './hooks/useChatScroll.ts';
 import { useKeyboardLayout } from './hooks/useKeyboardLayout.ts';
+import { useActiveModel } from './hooks/useActiveModel.ts';
+import { notify } from '../lib/notify';
 import { useCompanionMode } from './hooks/useCompanionMode.ts';
 import Animated, {
   useAnimatedStyle,
@@ -79,9 +94,6 @@ type ChatScreenNavigationProp = NativeStackNavigationProp<
 
 type ChatScreenRouteProp = RouteProp<RouteParamList, 'Chat'>;
 
-/** GiftedChat 回到底部按钮的渲染函数，模块级定义避免每次渲染生成新的组件类型 */
-const renderScrollToBottom = () => <CustomScrollToBottomComponent />;
-
 /** 消息窗口的初始与扩展尺寸，列表更新成本随总条数线性放大，窗口化后稳定在常数级 */
 const MESSAGE_WINDOW_BASE = 300;
 const MESSAGE_WINDOW_STEP = 300;
@@ -92,6 +104,9 @@ const MESSAGE_WINDOW_STEP = 300;
  * 倒置列表里 paddingBottom 映射视觉顶，与桌面 MessageList 的 STRIP_TOP_RESERVE 同规格，两边调整需同步。
  */
 const STRIP_TOP_RESERVE = 37;
+
+/** 应用内通知胶囊距输入浮层顶边的净空 */
+const NOTICE_CLEARANCE = 6;
 
 function ChatScreen(): React.JSX.Element {
   const { colors } = useTheme();
@@ -108,8 +123,13 @@ function ChatScreen(): React.JSX.Element {
   );
   const [inputBarHeight, setInputBarHeight] = useState(96);
   const [companionBubbleHeight, setCompanionBubbleHeight] = useState(0);
-  /** 非视觉横幅的数据源，agent 默认模型与供应商视觉清单任一取不到就不出横幅 */
+  /** agent 默认模型与供应商清单，进页各拉一次，模型入口、弹层与看图提示共用 */
+  const [agentDefault, setAgentDefault] = useState<ModelConfig | null>(null);
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  /** 非视觉横幅的数据源，当前生效模型与供应商视觉清单任一取不到就不出横幅 */
   const [modelNoVision, setModelNoVision] = useState(false);
+  /** 情绪气泡的每角色微调偏移，来自 agent 配置，取不到时按零偏移 */
+  const [bubbleOffset, setBubbleOffset] = useState({ x: 0, y: 0 });
 
   // ==================== Refs ====================
   const textInputViewRef = useRef<TextInput>(null);
@@ -128,13 +148,10 @@ function ChatScreen(): React.JSX.Element {
   const sessionTitles = useSessionStore((s) => s.sessionTitles);
 
   // ==================== chatStore ====================
-  const displayedSessionId = useChatStore((s) => s.displayedSessionId);
   const sessionSlice = useChatStore((s) => s.sessions[s.displayedSessionId]);
   const isLoadingMessages = useChatStore((s) => s.isLoading);
   /** 实时角色名，改名或切换 agent 后由 HomeScreen 同步进 store，名字行即时跟随 */
   const agentName = useChatStore((s) => s.agentName);
-  /** 附件与上传类事件的提示气泡，键走 i18n，一段时间后自动清除 */
-  const notice = useChatStore((s) => s.notice);
   const messages = sessionSlice?.messages ?? EMPTY_MESSAGES;
   const chatStatus = sessionSlice?.status ?? ChatStatus.Init;
 
@@ -145,16 +162,13 @@ function ChatScreen(): React.JSX.Element {
     [messages, windowCount]
   );
 
-  const currentPose = sessionSlice?.pose ?? 'default';
-  const poseError = sessionSlice?.poseError ?? false;
-
   // ==================== Hooks ====================
   const scroll = useChatScroll(chatStatusRef);
   const {
     keyboardLiftStyle,
     overlaySpacerStyle,
     fibInsetStyle,
-    overlayHeight,
+    overlayTopOffset,
   } = useKeyboardLayout(
     textInputViewRef,
     scroll.scrollToBottom,
@@ -165,6 +179,14 @@ function ChatScreen(): React.JSX.Element {
   const companion = useCompanionMode(currentAgentId, serverAddressRef);
   const attachments = useAttachments();
   const clearDraft = attachments.clear;
+
+  /** 聚焦时把浮层顶边注册给应用内通知作抬升量，失焦或卸载清零回基线，栈内压入的页面用基线位置 */
+  useFocusEffect(
+    useCallback(() => {
+      notify.setPageLift(overlayTopOffset + NOTICE_CLEARANCE);
+      return () => notify.setPageLift(0);
+    }, [overlayTopOffset])
+  );
 
   // ==================== Ref 同步 ====================
   useEffect(() => {
@@ -335,18 +357,18 @@ function ChatScreen(): React.JSX.Element {
     async (text: string): Promise<boolean> => {
       if (!isConnected()) {
         logger.warn('[inputBox] send blocked, ws not connected');
-        useChatStore.getState().showNotice('chat.notConnected');
+        notify.warn('chat.notConnected');
         return false;
       }
       if (attachments.isUploading) {
         logger.info('[inputBox] send blocked, attachments uploading');
-        useChatStore.getState().showNotice('chat.attachmentUploading');
+        notify.info('chat.attachmentUploading');
         return false;
       }
       const settled = await attachments.uploadAll();
       if (!settled) {
         logger.warn('[inputBox] send blocked, attachment upload failed');
-        useChatStore.getState().showNotice('chat.sendUploadFailed');
+        notify.error('chat.sendUploadFailed');
         return false;
       }
       logger.info(
@@ -368,37 +390,71 @@ function ChatScreen(): React.JSX.Element {
     useChatStore.getState().stopGeneration();
   }, []);
 
-  // ==================== 模型视觉能力 ====================
-  /** 非视觉横幅的数据源，agent 默认模型不在供应商视觉清单时置位，任一环取不到就维持不出横幅 */
+  // ==================== 模型数据源 ====================
+  const activeModel = useActiveModel(agentDefault);
+
+  /** agent 默认模型与供应商清单并行拉取，任一失败只影响它自己的消费方。
+   *  agent 详情到手的两个消费方是模型入口的回落值与气泡偏移 */
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const address = getServerAddress();
-        const agentId = getServerAgentId();
-        if (!address || !agentId) {
-          return;
-        }
-        const [agent, providers] = await Promise.all([
-          fetchAgentDetail(address, agentId),
-          listProviders(address),
-        ]);
-        const provider = providers.find(
-          (p) => p.id === agent.defaultModel.provider
-        );
-        if (cancelled || !provider?.visionModelIds) {
-          return;
-        }
-        setModelNoVision(
-          !provider.visionModelIds.includes(agent.defaultModel.model)
-        );
-      } catch (e) {
-        logger.warn(`[ChatScreen] vision capability check failed: ${e}`);
+      const address = getServerAddress();
+      const agentId = getServerAgentId();
+      if (!address || !agentId) {
+        return;
       }
+      const [agent, providerList] = await Promise.all([
+        fetchAgentDetail(address, agentId).catch((e: unknown) => {
+          logger.warn(`[ChatScreen] load agent failed: ${e}`);
+          return null;
+        }),
+        listProviders(address).catch((e: unknown) => {
+          logger.warn(`[ChatScreen] listProviders failed: ${e}`);
+          return [] as ProviderStatus[];
+        }),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      if (agent) {
+        setAgentDefault(agent.defaultModel);
+        setBubbleOffset({
+          x: agent.bubbleOffsetX ?? 0,
+          y: agent.bubbleOffsetY ?? 0,
+        });
+      }
+      setProviders(providerList);
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  /** 当前生效模型不在其供应商的视觉清单时亮非视觉横幅，清单取不到就不出横幅 */
+  useEffect(() => {
+    const visionModelIds = providers.find(
+      (p) => p.id === activeModel?.provider
+    )?.visionModelIds;
+    setModelNoVision(
+      !!visionModelIds && !visionModelIds.includes(activeModel?.model ?? '')
+    );
+  }, [activeModel, providers]);
+
+  // ==================== 模型切换 ====================
+  /** 点选模型：会话已存在就写进会话，新建态先暂存，两种情况都记下上次使用的供应商。
+   *  生效模型不在这里乐观改写，镜像库收到会话更新后由 useActiveModel 重读 */
+  const handlePickModel = useCallback((selection: ModelConfig) => {
+    saveLastUsedProvider(selection.provider);
+    const sessionId = useChatStore.getState().displayedSessionId;
+    if (sessionId === NEW_CHAT_SESSION) {
+      useChatStore.getState().setDraftModel(selection);
+      return;
+    }
+    const address = getServerAddress();
+    const agentId = getServerAgentId();
+    if (address && agentId) {
+      updateSessionModel(address, agentId, sessionId, selection);
+    }
   }, []);
 
   // ==================== UI 渲染 ====================
@@ -417,20 +473,6 @@ function ChatScreen(): React.JSX.Element {
   }));
 
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  // 回底按钮定位跟随浮层占位终态，事件时刻一次跳变
-  const scrollStyle = useMemo(
-    () =>
-      StyleSheet.create({
-        scrollToBottomContainerStyle: {
-          width: 30,
-          height: 30,
-          right: 16,
-          bottom: overlayHeight + 44,
-        },
-      }),
-    [overlayHeight]
-  );
 
   const slideStyle = useMemo(
     () =>
@@ -579,9 +621,6 @@ function ChatScreen(): React.JSX.Element {
                 // 日期浮动胶囊在每次消息更新时全量扫描所有消息，上万条会话下堵塞 JS 线程，这里关闭
                 false
               }
-              isScrollToBottomEnabled={true}
-              scrollToBottomComponent={renderScrollToBottom}
-              scrollToBottomStyle={scrollStyle.scrollToBottomContainerStyle}
             />
           </View>
           {/* Pane 2: 陪伴内容 */}
@@ -590,13 +629,10 @@ function ChatScreen(): React.JSX.Element {
               agentId={currentAgentId}
               serverAddr={serverAddressRef.current}
               hasAssets={companion.hasAssets}
-              currentPose={currentPose}
               bgError={companion.bgError}
-              poseError={poseError}
               onBgError={() => companion.setBgError(true)}
-              onPoseError={() =>
-                useChatStore.getState().setPoseError(displayedSessionId, true)
-              }
+              bubbleOffset={bubbleOffset}
+              targetSessionId={activeSessionId}
             />
           </Pressable>
         </Animated.View>
@@ -625,14 +661,6 @@ function ChatScreen(): React.JSX.Element {
         {/* 底部避让容器持静态安全区垫底，iOS 毛玻璃覆盖输入栏与安全区，安卓避让垫在容器外露出背景 */}
         <View style={fibInsetStyle}>
           <BackdropBlur />
-          {/* 附件与上传类事件的提示气泡，浮在输入卡上方 */}
-          {notice && (
-            <View style={styles.noticeBubble}>
-              <Text style={styles.noticeText}>
-                {t(notice.key, notice.values)}
-              </Text>
-            </View>
-          )}
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
@@ -654,6 +682,15 @@ function ChatScreen(): React.JSX.Element {
                 modelNoVision &&
                 attachments.items.some((f) => f.type === FileType.image)
               }
+              providers={providers}
+              activeModel={activeModel}
+              agentDefault={agentDefault}
+              onPickModel={handlePickModel}
+            />
+            {/* 回底按钮锚定输入栏上方，显隐由滚动阈值与陪伴页状态共同决定 */}
+            <ScrollToBottomButton
+              visible={scroll.scrolledUp && !companion.companionOpen}
+              onPress={scroll.scrollToBottom}
             />
           </View>
         </View>
@@ -692,20 +729,6 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: 15 + STRIP_TOP_RESERVE,
       flexGrow: 1,
       justifyContent: 'flex-end',
-    },
-    /** 附件与上传类事件的提示气泡，浮在输入卡上方居中 */
-    noticeBubble: {
-      alignSelf: 'center',
-      backgroundColor: colors.overlay,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      marginBottom: 6,
-      maxWidth: '80%',
-    },
-    noticeText: {
-      ...typography.body,
-      color: colors.primaryForeground,
     },
   });
 

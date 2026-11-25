@@ -2,24 +2,24 @@
  * @file ContextUsageShell.tsx
  * @description 输入条按钮行的上下文占用小壳。
  *
- * 壳形 48 乘 26 描边圆角矮胖壳，百分比数字居中带百分号对齐桌面端，色底按占用宽度铺开，
+ * 壳形 48 乘 26 描边圆角矮胖壳，百分比数字居中带百分号对齐桌面端，色底满宽以
+ * scaleX 靠左缩放铺开占用宽度，缩放走合成层不逐帧进布局保证右缘恒垂直，
  * 色阶三档随占用走高，与数字同色。轻点先触感再触发手动压缩，压缩全程禁点，
- * 数字与色底让位给居中转圈当作回执，转圈由压缩状态驱动跟随全程，终态失败换红色
- * 感叹号停留三秒再翻回数字，描边不参与。占用跨整数边界的变动走
+ * 数字与色底让位给居中原生转圈当作回执，转圈由压缩状态驱动跟随全程，
+ * 终态失败换红色感叹号停留三秒再翻回数字，描边不参与。占用跨整数边界的变动走
  * 600 毫秒匀速补间，取整同数的微变直接落定，取整后的数字作 SharedValue 直接
  * 进 Animated.Text 的 children，文字在 UI 线程逐帧更新不经 JS 线程不触发
  * React 重渲染。快照缺失降级图标壳，点按照常压缩。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { AlertCircle, Loader2, Minimize2 } from 'lucide-react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { AlertCircle, Minimize2 } from 'lucide-react-native';
 import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,7 @@ import {
   getServerAddress,
   getServerAgentId,
 } from '../../storage/StorageUtils.ts';
+import { notify } from '../../lib/notify';
 import { trigger } from '../util/HapticUtils.ts';
 import { HapticFeedbackTypes } from 'react-native-haptic-feedback/src/types.ts';
 import { logger } from '../../lib/logger';
@@ -70,7 +71,6 @@ export function ContextUsageShell() {
   const failedAt = compression?.failedAt ?? null;
 
   const pct = useSharedValue(0);
-  const spin = useSharedValue(0);
   const sessionRef = useRef<string | null>(null);
   const prevUsedRef = useRef<number | null>(null);
   const prevWindowRef = useRef(0);
@@ -101,20 +101,6 @@ export function ContextUsageShell() {
     });
   }, [snapshot, sessionId, pct]);
 
-  // 压缩回执转圈，UI 线程线性匀速循环旋转，压缩结束归零
-  useEffect(() => {
-    if (compressing) {
-      spin.value = withRepeat(
-        withTiming(360, { duration: 900, easing: Easing.linear }),
-        -1,
-        false
-      );
-    } else {
-      cancelAnimation(spin);
-      spin.value = 0;
-    }
-  }, [compressing, spin]);
-
   // 失败回执由 failedAt 时间戳驱动，亮三秒红色感叹号后翻回数字
   // 过期时间戳不亮，防会话切换或重挂载撞上旧回执
   const [failVisible, setFailVisible] = useState(false);
@@ -143,14 +129,11 @@ export function ContextUsageShell() {
   // 直接进 Animated.Text 的 children，文字在 UI 线程逐帧更新不经 React 重渲染
   const label = useDerivedValue(() => `${Math.round(pct.value)}%`);
   const fillStyle = useAnimatedStyle(() => ({
-    width: `${Math.min(100, pct.value)}%`,
+    transform: [{ scaleX: Math.min(1, pct.value / 100) }],
     backgroundColor: toneColor(pct.value),
   }));
   const numStyle = useAnimatedStyle(() => ({
     color: toneColor(pct.value),
-  }));
-  const spinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spin.value}deg` }],
   }));
 
   const compressNow = useCallback(async () => {
@@ -159,7 +142,7 @@ export function ContextUsageShell() {
     const address = getServerAddress();
     const agentId = getServerAgentId();
     if (!address || !agentId) {
-      useChatStore.getState().showNotice('chat.notConnected');
+      notify.warn('chat.notConnected');
       return;
     }
     try {
@@ -173,7 +156,7 @@ export function ContextUsageShell() {
           e instanceof Error ? e.message : e
         }`
       );
-      useChatStore.getState().showNotice('chat.compressFailed');
+      notify.error('chat.compressFailed');
     }
   }, [compressing, sessionId]);
 
@@ -191,12 +174,10 @@ export function ContextUsageShell() {
       style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
     >
       <View style={styles.shell}>
-        {/* 内容层三态，压缩中数字与色底让位给居中转圈，失败亮红色感叹号三秒，描边在层外保持静止 */}
+        {/* 内容层三态，压缩中数字与色底让位给居中原生转圈，失败亮红色感叹号三秒，描边在层外保持静止 */}
         <View style={styles.content}>
           {compressing ? (
-            <Animated.View style={spinStyle}>
-              <Loader2 size={14} color={tone} />
-            </Animated.View>
+            <ActivityIndicator size="small" color={tone} />
           ) : failVisible ? (
             <AlertCircle size={14} color="#ff4444" />
           ) : (
@@ -241,10 +222,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** 色底铺占用宽度，低透明与数字同色 */
+  /** 色底满宽靠左缩放到占用宽度，低透明与数字同色，缩放走合成层不进布局 */
   fill: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.16,
+    transformOrigin: 'left',
   },
   num: {
     ...typography.caption,

@@ -2,7 +2,8 @@
  * @file FloatingInputBar.tsx
  * @description 聊天页底部的浮动输入框组件。
  * 白底圆角卡片，纵向排列非视觉提示行、文件标签区、TextInput 和按钮行。
- * 按钮行左侧为加号按钮、右侧运行中为停止加发送双按钮，其余时间为单个发送按钮。
+ * 按钮行左侧为加号按钮、模型入口与占用小壳，右侧运行中为停止加发送双按钮，其余时间为单个发送按钮。
+ * 模型入口是无壳裸标，点按弹出模型弹层，生效模型未到手时整个入口不渲染。
  * 组件内部持有文本 state，附件落定即清空，onSend 返回 false 表示被拦截，正文与草稿都保留。
  */
 import React, { useCallback, useMemo, useState } from 'react';
@@ -14,7 +15,9 @@ import CustomSendComponent from './CustomSendComponent.tsx';
 import { CustomAddFileComponent } from './CustomAddFileComponent.tsx';
 import { ContextUsageShell } from './ContextUsageShell.tsx';
 import { CustomChatFooter } from './CustomChatFooter.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 import type { PickedFile } from '../util/FileUtils.ts';
+import type { ModelConfig, ProviderStatus } from '../../api/server-api.ts';
 import { logger } from '../../lib/logger';
 
 /** 浮动输入框 Props */
@@ -30,6 +33,14 @@ interface FloatingInputBarProps {
   onRetryFile: (id: string) => void;
   /** 草稿含图且当前模型不支持视觉时的提示行 */
   showNoVisionHint?: boolean;
+  /** 全部供应商，模型弹层内部只留已配置密钥的那些 */
+  providers: ProviderStatus[];
+  /** 当前生效模型，未到手时不渲染模型入口 */
+  activeModel: ModelConfig | null;
+  /** Agent 默认模型，模型弹层据此把它排在第二段 */
+  agentDefault: ModelConfig | null;
+  /** 点选模型后的回调，写不写记录由聊天页决定 */
+  onPickModel: (selection: ModelConfig) => void;
 }
 
 const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
@@ -42,6 +53,10 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
   onRemoveFile,
   onRetryFile,
   showNoVisionHint,
+  providers,
+  activeModel,
+  agentDefault,
+  onPickModel,
 }) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -96,6 +111,14 @@ const FloatingInputBar: React.FC<FloatingInputBarProps> = ({
         <View style={styles.buttonRow}>
           <View style={styles.leftGroup}>
             <CustomAddFileComponent onFileSelected={onFileSelected} />
+            {activeModel ? (
+              <ModelPicker
+                providers={providers}
+                value={activeModel}
+                agentDefault={agentDefault}
+                onPick={onPickModel}
+              />
+            ) : null}
             <ContextUsageShell />
           </View>
           <CustomSendComponent
@@ -144,7 +167,7 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'space-between',
       marginTop: 12,
     },
-    /** 左组容器，加号与占用小壳相邻，间距照 Demo 的 gap-2.5 */
+    /** 左组容器，加号、模型入口与占用小壳相邻，间距照 Demo 的 gap-2.5 */
     leftGroup: {
       flexDirection: 'row',
       alignItems: 'center',
