@@ -70,6 +70,7 @@
     "female": "Female",
     "male": "Male",
     "cloned": "Cloned",
+    "other": "Other",
     "selectModel": "Select Model",
     "noConfiguredModel": "No model providers available",
     "modelVision": "Supports image input",

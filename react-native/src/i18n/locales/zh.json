@@ -70,6 +70,7 @@
     "female": "女声",
     "male": "男声",
     "cloned": "克隆音色",
+    "other": "其他",
     "selectModel": "选择模型",
     "noConfiguredModel": "暂无可用模型供应商",
     "modelVision": "支持图片输入",

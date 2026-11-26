@@ -160,7 +160,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       'agent.langDefault'
   );
 
-  /** 音色选择器的分组，克隆组在前，预置按男女分组，空组不渲染 */
+  /** 音色选择器的分组，克隆组在前，预置按女声、男声、其他分组，空组不渲染 */
   const voiceGroups = [
     {
       label: t('agent.cloned'),
@@ -175,6 +175,12 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     {
       label: t('agent.male'),
       items: voices.filter((v) => v.group === 'preset' && v.gender === 'male'),
+    },
+    {
+      label: t('agent.other'),
+      items: voices.filter(
+        (v) => v.group === 'preset' && v.gender === 'neutral'
+      ),
     },
   ].filter((g) => g.items.length > 0);
 
@@ -393,7 +399,7 @@ const AgentDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         />
       ) : null}
 
-      {/* 音色选择器：克隆组在前，预置按男女分组 */}
+      {/* 音色选择器：克隆组在前，预置按女声、男声、其他分组 */}
       {sheet === 'voice' ? (
         <ActionSheet
           ref={sheetRef}
